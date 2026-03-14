@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I.
+CXXFLAGS = -std=c++17 -Wall -Wextra -I. -g
 LIBS = -lfftw3 -lfftw3f -lm
 TARGET = covariant
 SRCS = main.cpp

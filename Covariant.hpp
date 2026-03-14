@@ -8,7 +8,7 @@ template <unsigned Dimension>
 class Covariant
 {
 public:
-    typedef std::vector<float> Event;
+    typedef std::array<float, Dimension> Event;
     const unsigned dimension = Dimension;
 
 private:
@@ -82,8 +82,8 @@ public:
                 return false;
             rem[i] = event[i] * (points[i] - 1);
             unsigned floor = static_cast<unsigned>(rem[i]);
-            x += floor * stride[i];
             rem[i] -= floor;
+            x += floor * stride[i];
         }
 
         for (unsigned neighbor = 0; neighbor < (unsigned)(1 << Dimension); neighbor++)
@@ -254,15 +254,15 @@ private:
     void for_each_fiber(std::function<void(Fiber &)> func)
     {
         Fiber fiber;
-        for (unsigned dim = 0; dim < Dimension; ++dim)
+        for (unsigned i = 0; i < Dimension; ++i)
         {
-            fiber.d = dim;
-            fiber.stride = stride[dim];
+            fiber.d = i;
+            fiber.stride = stride[i];
 
             for (fiber.id = 0; fiber.id < _size / points[fiber.d]; fiber.id++)
             {
-                size_t smaller = dim == 0 ? 1 : fiber.id % stride[dim];
-                size_t larger = fiber.id / stride[dim];
+                size_t smaller = i == 0 ? 1 : fiber.id % stride[i];
+                size_t larger = fiber.id / stride[i];
                 fiber.base = larger * points[fiber.d] * smaller;
                 func(fiber);
             }
@@ -281,6 +281,8 @@ private:
         for (unsigned i = 0; i < Dimension; i++)
         {
             _f[i].resize(_size);
+            _T[i].resize(_size);
+            _S[i].resize(_size);
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);

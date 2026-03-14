@@ -1,12 +1,30 @@
 #include <iostream>
 #include <string>
+#include <random>
 
 // A popular, header-only library for command-line parsing.
 // See setup instructions below.
 #include <cxxopts.hpp>
 
 // The Covariant class header.
-#include "/home/wmoore/git/covariant/Covariant.hpp"
+#include "Covariant.hpp"
+
+std::mt19937& get_rng() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    return gen;
+}
+static auto& rng = get_rng();
+
+float random_float() {
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    return dist(rng);
+}
+
+float random_normal(float mean, float stddev) {
+    std::normal_distribution<float> dist(mean, stddev);
+    return dist(rng);
+}
 
 int main(int argc, char* argv[]) {
     // Set up the command-line options parser.
@@ -34,11 +52,22 @@ int main(int argc, char* argv[]) {
     
     Covariant<3> covariant;
     Covariant<3>::Event e;
+    std::vector<Covariant<3>::Event> means;
+    std::vector<float> stddevs;
+    std::vector<float> fractions;
+    while (means.size() < normal_param) {
+        Covariant<3>::Event mean {random_float(), random_float(), random_float()};
+        means.push_back(mean);
+        stddevs.push_back(random_float() * 0.1f + 0.05f);
+        fractions.push_back(random_float());
+    }
+    fractions.push_back(1.0f);
+    std::sort(fractions.begin(), fractions.end());
 
     while (covariant.events() < events_param) {
-        e.clear();
-        for (unsigned i = 0; i < covariant.dimension; ++i) {
-            e.push_back(static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+        int population = std::lower_bound(fractions.begin(), fractions.end(), random_float()) - fractions.begin();
+        for (unsigned i = 0; i < covariant.dimension; i++) {
+            e[i] = random_normal(means[population][i], stddevs[population]);
         }
         covariant.event(e);
     }
