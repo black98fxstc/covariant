@@ -19,12 +19,12 @@ private:
     size_t _events = 0;
     float *_weight;
     float *_density;
-    std::array<std::vector<float>, Dimension> _f;
-    std::array<std::array<std::vector<float>, Dimension>, Dimension> _s;
-    std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
-    std::array<std::vector<float>, Dimension> _T;
-    std::array<std::vector<float>, Dimension> _S;
-    std::vector<float> _L;
+    std::array<std::array<float, size>, Dimension> _f;
+    std::array<std::array<std::array<float, size>, Dimension>, Dimension> _s;
+    std::array<std::array<std::array<float, size>, Dimension>, Dimension> _t;
+    std::array<std::array<float, size>, Dimension> _T;
+    std::array<std::array<float, size>, Dimension> _S;
+    std::array<float, size> _L;
 
 public:
     struct Fiber
