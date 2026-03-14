@@ -47,14 +47,14 @@ public:
         return _events;
     }
 
-    const float& L(size_t x) const
+    const float& w(size_t x) const
     {
-        return _L[x];
+        return _weight[x];
     }
 
-    const float& P(size_t x) const
+    const float& f(size_t x) const
     {
-        return _P[x];
+        return _density[x];
     }
 
     const float& f(unsigned i, size_t x) const
@@ -70,6 +70,26 @@ public:
     const float& t(unsigned i, unsigned j, size_t x) const
     {
         return _t[i][j][x];
+    }
+
+    const float& S(unsigned i,size_t x) const
+    {
+        return _S[i][x];
+    }
+
+    const float& T(unsigned i,size_t x) const
+    {
+        return _T[i][x];
+    }
+
+    const float& L(size_t x) const
+    {
+        return _L[x];
+    }
+
+    const float& P(size_t x) const
+    {
+        return _P[x];
     }
 
     bool event(Event &event)
