@@ -36,15 +36,17 @@ int main(int argc, char* argv[]) {
     std::cout << "Instantiating Covariant<3, 256>..." << std::endl;
     
     Covariant<3, 256> covariant;
+    Covariant<3, 256>::Event e;
 
     while (covariant.events() < events_param) {
-        Covariant<3, 256>::Event e;
+        e.clear();
         for (unsigned i = 0; i < covariant.dimension; ++i) {
             e.push_back(static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
         }
         covariant.event(e);
     }
     covariant.smooth(smooth_param);
+    covariant.parameters();
     
     std::cout << "Covariant<3, 256> instantiated successfully." << std::endl;
     std::cout << "Initialized stride values: ";

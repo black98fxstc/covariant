@@ -2,6 +2,7 @@
 #include <array>
 #include <vector>
 #include <fftw3.h>
+#include <assert.h>
 
 template <unsigned Dimension, unsigned Grid>
 class Covariant
@@ -10,15 +11,25 @@ public:
     const unsigned dimension = Dimension;
     const unsigned grid = Grid;
     size_t stride[Dimension];
+    int points[Dimension];
     const double delta = 1.0 / grid;
     typedef std::vector<float> Event;
+    struct Fiber
+    {
+    public:
+        size_t id;
+        size_t base;
+        size_t stride;
+        unsigned d;
+    };
 
 private:
-    static constexpr unsigned points = Grid + 1;
-    static const size_t size = std::pow(points, Dimension);
+    static const size_t size = std::pow(Grid + 1, Dimension);
     size_t _events = 0;
     float *_weight;
     float *_density;
+    fftw_r2r_kind kind[Dimension];
+    void *DCT = nullptr;
     std::array<std::array<float, size>, Dimension> _f;
     std::array<std::array<std::array<float, size>, Dimension>, Dimension> _s;
     std::array<std::array<std::array<float, size>, Dimension>, Dimension> _t;
@@ -27,19 +38,10 @@ private:
     std::array<float, size> _L;
 
 public:
-    struct Fiber
-    {
-    public:
-        size_t id;
-        size_t base;
-        size_t stride;
-        unsigned dimension;
-    };
-
     bool
     event(Event &event)
     {
-        size_t coordinate = 0;
+        size_t x = 0;
         double rem[Dimension];
         for (unsigned i = 0; i < dimension; i++)
         {
@@ -47,7 +49,7 @@ public:
                 return false;
             rem[i] = event[i] * grid;
             unsigned floor = static_cast<unsigned>(rem[i]);
-            coordinate += floor * stride[i];
+            x += floor * stride[i];
             rem[i] -= floor;
         }
 
@@ -67,7 +69,7 @@ public:
                     weight *= 1.0f - rem[i];
                 }
             }
-            _weight[coordinate + offset] += weight;
+            _weight[x + offset] += weight;
         }
         ++_events;
         return true;
@@ -81,32 +83,45 @@ public:
     void smooth(float percent)
     {
         if (percent <= 0.0f)
-        _density = _weight;
+            _density = _weight;
     }
 
     void parameters()
     {
-        for_each_fiber([this](Fiber& fiber) { this->basis_functions(fiber); });
-        for_each_fiber([this](Fiber& fiber) { this->natural_parameters(fiber); });
-        for (size_t i = 0; i < size; i++)
+        for_each_fiber([this](Fiber &fiber)
+                       { this->basis_functions(fiber); });
+        for_each_fiber([this](Fiber &fiber)
+                       { this->natural_parameters(fiber); });
+        for (size_t x = 0; x < size; x++)
         {
             for (unsigned j = 0; j < Dimension; j++)
-                for (unsigned k = 0; k < Dimension; k++)
-                    _T[j][i] += _t[k][j][i];
+                for (unsigned i = 0; i < Dimension; i++)
+                    _T[j][x] += _t[i][j][x];
             for (unsigned j = 0; j < Dimension; j++)
-                _L[i] += _T[j][i];
+                _L[x] += _T[j][x];
         }
     }
 
-    Covariant() {
+    Covariant()
+    {
         size_t s = 1;
         for (unsigned i = 0; i < dimension; i++)
         {
+            points[i] = Grid + 1;
             stride[i] = s;
-            s *= points;
+            kind[i] = FFTW_REDFT00;
+            s *= points[i];
         }
-        _weight = (float*) fftw_malloc(sizeof(float) * size);
+        _weight = (float *)fftw_malloc(sizeof(float) * size);
+        _density = (float *)fftw_malloc(sizeof(float) * size);
+        DCT = (void *)fftwf_plan_r2r(Dimension, points, _weight, _density, kind, 0);
+        assert(DCT);
     }
+
+    ~Covariant()
+    {
+        fftwf_destroy_plan((fftwf_plan)DCT);
+    };
 
 private:
     void *basis_functions(Fiber &fiber)
@@ -116,61 +131,61 @@ private:
         {
             marginal += _density[fiber.base + i * fiber.stride];
         }
-        for (size_t i = 0; i < points; i++)
+        for (int i = 0; i < points[fiber.d]; i++)
         {
-            _f[fiber.dimension][fiber.base + i * fiber.stride] = _density[fiber.base + i * fiber.stride] / marginal;
+            _f[fiber.d][fiber.base + i * fiber.stride] = _density[fiber.base + i * fiber.stride] / marginal;
         }
         return nullptr;
     }
 
     void *natural_parameters(Fiber &fiber)
     {
-        for (unsigned dim = 0; dim < Dimension; dim++)
+        for (unsigned i = 0; i < Dimension; i++)
         {
             float max = 0.0f;
             unsigned m = grid / 2;
-            for (unsigned i = 0; i < points; i++)
+            for (int j = 0; j < points[fiber.d]; j++)
             {
-                if (_f[dim][fiber.base + i * fiber.stride] > max)
+                if (_f[i][fiber.base + j * fiber.stride] > max)
                 {
-                    max = _f[dim][fiber.base + i * fiber.stride];
-                    m = i;
+                    max = _f[i][fiber.base + j * fiber.stride];
+                    m = j;
                 }
             }
             double t;
-            _s[dim][fiber.dimension][fiber.base + m * fiber.stride] = 0.0;
-            for (unsigned i = m, j; i < points;)
+            _s[i][fiber.d][fiber.base + m * fiber.stride] = 0.0;
+            for (int k = m, j; k < points[fiber.d];)
             {
-                j = i + 1;
-                while (_f[dim][fiber.base + j * fiber.stride] <= 0.0 && j < grid)
+                j = k + 1;
+                while (_f[i][fiber.base + j * fiber.stride] <= 0.0 && j < points[fiber.d] - 1)
                     j++;
-                if (_t[dim][fiber.dimension][fiber.base + j * fiber.stride] <= 0.0)
+                if (_t[i][fiber.d][fiber.base + j * fiber.stride] <= 0.0)
                     t = 1.0 / delta / delta;
                 else
-                    t = -2.0 *
-                        (std::log(_f[dim][fiber.base + j * fiber.stride]) - std::log(_f[dim][fiber.base + i * fiber.stride]) / delta / delta / (j - i) / (j - i) - _s[dim][fiber.dimension][fiber.base + i * fiber.stride] / delta / (j - i));
-                while (i < j)
+                    t = -2.0 * (std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride]) / delta / delta / (j - k) / (j - k) 
+                    - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
+                while (k < j)
                 {
-                    _t[dim][fiber.dimension][fiber.base + i * fiber.stride] = t;
-                    _s[dim][fiber.dimension][fiber.base + (i + 1) * fiber.stride] = -_t[dim][fiber.dimension][fiber.base + i * fiber.stride] * delta + _s[dim][fiber.dimension][fiber.base + i * fiber.stride];
-                    i++;
+                    _t[i][fiber.d][fiber.base + k * fiber.stride] = t;
+                    _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] = -_t[i][fiber.d][fiber.base + k * fiber.stride] * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
+                    k++;
                 }
             }
-            for (unsigned i = m, j; i > 0;)
+            for (unsigned k = m, j; k > 0;)
             {
-                j = i - 1;
-                while (_f[dim][fiber.base + j * fiber.stride] == 0.0 && j > 0)
+                j = k - 1;
+                while (_f[i][fiber.base + j * fiber.stride] == 0.0 && j > 0)
                     j--;
-                if (_t[dim][fiber.dimension][fiber.base + j * fiber.stride] <= 0.0)
+                if (_t[i][fiber.d][fiber.base + j * fiber.stride] <= 0.0)
                     t = 1.0 / delta / delta;
                 else
-                    t = -2.0 *
-                        (std::log(_f[dim][fiber.base + j * fiber.stride]) - std::log(_f[dim][fiber.base + i * fiber.stride]) / delta / delta / (j - i) / (j - i) - _s[dim][fiber.dimension][fiber.base + i * fiber.stride] / delta / (j - i));
-                while (i > j)
+                    t = -2.0 * (std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride]) / delta / delta / (j - k) / (j - k) 
+                    - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
+                while (k > j)
                 {
-                    _t[dim][fiber.dimension][fiber.base + i * fiber.stride] = t;
-                    _s[dim][fiber.dimension][fiber.base + (i + 1) * fiber.stride] = -_t[dim][fiber.dimension][fiber.base + i * fiber.stride] * delta + _s[dim][fiber.dimension][fiber.base + i * fiber.stride];
-                    i--;
+                    _t[i][fiber.d][fiber.base + k * fiber.stride] = t;
+                    _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] = -_t[i][fiber.d][fiber.base + k * fiber.stride] * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
+                    k--;
                 }
             }
         }
@@ -182,17 +197,16 @@ private:
         Fiber fiber;
         for (unsigned dim = 0; dim < Dimension; ++dim)
         {
-            fiber.dimension = dim;
+            fiber.d = dim;
             fiber.stride = stride[dim];
 
-            for (fiber.id = 0; fiber.id < size / points; fiber.id++)
+            for (fiber.id = 0; fiber.id < size / points[fiber.d]; fiber.id++)
             {
                 size_t smaller = dim == 0 ? 1 : fiber.id % stride[dim];
                 size_t larger = fiber.id / stride[dim];
-                fiber.base = larger * points * smaller;
+                fiber.base = larger * points[fiber.d] * smaller;
                 func(fiber);
             }
         }
     }
-
 };

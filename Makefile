@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -I.
-LIBS = -lfftw3 -lm
+LIBS = -lfftw3 -lfftw3f -lm
 TARGET = covariant
 SRCS = main.cpp
 OBJS = $(SRCS:.cpp=.o)
