@@ -31,8 +31,8 @@ private:
     std::array<std::vector<float>, Dimension> _f;
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _s;
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
-    std::array<std::vector<float>, Dimension> _T;
     std::array<std::vector<float>, Dimension> _S;
+    std::array<std::vector<float>, Dimension> _T;
     std::vector<float> _L;
     std::vector<float> _P;
 
@@ -47,52 +47,52 @@ public:
         return _events;
     }
 
-    const float& w(size_t x) const
+    const float &w(size_t x) const
     {
         return _weight[x];
     }
 
-    const float& f(size_t x) const
+    const float &f(size_t x) const
     {
         return _density[x];
     }
 
-    const float& f(unsigned i, size_t x) const
+    const float &f(unsigned i, size_t x) const
     {
         return _f[i][x];
     }
 
-    const float& s(unsigned i, unsigned j, size_t x) const
+    const float &s(unsigned i, unsigned j, size_t x) const
     {
         return _s[i][j][x];
     }
 
-    const float& t(unsigned i, unsigned j, size_t x) const
+    const float &t(unsigned i, unsigned j, size_t x) const
     {
         return _t[i][j][x];
     }
 
-    const float& S(unsigned i,size_t x) const
+    const float &S(unsigned i, size_t x) const
     {
         return _S[i][x];
     }
 
-    const float& T(unsigned i,size_t x) const
+    const float &T(unsigned i, size_t x) const
     {
         return _T[i][x];
     }
 
-    const float& L(size_t x) const
+    const float &L(size_t x) const
     {
         return _L[x];
     }
 
-    const float& P(size_t x) const
+    const float &P(size_t x) const
     {
         return _P[x];
     }
 
-    bool event(Event &event)
+    bool event(const Event &event)
     {
         size_t x = 0;
         double rem[Dimension];
@@ -132,32 +132,7 @@ public:
     {
         if (percent > 0.0f)
         {
-            float *cosine = (float *)fftw_malloc(sizeof(float) * _size);
-            fftwf_execute_r2r((fftwf_plan)DCT, _weight, cosine);
-            double **kernel = new double *[Dimension];
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                const double pi = 3.14159265358979323846;
-                double *k = kernel[i] = new double[points[i]];
-                double radius = percent / 100.0f * points[i];
-                for (int j = 0; j < points[i]; j++)
-                    k[j] = exp(-j * j * radius * radius * pi * pi * 2);
-            }
-            for (size_t x = 0; x < _size; x++)
-            {
-                double k = 1.0;
-                for (unsigned i = 0; i < Dimension; i++)
-                {
-                    unsigned j = (x / stride[i]) % points[i];
-                    k *= kernel[i][j];
-                }
-                cosine[x] *= k;
-            }
-            fftwf_execute_r2r((fftwf_plan)DCT, cosine, _density);
-            fftwf_free(cosine);
-            for (unsigned i = 0; i < Dimension; i++)
-                free(kernel[i]);
-            delete[] kernel;
+            filter(_weight, _density, percent = 1.0f);
         }
         else
         {
@@ -167,8 +142,18 @@ public:
         std::vector<float> sorted;
         std::copy(_density, _density + _size, std::back_inserter(sorted));
         std::sort(sorted.begin(), sorted.end());
+        std::vector<float> summed(sorted);
+        double sum = 0.0;
         for (size_t x = 0; x < _size; x++)
-            _P[x] = (std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin()) / static_cast<float>(_size);
+            summed[x] = sum += sorted[x];
+        for (size_t x = 0; x < _size; x++)
+        {
+            _P[x] = summed[(std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin())] / sum;
+            if (_density[x] < 0.0f)
+                _density[x] = 0.0f;
+            else
+                _density[x] /= sum;
+        }
 
         for_each_fiber([this](Fiber &fiber)
                        { this->basis_functions(fiber); });
@@ -176,12 +161,89 @@ public:
                        { this->natural_parameters(fiber); });
         for (size_t x = 0; x < _size; x++)
         {
-            for (unsigned j = 0; j < Dimension; j++)
+            for (unsigned j = 0; j < Dimension; j++) {
                 for (unsigned i = 0; i < Dimension; i++)
+                {
+                    _S[j][x] += _s[i][j][x];
                     _T[j][x] += _t[i][j][x];
+                }
+                if (_P[x] <= 0.05f)
+                    _S[j][x] = 1.0f;
+            }
             for (unsigned j = 0; j < Dimension; j++)
                 _L[x] += _T[j][x];
         }
+
+        // for_each_fiber([this](Fiber &fiber)
+        // {
+        //     const double threshold = 0.05f;
+        //     int p = 0, q;
+        //     for (int i = 0; i < points[fiber.d]; i++)
+        //         if (_P[fiber.base + i * fiber.stride] <= threshold)
+        //         _S[fiber.d][fiber.base + i * fiber.stride] = -1.0f;
+        //     // while (_P[fiber.base + p * fiber.stride] <= threshold && p < points[fiber.d])
+        //     //     p++;
+        //     // if (p == points[fiber.d]) {
+        //     //     for (int i = 0; i < points[fiber.d]; i++)
+        //     //         _S[fiber.d][fiber.base + i * fiber.stride] = -1.0f;
+        //     //     return;     
+        //     // }
+        //     // float edge_value = _S[fiber.d][fiber.base + p * fiber.stride];
+        //     // for (int i = p; i > 0; i--)
+        //     //     _S[fiber.d][fiber.base + i * fiber.stride] = edge_value;
+        //     // for (q = p + 1; p < points[fiber.d]; p = q) {
+        //     //     while (_P[fiber.base + q * fiber.stride] > threshold && q < points[fiber.d])
+        //     //         q++;
+        //     //     if (q == points[fiber.d])
+        //     //         break;
+        //     //     p = q;
+        //     //     while (_P[fiber.base + q * fiber.stride] <= threshold && q < points[fiber.d])
+        //     //         q++;
+        //     //     if (q == points[fiber.d])
+        //     //         break;
+        //     //     for (int i = p + 1; i < q; i++)
+        //     //         _S[fiber.d][fiber.base + i * fiber.stride] =
+        //     //             (double)(i-p)/(double)(q-p)*_S[fiber.d][fiber.base + p * fiber.stride]
+        //     //           + (double)(q-i)/(double)(q-p)*_S[fiber.d][fiber.base + q * fiber.stride];
+        //     // }
+        //     // edge_value = _S[fiber.d][fiber.base + p * fiber.stride];
+        //     // for (int i = p; i < points[fiber.d]; i++)
+        //     //     _S[fiber.d][fiber.base + i * fiber.stride] = edge_value;
+        //     });
+    }
+
+    double factorProbability()
+    {
+        double error = 0.0;
+        for (size_t x = 0; x < _size; x++)
+        {
+            double product = 1.0;
+            for (unsigned i = 0; i < Dimension; i++)
+                product *= f(i, x);
+            double diff = product - f(x);
+            diff = std::abs(diff);
+            if (diff > error)
+                error = diff;
+        }
+        return error;
+    }
+
+    double differentialEquation()
+    {
+        double error = 0.0;
+        for_each_fiber([this, &error](Fiber &fiber)
+                       {
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                for (int k = 0; k < points[fiber.d] - 1; k++)
+                {
+                    double diff = _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] - (-_t[i][fiber.d][fiber.base + k * fiber.stride] * 1.0/(points[fiber.d] - 1) + _s[i][fiber.d][fiber.base + k * fiber.stride]);
+                    diff = std::abs(diff);
+                    if (diff > error)
+                        error = diff;
+                }
+            } });
+        return error;
     }
 
     Covariant(int points[Dimension]) : points(points)
@@ -201,9 +263,44 @@ public:
         fftwf_destroy_plan((fftwf_plan)DCT);
         fftwf_free(_weight);
         fftwf_free(_density);
-    };
+    }
 
 private:
+    void filter(float* input, float* output, float percent = 1.0f)
+     {
+        float *cosine = (float *)fftw_malloc(sizeof(float) * _size);
+        fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
+        double **kernel = new double *[Dimension];
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            const double pi = 3.14159265358979323846;
+            double *k = kernel[i] = new double[points[i]];
+            double radius = percent / 100.0f;
+            for (int j = 0; j < points[i]; j++)
+                k[j] = exp(-j * j * radius * radius * pi * pi * 2);
+        }
+        for (size_t x = 0; x < _size; x++)
+        {
+            double k = 1.0;
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                unsigned j = (x / stride[i]) % points[i];
+                k *= kernel[i][j];
+            }
+            cosine[x] *= k;
+        }
+        fftwf_execute_r2r((fftwf_plan)DCT, cosine, output);
+        fftwf_free(cosine);
+        for (unsigned i = 0; i < Dimension; i++)
+            free(kernel[i]);
+        delete[] kernel;
+    }
+
+    void filter(float* data, float percent = 1.0f)
+    {
+        filter(data, data, percent);
+    }
+
     void *basis_functions(Fiber &fiber)
     {
         double marginal = (_density[fiber.base] + _density[fiber.base + (points[fiber.d] - 1) * fiber.stride]) / 2.0;
@@ -223,7 +320,7 @@ private:
         for (unsigned i = 0; i < Dimension; i++)
         {
             float max = 0.0f;
-            unsigned m = points[fiber.d] / 2;
+            unsigned m = points[fiber.d];
             for (int j = 0; j < points[fiber.d]; j++)
             {
                 if (_f[i][fiber.base + j * fiber.stride] > max)
@@ -240,30 +337,31 @@ private:
                 j = k + 1;
                 while (_f[i][fiber.base + j * fiber.stride] <= 0.0 && j < points[fiber.d] - 1)
                     j++;
-                if (_t[i][fiber.d][fiber.base + j * fiber.stride] <= 0.0)
-                    t = 1.0 / delta / delta;
+                if (_f[i][fiber.base + j * fiber.stride] <= 0.0)
+                    t = 1.0; // delta / delta;
                 else
-                    t = -2.0 * (std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride]) / delta / delta / (j - k) / (j - k) - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
+                    t = -2.0 * ((std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride])) / delta / delta / (j - k) / (j - k) - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
                 while (k < j)
                 {
                     _t[i][fiber.d][fiber.base + k * fiber.stride] = t;
-                    _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] = -_t[i][fiber.d][fiber.base + k * fiber.stride] * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
+                    if (k != points[fiber.d] - 1)
+                        _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] = -t * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
                     k++;
                 }
             }
             for (unsigned k = m, j; k > 0;)
             {
                 j = k - 1;
-                while (_f[i][fiber.base + j * fiber.stride] == 0.0 && j > 0)
+                while (_f[i][fiber.base + j * fiber.stride] <= 0.0 && j > 0)
                     j--;
-                if (_t[i][fiber.d][fiber.base + j * fiber.stride] <= 0.0)
+                if (_f[i][fiber.base + j * fiber.stride] <= 0.0)
                     t = 1.0 / delta / delta;
                 else
-                    t = -2.0 * (std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride]) / delta / delta / (j - k) / (j - k) - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
+                    t = -2.0 * ((std::log(_f[i][fiber.base + j * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride])) / delta / delta / (j - k) / (j - k) - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta / (j - k));
                 while (k > j)
                 {
-                    _t[i][fiber.d][fiber.base + k * fiber.stride] = t;
-                    _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] = -_t[i][fiber.d][fiber.base + k * fiber.stride] * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
+                    _t[i][fiber.d][fiber.base + (k - 1) * fiber.stride] = t;
+                    _s[i][fiber.d][fiber.base + (k - 1) * fiber.stride] = t * delta + _s[i][fiber.d][fiber.base + k * fiber.stride];
                     k--;
                 }
             }
@@ -281,9 +379,9 @@ private:
 
             for (fiber.id = 0; fiber.id < _size / points[fiber.d]; fiber.id++)
             {
-                size_t smaller = i == 0 ? 1 : fiber.id % stride[i];
+                size_t smaller = fiber.id % stride[i];
                 size_t larger = fiber.id / stride[i];
-                fiber.base = larger * points[fiber.d] * smaller;
+                fiber.base = larger * stride[i] * points[fiber.d] + smaller;
                 func(fiber);
             }
         }
