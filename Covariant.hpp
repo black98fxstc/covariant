@@ -33,6 +33,7 @@ private:
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
     std::array<std::vector<float>, Dimension> _S;
     std::array<std::vector<float>, Dimension> _T;
+    std::array<std::vector<float>, Dimension> _M;
     std::vector<float> _L;
     std::vector<float> _P;
 
@@ -80,6 +81,11 @@ public:
     const float &T(unsigned i, size_t x) const
     {
         return _T[i][x];
+    }
+
+    const float &M(unsigned i, size_t x) const
+    {
+        return _M[i][x];
     }
 
     const float &L(size_t x) const
@@ -133,6 +139,9 @@ public:
         if (percent > 0.0f)
         {
             filter(_weight, _density, percent = 1.0f);
+            for (size_t x = 0; x < _size; x++)
+                if (_density[x] < 0.0f)
+                    _density[x] = 0.0f;
         }
         else
         {
@@ -149,10 +158,7 @@ public:
         for (size_t x = 0; x < _size; x++)
         {
             _P[x] = summed[(std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin())] / sum;
-            if (_density[x] < 0.0f)
-                _density[x] = 0.0f;
-            else
-                _density[x] /= sum;
+            _density[x] /= sum;
         }
 
         for_each_fiber([this](Fiber &fiber)
@@ -162,54 +168,83 @@ public:
         for (size_t x = 0; x < _size; x++)
         {
             for (unsigned j = 0; j < Dimension; j++) {
-                for (unsigned i = 0; i < Dimension; i++)
-                {
-                    _S[j][x] += _s[i][j][x];
-                    _T[j][x] += _t[i][j][x];
-                }
-                if (_P[x] <= 0.05f)
-                    _S[j][x] = 1.0f;
-            }
-            for (unsigned j = 0; j < Dimension; j++)
                 _L[x] += _T[j][x];
+                if (_P[x] <= 0.05f)
+                    _L[x] = -1.0f;
+            }
         }
-
         // for_each_fiber([this](Fiber &fiber)
-        // {
-        //     const double threshold = 0.05f;
-        //     int p = 0, q;
-        //     for (int i = 0; i < points[fiber.d]; i++)
-        //         if (_P[fiber.base + i * fiber.stride] <= threshold)
-        //         _S[fiber.d][fiber.base + i * fiber.stride] = -1.0f;
-        //     // while (_P[fiber.base + p * fiber.stride] <= threshold && p < points[fiber.d])
-        //     //     p++;
-        //     // if (p == points[fiber.d]) {
-        //     //     for (int i = 0; i < points[fiber.d]; i++)
-        //     //         _S[fiber.d][fiber.base + i * fiber.stride] = -1.0f;
-        //     //     return;     
-        //     // }
-        //     // float edge_value = _S[fiber.d][fiber.base + p * fiber.stride];
-        //     // for (int i = p; i > 0; i--)
-        //     //     _S[fiber.d][fiber.base + i * fiber.stride] = edge_value;
-        //     // for (q = p + 1; p < points[fiber.d]; p = q) {
-        //     //     while (_P[fiber.base + q * fiber.stride] > threshold && q < points[fiber.d])
-        //     //         q++;
-        //     //     if (q == points[fiber.d])
-        //     //         break;
-        //     //     p = q;
-        //     //     while (_P[fiber.base + q * fiber.stride] <= threshold && q < points[fiber.d])
-        //     //         q++;
-        //     //     if (q == points[fiber.d])
-        //     //         break;
-        //     //     for (int i = p + 1; i < q; i++)
-        //     //         _S[fiber.d][fiber.base + i * fiber.stride] =
-        //     //             (double)(i-p)/(double)(q-p)*_S[fiber.d][fiber.base + p * fiber.stride]
-        //     //           + (double)(q-i)/(double)(q-p)*_S[fiber.d][fiber.base + q * fiber.stride];
-        //     // }
-        //     // edge_value = _S[fiber.d][fiber.base + p * fiber.stride];
-        //     // for (int i = p; i < points[fiber.d]; i++)
-        //     //     _S[fiber.d][fiber.base + i * fiber.stride] = edge_value;
-        //     });
+        //                { comb_the_fibers(fiber); });
+        // for_each_fiber([this](Fiber &fiber)
+        //                { modal_clustering(fiber); });
+    }
+
+    void modal_clustering(Covariant<Dimension>::Fiber &fiber)
+    {
+        int winding = 0;
+        int j;
+        for (j = 0; j < points[fiber.d] - 1; j++)
+        {
+            if ((_S[fiber.d][fiber.base + j * fiber.stride] > 0.0f  && _S[fiber.d][fiber.base + (j + 1) * fiber.stride] <= 0.0f)
+             || (_S[fiber.d][fiber.base + j * fiber.stride] <= 0.0f && _S[fiber.d][fiber.base + (j + 1) * fiber.stride] > 0.0f))
+            {
+                if (_T[fiber.d][fiber.base + j * fiber.stride] < 0.0f)
+                {
+                    winding++;
+                    _M[fiber.d][fiber.base + j * fiber.stride] = 0.0f;
+                }
+                else
+                    _M[fiber.d][fiber.base + j * fiber.stride] = winding % 2 ? 1.0f : -1.0f;
+            }
+            else
+                _M[fiber.d][fiber.base + j * fiber.stride] = winding % 2 ? 1.0f : -1.0f;
+        }
+        _M[fiber.d][fiber.base + j * fiber.stride] = winding % 2 ? 1.0f : -1.0f;
+    }
+
+    void comb_the_fibers(Covariant<Dimension>::Fiber &fiber)
+    {
+        double delta = 1.0 / (points[fiber.d] - 1);
+        const double threshold = 0.01f;
+        int p = 0, q;
+        // find the first reliable point
+        for (q = p; q < points[fiber.d]; q++)
+            if (_P[fiber.base + q * fiber.stride] > threshold)
+                break;
+        // normal tail to infinity
+        if (q == points[fiber.d])
+            _T[fiber.d][fiber.base + --q * fiber.stride] = 1.0f;
+        for (int i = q; i > p; i--) {
+            _T[fiber.d][fiber.base + (i - 1) * fiber.stride] = std::abs(_T[fiber.d][fiber.base + i * fiber.stride]);
+            _S[fiber.d][fiber.base + (i - 1) * fiber.stride] = _S[fiber.d][fiber.base + i * fiber.stride] + delta * _T[fiber.d][fiber.base + i * fiber.stride];
+        }
+        p = q;          
+        for (q = p + 1; q < points[fiber.d]; p = q)
+        {
+            // find the next unreliable point if any
+            while (q < points[fiber.d] && _P[fiber.base + q * fiber.stride] > threshold)
+                q++;
+            if (q == points[fiber.d])
+                break;
+            p = q;
+            // find the next reliable point if any
+            while (q < points[fiber.d] && _P[fiber.base + q * fiber.stride] <= threshold)
+                q++;
+            if (q == points[fiber.d])
+                break;
+            // interpolate the unreliable points
+            for (int i = p + 1; i < q; i++) {
+                _T[fiber.d][fiber.base + i * fiber.stride] = 
+                    (_S[fiber.d][fiber.base + q * fiber.stride] - _S[fiber.d][fiber.base + p * fiber.stride])/(double)(q - p);
+                _S[fiber.d][fiber.base + i * fiber.stride] =
+                    (double)(i - p) / (double)(q - p) * _S[fiber.d][fiber.base + q * fiber.stride] + (double)(q - i) / (double)(q - p) * _S[fiber.d][fiber.base + p * fiber.stride];
+            }
+        }
+        // normal tail on the other side
+        for (int i = p + 1; i < points[fiber.d] - 1; i++) {
+            _T[fiber.d][fiber.base + i * fiber.stride] = std::abs(_T[fiber.d][fiber.base + (i - 1) * fiber.stride]);
+            _S[fiber.d][fiber.base + i * fiber.stride] = _S[fiber.d][fiber.base + (i - 1) * fiber.stride] - delta * _T[fiber.d][fiber.base + (i - 1) * fiber.stride];
+        }
     }
 
     double factorProbability()
@@ -365,6 +400,11 @@ private:
                     k--;
                 }
             }
+            for (int k = 0; k < points[fiber.d]; k++)
+            {
+                _S[fiber.d][fiber.base + k * fiber.stride] += _s[i][fiber.d][fiber.base + k * fiber.stride];
+                _T[fiber.d][fiber.base + k * fiber.stride] += _t[i][fiber.d][fiber.base + k * fiber.stride];
+            }
         }
         return nullptr;
     }
@@ -379,9 +419,12 @@ private:
 
             for (fiber.id = 0; fiber.id < _size / points[fiber.d]; fiber.id++)
             {
-                size_t smaller = fiber.id % stride[i];
-                size_t larger = fiber.id / stride[i];
-                fiber.base = larger * stride[i] * points[fiber.d] + smaller;
+                size_t smaller = fiber.id % stride[fiber.d];
+                size_t larger = fiber.id / stride[fiber.d];
+                if (fiber.d == Dimension - 1)
+                    fiber.base = smaller;
+                else
+                    fiber.base = larger * points[fiber.d] * stride[fiber.d] + smaller;
                 func(fiber);
             }
         }
@@ -401,6 +444,7 @@ private:
             _f[i].resize(_size);
             _T[i].resize(_size);
             _S[i].resize(_size);
+            _M[i].resize(_size);
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);
