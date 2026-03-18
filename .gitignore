@@ -1,3 +1,9 @@
 covariant
 main.o
 norminv.cpp
+run_params.bin
+Covariant.hpp
+covariant.dat
+.gitignore
+
+*.bin
