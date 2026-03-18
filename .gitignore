@@ -7,3 +7,4 @@ covariant.dat
 .gitignore
 
 *.bin
+*.o

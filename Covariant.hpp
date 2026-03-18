@@ -18,6 +18,12 @@ private:
         size_t base;
         size_t stride;
         unsigned d;
+        float& f (int i, int j) {
+            return f[i][base + j * stride]; }
+        float& s (int i, int j) {
+            return s[i][base + j * stride]; }
+        float& t (int i, int j) {
+            return t[i][base + j * stride]; }
     };
 
     size_t _size;
@@ -269,14 +275,16 @@ public:
         double error = 0.0;
         for_each_fiber([this, &error](Fiber &fiber)
         {
-            double delta = 1.0 / (points[fiber.d] - 1);
+            double t, t_diff, delta = 1.0 / (points[fiber.d] - 1);
             for (unsigned int i = 0; i < Dimension; i++)
             {
                 for (int k = 0; k < points[fiber.d] - 1; k++)
                 {
-                    double t = -2.0 * ((std::log(_f[i][fiber.base + (k + 1) * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride])) / delta / delta 
-                                - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta);
-                    double t_diff = t - _t[i][fiber.d][fiber.base + k * fiber.stride];
+                    if (_f[i][fiber.base + (k + 1) * fiber.stride] > 0 && _f[i][fiber.base + k * fiber.stride] > 0) {
+                        t = -2.0 * ((std::log(_f[i][fiber.base + (k + 1) * fiber.stride]) - std::log(_f[i][fiber.base + k * fiber.stride])) / delta / delta 
+                                    - _s[i][fiber.d][fiber.base + k * fiber.stride] / delta);
+                    }
+                    t_diff = t - _t[i][fiber.d][fiber.base + k * fiber.stride];
                     
                     double diff = _s[i][fiber.d][fiber.base + (k + 1) * fiber.stride] - (-_t[i][fiber.d][fiber.base + k * fiber.stride] * 1.0/(points[fiber.d] - 1) + _s[i][fiber.d][fiber.base + k * fiber.stride]);
                     diff = std::abs(diff);
@@ -376,7 +384,7 @@ private:
             double delta = 1.0 / (points[fiber.d] - 1);
             double t;
             _s[i][fiber.d][fiber.base + m * fiber.stride] = 0.0;
-            for (int k = m, j; k < points[fiber.d];)
+            for (int k = m, j; k < points[fiber.d] - 1;)
             {
                 j = k + 1;
                 while (_f.at(i).at(fiber.base + j * fiber.stride) <= 0.0 && j < points[fiber.d] - 1)
@@ -384,7 +392,8 @@ private:
                 if (_f.at(i).at(fiber.base + j * fiber.stride) <= 0.0)
                     t = 1.0; // delta / delta;
                 else
-                    t = -2.0 * ((std::log(_f.at(i).at(fiber.base + j * fiber.stride)) - std::log(_f.at(i).at(fiber.base + k * fiber.stride))) / delta / delta / (j - k) / (j - k) - _s.at(i).at(fiber.d).at(fiber.base + k * fiber.stride) / delta / (j - k));
+                    t = -2.0 * ((std::log(_f.at(i).at(fiber.base + j * fiber.stride)) - std::log(_f.at(i).at(fiber.base + k * fiber.stride))) / delta / delta / (j - k) / (j - k) 
+                        - _s.at(i).at(fiber.d).at(fiber.base + k * fiber.stride) / delta / (j - k));
                 while (k < j)
                 {
                     _t.at(i).at(fiber.d).at(fiber.base + k * fiber.stride) = t;
