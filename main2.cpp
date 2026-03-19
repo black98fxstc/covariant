@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Analyzing the sample..." << std::endl;
 
     covariant.parameters(smooth_param);
-    if(covariant.factorProbability() < 0.01) {
+    if(covariant.factorProbability() > 0.01) {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
     }
     assert(covariant.differentialEquation() < 0.01);
@@ -178,7 +178,7 @@ int main(int argc, char* argv[]) {
     write_file("P.bin", [&](size_t x) { return covariant.P(x); });
     write_file("f.bin", [&](size_t x) { return covariant.f(x); });
     write_file("f1.bin", [&](size_t x) { return covariant.f(0, x); });
-    write_file("f1.bin", [&](size_t x) { return covariant.f(1, x); });
+    write_file("f2.bin", [&](size_t x) { return covariant.f(1, x); });
     write_file("S1.bin", [&](size_t x) { return covariant.S(0, x); });
     write_file("S2.bin", [&](size_t x) { return covariant.S(1, x); });
     write_file("L.bin", [&](size_t x) { return covariant.L(x); });

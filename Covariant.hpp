@@ -14,19 +14,25 @@ public:
 private:
     struct Fiber
     {
-        Covariant& cov;
+        Covariant &cov;
         size_t id;
         size_t base;
         size_t stride;
         double delta;
         unsigned d;
-        float& f (int i, int j) {
-            return cov._f.at(i).at(base + j * stride); }
-        float& s (int i, int j) {
-            return cov._s.at(i).at(d).at(base + j * stride); }
-        float& t (int i, int j) {
-            return cov._t.at(i).at(d).at(base + j * stride); }
-        Fiber(Covariant& cov) : cov(cov) {};
+        float &f(int i, int j)
+        {
+            return cov._f.at(i).at(base + j * stride);
+        }
+        float &s(int i, int j)
+        {
+            return cov._s.at(i).at(d).at(base + j * stride);
+        }
+        float &t(int i, int j)
+        {
+            return cov._t.at(i).at(d).at(base + j * stride);
+        }
+        Fiber(Covariant &cov) : cov(cov) {};
     };
 
     size_t _size;
@@ -183,18 +189,24 @@ public:
         for_each_fiber([this](Fiber &fiber)
                        { this->natural_parameters(fiber); });
         for (size_t x = 0; x < _size; x++)
-        {
-            for (unsigned j = 0; j < Dimension; j++) {
+            for (unsigned i = 0; i < Dimension; i++)
+                for (unsigned j = 0; j < Dimension; j++)
+                {
+                    _S.at(j).at(x) += _s.at(i).at(j).at(x);
+                    _T.at(j).at(x) += _s.at(i).at(j).at(x);
+                }
+        for (size_t x = 0; x < _size; x++)
+            for (unsigned j = 0; j < Dimension; j++)
+            {
                 _L[x] += _T[j][x];
                 if (_P[x] <= 0.05f)
                     _L[x] = -1.0f;
             }
-        }
-        // for_each_fiber([this](Fiber &fiber)
-        //                { comb_the_fibers(fiber); });
-        // for_each_fiber([this](Fiber &fiber)
-        //                { modal_clustering(fiber); });
     }
+    // for_each_fiber([this](Fiber &fiber)
+    //                { comb_the_fibers(fiber); });
+    // for_each_fiber([this](Fiber &fiber)
+    //                { modal_clustering(fiber); });
 
     void modal_clustering(Covariant<Dimension>::Fiber &fiber)
     {
@@ -225,7 +237,8 @@ public:
         // normal tail to infinity
         if (q == points[fiber.d])
             _T[fiber.d][--q * fiber.stride] = 1.0f;
-        for (int i = q; i > p; i--) {
+        for (int i = q; i > p; i--)
+        {
             _T[fiber.d][(i - 1) * fiber.stride] = std::abs(_T[fiber.d][i * fiber.stride]);
             _S[fiber.d][(i - 1) * fiber.stride] = _S[fiber.d][i * fiber.stride] + delta * _T[fiber.d][i * fiber.stride];
         }
@@ -244,7 +257,8 @@ public:
             if (q == points[fiber.d])
                 break;
             // interpolate the unreliable points
-            for (int i = p + 1; i < q; i++) {
+            for (int i = p + 1; i < q; i++)
+            {
                 _T[fiber.d][i * fiber.stride] =
                     (_S[fiber.d][q * fiber.stride] - _S[fiber.d][p * fiber.stride]) / (double)(q - p);
                 _S[fiber.d][i * fiber.stride] =
@@ -252,7 +266,8 @@ public:
             }
         }
         // normal tail on the other side
-        for (int i = p + 1; i < points[fiber.d] - 1; i++) {
+        for (int i = p + 1; i < points[fiber.d] - 1; i++)
+        {
             _T[fiber.d][i * fiber.stride] = std::abs(_T[fiber.d][(i - 1) * fiber.stride]);
             _S[fiber.d][i * fiber.stride] = _S[fiber.d][(i - 1) * fiber.stride] - delta * _T[fiber.d][(i - 1) * fiber.stride];
         }
@@ -277,7 +292,7 @@ public:
     {
         double error = 0.0;
         for_each_fiber([this, &error](Fiber &fiber)
-        {
+                       {
             double t, s_diff, t_diff, delta = 1.0 / (points[fiber.d] - 1);
             for (unsigned int i = 0; i < Dimension; i++)
             {
@@ -359,6 +374,8 @@ private:
         {
             marginal += _density[fiber.base + i * fiber.stride];
         }
+        if (marginal < 0.01 * fiber.delta)
+            marginal = 0.01 * fiber.delta;
         for (int i = 0; i < points[fiber.d]; i++)
         {
             fiber.f(fiber.d, i) = _density[fiber.base + i * fiber.stride] / marginal;
@@ -366,22 +383,25 @@ private:
         return nullptr;
     }
 
+    inline float squared(float x) { return x * x; };
+
     void *natural_parameters(Fiber &fiber)
     {
         for (unsigned i = 0; i < Dimension; i++)
         {
             float max = 0.0f;
+            if (fiber.d > 0)
+                max = 0.0f;
             int m = points[fiber.d] - 1;
-            for (int j = 0; j < points[fiber.d]; j++)
+            for (int k = 0; k < points[fiber.d]; k++)
             {
-                if (fiber.f(i, j) > max)
+                if (fiber.f(i, k) > max)
                 {
-                    max = fiber.f(i, j);
-                    m = j;
+                    max = fiber.f(i, k);
+                    m = k;
                 }
             }
-            double delta = 1.0 / (points[fiber.d] - 1);
-            double t, t2;
+            double t;
             fiber.s(i, m) = 0.0;
             for (int k = m, j; k < points[fiber.d] - 1;)
             {
@@ -389,16 +409,14 @@ private:
                 while (fiber.f(i, j) <= 0.0 && j < points[fiber.d] - 1)
                     j++;
                 if (fiber.f(i, j) <= 0.0)
-                    t = 1.0 / delta / delta;
+                    t = 1.0 / squared(fiber.delta);
                 else
-                    t = -2.0 * ((std::log(fiber.f(i, j)) - std::log(fiber.f(i, k))) / delta / delta / (j - k) / (j - k) 
-                        - fiber.s(i, k) / delta / (j - k));
-                t2 = -2.0 * ((std::log(fiber.f(i, k + 1)) - std::log(fiber.f(i, k))) / delta / delta - fiber.s(i, k) / delta);
+                    t = -2.0 * ((std::log(fiber.f(i, j)) - std::log(fiber.f(i, k))) / squared(fiber.delta * (j - k)) - fiber.s(i, k) / fiber.delta / (j - k));
                 while (k < j)
                 {
                     fiber.t(i, k) = t;
                     if (k != points[fiber.d] - 1)
-                        fiber.s(i, (k + 1)) = -t * delta + fiber.s(i, k);
+                        fiber.s(i, k + 1) = -t * fiber.delta + fiber.s(i, k);
                     k++;
                 }
             }
@@ -408,22 +426,15 @@ private:
                 while (j > 0 && fiber.f(i, j) <= 0.0)
                     j--;
                 if (fiber.f(i, j) <= 0.0)
-                    t = 1.0 / delta / delta;
+                    t = 1.0 / squared(fiber.delta);
                 else
-                    t = 2.0 * ((std::log(fiber.f(i, k)) - std::log(fiber.f(i, j))) / delta / delta / (k - j) / (k - j) 
-                        - fiber.s(i, k) / delta / (k - j));
+                    t = 2.0 * ((std::log(fiber.f(i, k)) - std::log(fiber.f(i, j))) / squared(fiber.delta * (k - j)) - fiber.s(i, k) / fiber.delta / (k - j));
                 while (k > j)
                 {
                     fiber.t(i, k - 1) = t;
-                    fiber.s(i, k - 1) = t * delta + fiber.s(i, k);
+                    fiber.s(i, k - 1) = t * fiber.delta + fiber.s(i, k);
                     k--;
                 }
-                t2 = -2.0 * ((std::log(fiber.f(i, k + 1)) - std::log(fiber.f(i, k))) / delta / delta - fiber.s(i, k) / delta);
-            }
-            for (int k = 0; k < points[fiber.d]; k++)
-            {
-                _S.at(fiber.d).at(k) += fiber.s(i, k);
-                _T.at(fiber.d).at(k) += fiber.t(i, k);
             }
         }
         return nullptr;
