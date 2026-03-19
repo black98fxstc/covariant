@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
     if(covariant.factorProbability() < 0.01) {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
     }
-    assert(covariant.differentialEquation() < 0.01);
+    assert(covariant.differentialEquation() < 0.001);
 
     std::cout << "Consistency checkes passed..." << std::endl;
     
