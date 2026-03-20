@@ -215,7 +215,7 @@ public:
                     _L[x] = -1.0f;
             }
         for_each_fiber([this](Fiber &fiber)
-                    { comb_the_fibers(fiber); });
+                       { comb_the_fibers(fiber); });
     }
     // for_each_fiber([this](Fiber &fiber)
     //                { modal_clustering(fiber); });
@@ -239,52 +239,61 @@ public:
 
     void comb_the_fibers(Covariant<Dimension>::Fiber &fiber)
     {
-        const double threshold = 0.001f;
-        int p = 0, q;
-        // find the first reliable point
-        for (q = p; q < points[fiber.d]; q++)
-            if (fiber.P(q) > threshold)
-                break;
-        if (q == points[fiber.d]) 
-        {   // none
-            double sum = 0;
+        const double quantile = 0.001f, threshold = 0.005f;
+        int p = 0, q = 0;
+        double P = 0;
+        if (fiber.d == 0 && fiber.id == 27)
+            p = q;
+        // find first significant interval
+        while (q < points[fiber.d] && P < threshold)
+        {
+            P = 0;
+            while (q < points[fiber.d] && fiber.P(q) <= quantile)
+                q++;
+            p = q;
+            while (q < points[fiber.d] && fiber.P(q) > quantile)
+                P += f(fiber.base + q++ * fiber.stride);
+        }
+        // if none do something smooth
+        if (q == points[fiber.d])
+        {
             for (int i = 0; i < points[fiber.d]; i++)
-                sum += fiber.S(i);
-            for (int i = 0; i < points[fiber.d]; i++) {
+            {
                 fiber.T(i) = 0.0f;
-                fiber.S(i) = sum * fiber.delta;
+                fiber.S(i) = 1.0f;
             }
             return;
         }
-        // normal tail to infinity
-        for (int i = q; i > p; i--)
+        // normal tail to minus infinity
+        for (int i = p; i > 0; i--)
         {
             fiber.T((i - 1)) = std::abs(fiber.T(i));
             fiber.S((i - 1)) = fiber.S(i) + fiber.delta * fiber.T(i);
         }
         p = q;
-        for (q = p + 1; q < points[fiber.d]; p = q)
+        // interpolate between significant intervales
+        while (q < points[fiber.d])
         {
-            // find the next unreliable point if any
-            while (q < points[fiber.d] && fiber.P(q) > threshold)
-                q++;
+            P = 0;
+            while (q < points[fiber.d] && P < threshold)
+            {
+                P = 0;
+                while (q < points[fiber.d] && fiber.P(q) <= quantile)
+                    q++;
+                while (q < points[fiber.d] && fiber.P(q) > quantile)
+                    P += f(fiber.base + q++ * fiber.stride);
+            }
             if (q == points[fiber.d])
                 break;
-            p = q;
-            // find the next reliable point if any
-            while (q < points[fiber.d] && fiber.P(q) <= threshold)
-                q++;
-            if (q == points[fiber.d])
-                break;
-            // interpolate the unreliable points
             for (int i = p + 1; i < q; i++)
             {
                 fiber.T(i) = (fiber.S(q) - fiber.S(p)) / (double)(q - p);
                 fiber.S(i) = ((double)(i - p) * fiber.S(q) + (double)(q - i) * fiber.S(p)) / (double)(q - p);
             }
+            p = q;
         }
         // normal tail on the other side
-        for (int i = p + 1; i < points[fiber.d]; i++)
+        for (int i = p; i < points[fiber.d]; i++)
         {
             fiber.T(i) = std::abs(fiber.T((i - 1)));
             fiber.S(i) = fiber.S(i - 1) - fiber.delta * fiber.T(i - 1);
@@ -392,12 +401,12 @@ private:
         {
             marginal += _density[fiber.base + i * fiber.stride];
         }
-        if (marginal < 0.01 * fiber.delta)
-            marginal = 0.01 * fiber.delta;
-        for (int i = 0; i < points[fiber.d]; i++)
-        {
-            fiber.f(fiber.d, i) = _density[fiber.base + i * fiber.stride] / marginal;
-        }
+        if (marginal < 1.0 / (double)_events)
+            for (int i = 0; i < points[fiber.d]; i++)
+                fiber.f(fiber.d, i) = 0.0f;
+        else
+            for (int i = 0; i < points[fiber.d]; i++)
+                fiber.f(fiber.d, i) = _density[fiber.base + i * fiber.stride] / marginal;
         return nullptr;
     }
 

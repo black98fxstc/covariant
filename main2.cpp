@@ -183,6 +183,8 @@ int main(int argc, char* argv[]) {
     write_file("f2.bin", [&](size_t x) { return covariant.f(1, x); });
     write_file("S1.bin", [&](size_t x) { return covariant.S(0, x); });
     write_file("S2.bin", [&](size_t x) { return covariant.S(1, x); });
+    write_file("T1.bin", [&](size_t x) { return covariant.T(0, x); });
+    write_file("T2.bin", [&](size_t x) { return covariant.T(1, x); });
     write_file("L.bin", [&](size_t x) { return covariant.L(x); });
     write_file("w.bin", [&](size_t x) { return covariant.w(x); });
     std::cout << "Data written successfully." << std::endl;
