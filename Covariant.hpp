@@ -40,6 +40,10 @@ private:
         {
             return cov._T.at(d).at(base + j * stride);
         }
+        float &M(int j)
+        {
+            return cov._M.at(base + j * stride);
+        }
         float &P(int j)
         {
             return cov._P.at(base + j * stride);
@@ -60,7 +64,7 @@ private:
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
     std::array<std::vector<float>, Dimension> _S;
     std::array<std::vector<float>, Dimension> _T;
-    std::array<std::vector<float>, Dimension> _M;
+    std::vector<float> _M;
     std::vector<float> _L;
     std::vector<float> _P;
 
@@ -117,9 +121,9 @@ public:
         return _T[i][x];
     }
 
-    const float &M(unsigned i, size_t x) const
+    const float &M(size_t x) const
     {
-        return _M[i][x];
+        return _M[x];
     }
 
     const float &L(size_t x) const
@@ -214,11 +218,11 @@ public:
                 if (_P[x] <= 0.05f)
                     _L[x] = -1.0f;
             }
+        // for_each_fiber([this](Fiber &fiber)
+        //                { comb_the_fibers(fiber); });
         for_each_fiber([this](Fiber &fiber)
-                       { comb_the_fibers(fiber); });
+                    { modal_clustering(fiber); });
     }
-    // for_each_fiber([this](Fiber &fiber)
-    //                { modal_clustering(fiber); });
 
     void modal_clustering(Covariant<Dimension>::Fiber &fiber)
     {
@@ -226,14 +230,8 @@ public:
         for (j = 0; j < points[fiber.d] - 1; j++)
         {
             if ((fiber.S(j) > 0.0f && fiber.S((j + 1)) <= 0.0f) || (fiber.S(j) <= 0.0f && fiber.S((j + 1)) > 0.0f))
-            {
                 if (fiber.T(j) < 0.0f)
-                    _M(j) = 1.0f;
-                else
-                    _M(j) = -1.0f;
-            }
-            else
-                _M(j) = -1.0f;
+                    fiber.M(j) = 0.0f;
         }
     }
 
@@ -503,13 +501,14 @@ private:
             _f[i].resize(_size);
             _T[i].resize(_size);
             _S[i].resize(_size);
-            _M[i].resize(_size);
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);
                 _t[i][j].resize(_size);
             }
         }
+        _M.resize(_size);
+        std::fill(_M.begin(), _M.end(), -1.0f);
         _L.resize(_size);
         _P.resize(_size);
         _weight = (float *)fftw_malloc(sizeof(float) * _size);
