@@ -32,6 +32,18 @@ private:
         {
             return cov._t.at(i).at(d).at(base + j * stride);
         }
+        float &S(int j)
+        {
+            return cov._S.at(d).at(base + j * stride);
+        }
+        float &T(int j)
+        {
+            return cov._T.at(d).at(base + j * stride);
+        }
+        float &P(int j)
+        {
+            return cov._P.at(base + j * stride);
+        }
         Fiber(Covariant &cov) : cov(cov) {};
     };
 
@@ -202,9 +214,9 @@ public:
                 if (_P[x] <= 0.05f)
                     _L[x] = -1.0f;
             }
+        for_each_fiber([this](Fiber &fiber)
+                    { comb_the_fibers(fiber); });
     }
-    // for_each_fiber([this](Fiber &fiber)
-    //                { comb_the_fibers(fiber); });
     // for_each_fiber([this](Fiber &fiber)
     //                { modal_clustering(fiber); });
 
@@ -213,63 +225,69 @@ public:
         int j;
         for (j = 0; j < points[fiber.d] - 1; j++)
         {
-            if ((_S[fiber.d][j * fiber.stride] > 0.0f && _S[fiber.d][(j + 1) * fiber.stride] <= 0.0f) || (_S[fiber.d][j * fiber.stride] <= 0.0f && _S[fiber.d][(j + 1) * fiber.stride] > 0.0f))
+            if ((fiber.S(j) > 0.0f && fiber.S((j + 1)) <= 0.0f) || (fiber.S(j) <= 0.0f && fiber.S((j + 1)) > 0.0f))
             {
-                if (_T[fiber.d][j * fiber.stride] < 0.0f)
-                    _M[fiber.d][j * fiber.stride] = 1.0f;
+                if (fiber.T(j) < 0.0f)
+                    _M(j) = 1.0f;
                 else
-                    _M[fiber.d][j * fiber.stride] = -1.0f;
+                    _M(j) = -1.0f;
             }
             else
-                _M[fiber.d][j * fiber.stride] = -1.0f;
+                _M(j) = -1.0f;
         }
     }
 
     void comb_the_fibers(Covariant<Dimension>::Fiber &fiber)
     {
-        double delta = 1.0 / (points[fiber.d] - 1);
-        const double threshold = 0.01f;
+        const double threshold = 0.001f;
         int p = 0, q;
         // find the first reliable point
         for (q = p; q < points[fiber.d]; q++)
-            if (_P[q * fiber.stride] > threshold)
+            if (fiber.P(q) > threshold)
                 break;
+        if (q == points[fiber.d]) 
+        {   // none
+            double sum = 0;
+            for (int i = 0; i < points[fiber.d]; i++)
+                sum += fiber.S(i);
+            for (int i = 0; i < points[fiber.d]; i++) {
+                fiber.T(i) = 0.0f;
+                fiber.S(i) = sum * fiber.delta;
+            }
+            return;
+        }
         // normal tail to infinity
-        if (q == points[fiber.d])
-            _T[fiber.d][--q * fiber.stride] = 1.0f;
         for (int i = q; i > p; i--)
         {
-            _T[fiber.d][(i - 1) * fiber.stride] = std::abs(_T[fiber.d][i * fiber.stride]);
-            _S[fiber.d][(i - 1) * fiber.stride] = _S[fiber.d][i * fiber.stride] + delta * _T[fiber.d][i * fiber.stride];
+            fiber.T((i - 1)) = std::abs(fiber.T(i));
+            fiber.S((i - 1)) = fiber.S(i) + fiber.delta * fiber.T(i);
         }
         p = q;
         for (q = p + 1; q < points[fiber.d]; p = q)
         {
             // find the next unreliable point if any
-            while (q < points[fiber.d] && _P[q * fiber.stride] > threshold)
+            while (q < points[fiber.d] && fiber.P(q) > threshold)
                 q++;
             if (q == points[fiber.d])
                 break;
             p = q;
             // find the next reliable point if any
-            while (q < points[fiber.d] && _P[q * fiber.stride] <= threshold)
+            while (q < points[fiber.d] && fiber.P(q) <= threshold)
                 q++;
             if (q == points[fiber.d])
                 break;
             // interpolate the unreliable points
             for (int i = p + 1; i < q; i++)
             {
-                _T[fiber.d][i * fiber.stride] =
-                    (_S[fiber.d][q * fiber.stride] - _S[fiber.d][p * fiber.stride]) / (double)(q - p);
-                _S[fiber.d][i * fiber.stride] =
-                    (double)(i - p) / (double)(q - p) * _S[fiber.d][q * fiber.stride] + (double)(q - i) / (double)(q - p) * _S[fiber.d][p * fiber.stride];
+                fiber.T(i) = (fiber.S(q) - fiber.S(p)) / (double)(q - p);
+                fiber.S(i) = ((double)(i - p) * fiber.S(q) + (double)(q - i) * fiber.S(p)) / (double)(q - p);
             }
         }
         // normal tail on the other side
-        for (int i = p + 1; i < points[fiber.d] - 1; i++)
+        for (int i = p + 1; i < points[fiber.d]; i++)
         {
-            _T[fiber.d][i * fiber.stride] = std::abs(_T[fiber.d][(i - 1) * fiber.stride]);
-            _S[fiber.d][i * fiber.stride] = _S[fiber.d][(i - 1) * fiber.stride] - delta * _T[fiber.d][(i - 1) * fiber.stride];
+            fiber.T(i) = std::abs(fiber.T((i - 1)));
+            fiber.S(i) = fiber.S(i - 1) - fiber.delta * fiber.T(i - 1);
         }
     }
 

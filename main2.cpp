@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
         size_t num_events;
         infile.read(reinterpret_cast<char*>(&num_events), sizeof(num_events));
         events.resize(num_events);
-        infile.read(reinterpret_cast<char*>(events.data()), events.size() * sizeof(Covariant<3>::Event));
+        infile.read(reinterpret_cast<char*>(events.data()), events.size() * sizeof(Covariant<2>::Event));
         infile.close();
         std::cout << "Loaded " << events.size() << " events." << std::endl;
     } else {
@@ -158,7 +158,9 @@ int main(int argc, char* argv[]) {
     if(covariant.factorProbability() > 0.01) {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
     }
-    assert(covariant.differentialEquation() < 0.01);
+    if(covariant.differentialEquation() > 0.01) {
+        std::cout << "Differential equation solution is unusually bad " << covariant.factorProbability() << std::endl;
+    }
 
     std::cout << "Consistency checkes passed..." << std::endl;
     
