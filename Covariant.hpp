@@ -59,6 +59,7 @@ private:
     int points[Dimension];
     fftw_r2r_kind kind[Dimension];
     void *DCT = nullptr;
+    unsigned long fft_normalizer = 1;
     std::array<std::vector<float>, Dimension> _f;
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _s;
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
@@ -218,6 +219,11 @@ public:
                 if (_P[x] <= 0.05f)
                     _L[x] = -1.0f;
             }
+        for (unsigned j = 0; j < Dimension; j++)
+        {
+            filter(_S[j].data(), 2, true);
+            filter(_T[j].data(), 2, true);
+        }
         // for_each_fiber([this](Fiber &fiber)
         //                { comb_the_fibers(fiber); });
         for_each_fiber([this](Fiber &fiber)
@@ -230,72 +236,85 @@ public:
         for (j = 0; j < points[fiber.d] - 1; j++)
         {
             if ((fiber.S(j) > 0.0f && fiber.S((j + 1)) <= 0.0f) || (fiber.S(j) <= 0.0f && fiber.S((j + 1)) > 0.0f))
-                if (fiber.T(j) < 0.0f)
+                if (fiber.T(j) < 0.0f && fiber.P(j) > .001f)
                     fiber.M(j) = 0.0f;
         }
     }
 
     void comb_the_fibers(Covariant<Dimension>::Fiber &fiber)
     {
-        const double quantile = 0.001f, threshold = 0.005f;
-        int p = 0, q = 0;
-        double P = 0;
-        if (fiber.d == 0 && fiber.id == 27)
-            p = q;
-        // find first significant interval
-        while (q < points[fiber.d] && P < threshold)
+        for (int pass = 0; pass < 32; pass++)
         {
-            P = 0;
-            while (q < points[fiber.d] && fiber.P(q) <= quantile)
-                q++;
-            p = q;
-            while (q < points[fiber.d] && fiber.P(q) > quantile)
-                P += f(fiber.base + q++ * fiber.stride);
-        }
-        // if none do something smooth
-        if (q == points[fiber.d])
-        {
-            for (int i = 0; i < points[fiber.d]; i++)
+            for (int i = 0; i < points[fiber.d] - 2; i++)
             {
-                fiber.T(i) = 0.0f;
-                fiber.S(i) = 1.0f;
+                fiber.S(i) = (fiber.S(i) + fiber.S(i+1)) / 2.0f;
+                fiber.T(i) = (fiber.T(i) + fiber.T(i+1)) / 2.0f;
             }
-            return;
-        }
-        // normal tail to minus infinity
-        for (int i = p; i > 0; i--)
-        {
-            fiber.T((i - 1)) = std::abs(fiber.T(i));
-            fiber.S((i - 1)) = fiber.S(i) + fiber.delta * fiber.T(i);
-        }
-        p = q;
-        // interpolate between significant intervales
-        while (q < points[fiber.d])
-        {
-            P = 0;
-            while (q < points[fiber.d] && P < threshold)
+            for (int i = points[fiber.d] - 1; i > 0; i--)
             {
-                P = 0;
-                while (q < points[fiber.d] && fiber.P(q) <= quantile)
-                    q++;
-                while (q < points[fiber.d] && fiber.P(q) > quantile)
-                    P += f(fiber.base + q++ * fiber.stride);
+                fiber.S(i) = (fiber.S(i) + fiber.S(i-1)) / 2.0f;
+                fiber.T(i) = (fiber.T(i) + fiber.T(i-1)) / 2.0f;
             }
-            if (q == points[fiber.d])
-                break;
-            for (int i = p + 1; i < q; i++)
-            {
-                fiber.T(i) = (fiber.S(q) - fiber.S(p)) / (double)(q - p);
-                fiber.S(i) = ((double)(i - p) * fiber.S(q) + (double)(q - i) * fiber.S(p)) / (double)(q - p);
-            }
-            p = q;
         }
-        // normal tail on the other side
-        for (int i = p; i < points[fiber.d]; i++)
-        {
-            fiber.T(i) = std::abs(fiber.T((i - 1)));
-            fiber.S(i) = fiber.S(i - 1) - fiber.delta * fiber.T(i - 1);
-        }
+    //     const double quantile = 0.001f, threshold = 0.005f;
+    //     int p = 0, q = 0;
+    //     double P = 0;
+    //     if (fiber.d == 0 && fiber.id == 27)
+    //         p = q;
+    //     // find first significant interval
+    //     while (q < points[fiber.d] && P < threshold)
+    //     {
+    //         P = 0;
+    //         while (q < points[fiber.d] && fiber.P(q) <= quantile)
+    //             q++;
+    //         p = q;
+    //         while (q < points[fiber.d] && fiber.P(q) > quantile)
+    //             P += f(fiber.base + q++ * fiber.stride);
+    //     }
+    //     // if none do something smooth
+    //     if (q == points[fiber.d])
+    //     {
+    //         for (int i = 0; i < points[fiber.d]; i++)
+    //         {
+    //             fiber.T(i) = 0.0f;
+    //             fiber.S(i) = 1.0f;
+    //         }
+    //         return;
+    //     }
+    //     // normal tail to minus infinity
+    //     for (int i = p; i > 0; i--)
+    //     {
+    //         fiber.T((i - 1)) = std::abs(fiber.T(i));
+    //         fiber.S((i - 1)) = fiber.S(i) + fiber.delta * fiber.T(i);
+    //     }
+    //     p = q;
+    //     // interpolate between significant intervales
+    //     while (q < points[fiber.d])
+    //     {
+    //         P = 0;
+    //         while (q < points[fiber.d] && P < threshold)
+    //         {
+    //             P = 0;
+    //             while (q < points[fiber.d] && fiber.P(q) <= quantile)
+    //                 q++;
+    //             while (q < points[fiber.d] && fiber.P(q) > quantile)
+    //                 P += f(fiber.base + q++ * fiber.stride);
+    //         }
+    //         if (q == points[fiber.d])
+    //             break;
+    //         for (int i = p + 1; i < q; i++)
+    //         {
+    //             fiber.T(i) = (fiber.S(q) - fiber.S(p)) / (double)(q - p);
+    //             fiber.S(i) = ((double)(i - p) * fiber.S(q) + (double)(q - i) * fiber.S(p)) / (double)(q - p);
+    //         }
+    //         p = q;
+    //     }
+    //     // normal tail on the other side
+    //     for (int i = p; i < points[fiber.d]; i++)
+    //     {
+    //         fiber.T(i) = std::abs(fiber.T((i - 1)));
+    //         fiber.S(i) = fiber.S(i - 1) - fiber.delta * fiber.T(i - 1);
+    //     }
     }
 
     double factorProbability()
@@ -357,7 +376,7 @@ public:
     }
 
 private:
-    void filter(float *input, float *output, float percent = 1.0f)
+    void filter(float *input, float *output, float percent = 1.0f, bool normalize = false)
     {
         float *cosine = (float *)fftw_malloc(sizeof(float) * _size);
         fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
@@ -385,11 +404,14 @@ private:
         for (unsigned i = 0; i < Dimension; i++)
             free(kernel[i]);
         delete[] kernel;
+        if (normalize)
+            for (unsigned x = 0; x < _size; x++)
+                output[x] /= (double)fft_normalizer;
     }
 
-    void filter(float *data, float percent = 1.0f)
+    void filter(float *data, float percent = 1.0f, bool normalize = false)
     {
-        filter(data, data, percent);
+        filter(data, data, percent, normalize);
     }
 
     void *basis_functions(Fiber &fiber)
@@ -408,7 +430,7 @@ private:
         return nullptr;
     }
 
-    inline float squared(float x) { return x * x; };
+    inline double squared(double x) { return x * x; };
 
     void *natural_parameters(Fiber &fiber)
     {
@@ -439,9 +461,12 @@ private:
                     t = -2.0 * ((std::log(fiber.f(i, j)) - std::log(fiber.f(i, k))) / squared(fiber.delta * (j - k)) - fiber.s(i, k) / fiber.delta / (j - k));
                 while (k < j)
                 {
-                    fiber.t(i, k) = t;
+                    fiber.t(i, k) = (float)t;
                     if (k != points[fiber.d] - 1)
-                        fiber.s(i, k + 1) = -t * fiber.delta + fiber.s(i, k);
+                    {
+                        double s = -t * fiber.delta + fiber.s(i, k);
+                        fiber.s(i, k + 1) = (float)s;
+                    }
                     k++;
                 }
             }
@@ -456,8 +481,9 @@ private:
                     t = 2.0 * ((std::log(fiber.f(i, k)) - std::log(fiber.f(i, j))) / squared(fiber.delta * (k - j)) - fiber.s(i, k) / fiber.delta / (k - j));
                 while (k > j)
                 {
-                    fiber.t(i, k - 1) = t;
-                    fiber.s(i, k - 1) = t * fiber.delta + fiber.s(i, k);
+                    fiber.t(i, k - 1) = (float)t;
+                    double s = t * fiber.delta + fiber.s(i, k);
+                    fiber.s(i, k - 1) = (float)s;
                     k--;
                 }
             }
@@ -498,6 +524,7 @@ private:
         }
         for (unsigned i = 0; i < Dimension; i++)
         {
+            fft_normalizer *= 2 * (points[i] - 1);
             _f[i].resize(_size);
             _T[i].resize(_size);
             _S[i].resize(_size);

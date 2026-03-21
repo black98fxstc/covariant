@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
         while (means.size() < normal_param) {
             Covariant<3>::Event mean {random_float() * .8f + .1f, random_float() * .8f + .1f, random_float() * .8f + .1f};
             means.push_back(mean);
-            stddevs.push_back(random_float() * 0.05f + 0.025f);
+            stddevs.push_back(random_float() * 0.25f + 0.025f);
         }
         if (normal_param > 1) {
             while (fractions.size() < normal_param - 1) {
