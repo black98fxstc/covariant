@@ -40,10 +40,6 @@ private:
         {
             return cov._T.at(d).at(base + j * stride);
         }
-        float &M(int j)
-        {
-            return cov._M.at(base + j * stride);
-        }
         float &P(int j)
         {
             return cov._P.at(base + j * stride);
@@ -65,7 +61,7 @@ private:
     std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
     std::array<std::vector<float>, Dimension> _S;
     std::array<std::vector<float>, Dimension> _T;
-    std::vector<float> _M;
+    std::vector<Covariant<Dimension>::Event> _M;
     std::vector<float> _L;
     std::vector<float> _P;
 
@@ -122,11 +118,6 @@ public:
         return _T[i][x];
     }
 
-    const float &M(size_t x) const
-    {
-        return _M[x];
-    }
-
     const float &L(size_t x) const
     {
         return _L[x];
@@ -135,6 +126,11 @@ public:
     const float &P(size_t x) const
     {
         return _P[x];
+    }
+
+    std::vector<Covariant<Dimension>::Event> &M()
+    {
+        return _M;
     }
 
     bool event(const Event &event)
@@ -232,12 +228,21 @@ public:
 
     void modal_clustering(Covariant<Dimension>::Fiber &fiber)
     {
+        Covariant<Dimension>::Event e;
         int j;
         for (j = 0; j < points[fiber.d] - 1; j++)
         {
             if ((fiber.S(j) > 0.0f && fiber.S((j + 1)) <= 0.0f) || (fiber.S(j) <= 0.0f && fiber.S((j + 1)) > 0.0f))
                 if (fiber.T(j) < 0.0f && fiber.P(j) > .001f)
-                    fiber.M(j) = 0.0f;
+                {
+                    size_t x = fiber.base + j * fiber.stride;
+                    for (int i = 0; i < Dimension; i++)
+                    {
+                        e[i] = (double)(x % points[fiber.d]) * fiber.delta;
+                        x /= points[fiber.d];
+                    }
+                    _M.push_back(e);
+                }
         }
     }
 
@@ -534,8 +539,6 @@ private:
                 _t[i][j].resize(_size);
             }
         }
-        _M.resize(_size);
-        std::fill(_M.begin(), _M.end(), -1.0f);
         _L.resize(_size);
         _P.resize(_size);
         _weight = (float *)fftw_malloc(sizeof(float) * _size);
