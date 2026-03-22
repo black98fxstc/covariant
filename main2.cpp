@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
     
     std::cout << "Program running with --normal=" << normal_param << " and --events=" << events_param << " and --smooth=" << smooth_param << std::endl;
     
-    Covariant<2> covariant(64);
+    Covariant<2> covariant(256);
     std::vector<Covariant<2>::Event> events;
 
     if (result.count("load")) {
@@ -168,7 +168,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Writing data to files..." << std::endl;
     auto write_file = [&](std::string filename, std::function<float(size_t)> get_val) {
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-        int dims[2] = {65, 65};
+        int dims[2] = {257, 257};
         outfile.write(reinterpret_cast<char*>(&dims), sizeof(dims));
         for (size_t x = 0; x < covariant.size(); ++x) {
             float val = get_val(x);
@@ -185,9 +185,14 @@ int main(int argc, char* argv[]) {
     write_file("S2.bin", [&](size_t x) { return covariant.S(1, x); });
     write_file("T1.bin", [&](size_t x) { return covariant.T(0, x); });
     write_file("T2.bin", [&](size_t x) { return covariant.T(1, x); });
-    write_file("L.bin", [&](size_t x) { return covariant.L(x); });
-    write_file("M.bin", [&](size_t x) { return covariant.M(x); });
     write_file("w.bin", [&](size_t x) { return covariant.w(x); });
+
+    std::ofstream mfile("M.bin", std::ios::binary | std::ios::trunc);
+    size_t m_size = covariant.M().size();
+    mfile.write(reinterpret_cast<char*>(&m_size), sizeof(m_size));
+    mfile.write(reinterpret_cast<char*>(covariant.M().data()), m_size * sizeof(Covariant<2>::Event));
+    mfile.close();
+
     std::cout << "Data written successfully." << std::endl;
     
     return 0;

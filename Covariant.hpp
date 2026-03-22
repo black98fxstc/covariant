@@ -64,8 +64,10 @@ private:
     std::vector<Covariant<Dimension>::Event> _M;
     std::vector<float> _L;
     std::vector<float> _P;
+    std::vector<float> _R;
+    std::array<std::vector<float>, Dimension> _Q;
 
-public:
+    public:
     size_t size() const
     {
         return _size;
@@ -236,7 +238,7 @@ public:
                 if (fiber.T(j) < 0.0f && fiber.P(j) > .001f)
                 {
                     size_t x = fiber.base + j * fiber.stride;
-                    for (int i = 0; i < Dimension; i++)
+                    for (unsigned i = 0; i < Dimension; i++)
                     {
                         e[i] = (double)(x % points[fiber.d]) * fiber.delta;
                         x /= points[fiber.d];
