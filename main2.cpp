@@ -28,6 +28,31 @@ float random_normal(float mean, float stddev) {
     return dist(get_rng());
 }
 
+class RandomEvent : public Covariant<2>::Event {
+public:
+    virtual void sample() = 0;
+};
+
+class Normal : public RandomEvent
+{
+public:
+    Covariant<2>::Event mean;
+    float stddev;
+
+    void sample()
+    {
+        for (unsigned i = 0; i < 2; i++)
+            at(i) = random_normal(mean[i], stddev);
+    };
+
+    Normal ()
+    {
+        for (unsigned i = 0; i < 2; i++)
+            mean[i] = random_float() * .8f + .1f;
+        stddev = random_float() * 0.25f + 0.025f;
+    }
+};
+
 int main(int argc, char* argv[]) {
     // Set up the command-line options parser.
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Covariant class");
@@ -37,7 +62,6 @@ int main(int argc, char* argv[]) {
         ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
         ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("1.0"))
-        ("r,repeat", "Repeat last run")
         ("h,help", "Print usage")
         ("save", "Save generated data to a file.", cxxopts::value<std::string>()->implicit_value("covariant.dat"))
         ("load", "Load data from a file instead of generating.", cxxopts::value<std::string>()->implicit_value("covariant.dat"));
@@ -52,60 +76,20 @@ int main(int argc, char* argv[]) {
     unsigned normal_param;
     size_t events_param;
     float smooth_param;
-    std::vector<Covariant<3>::Event> means;
-    std::vector<float> stddevs;
+    std::vector<RandomEvent*> population;
     std::vector<float> fractions;
 
-    if (result.count("repeat")) {
-        std::cout << "Repeating previous run from file." << std::endl;
-        std::ifstream infile("run_params.bin", std::ios::binary);
-        if (!infile) {
-            std::cerr << "Error: repeat file not found (run_params.bin). Run without --repeat first." << std::endl;
-            return 1;
-        }
-        infile.read(reinterpret_cast<char*>(&normal_param), sizeof(normal_param));
-        infile.read(reinterpret_cast<char*>(&events_param), sizeof(events_param));
-        infile.read(reinterpret_cast<char*>(&smooth_param), sizeof(smooth_param));
-        
-        means.resize(normal_param);
-        stddevs.resize(normal_param);
-        if (normal_param > 1) {
-            fractions.resize(normal_param - 1);
-        }
+    normal_param = result["normal"].as<unsigned>();
+    events_param = result["events"].as<size_t>();
+    smooth_param = result["smooth"].as<float>();
 
-        infile.read(reinterpret_cast<char*>(means.data()), means.size() * sizeof(Covariant<3>::Event));
-        infile.read(reinterpret_cast<char*>(stddevs.data()), stddevs.size() * sizeof(float));
-        if (!fractions.empty()) {
-            infile.read(reinterpret_cast<char*>(fractions.data()), fractions.size() * sizeof(float));
+    for (unsigned i = 0; i < normal_param; i++)
+        population.push_back(new Normal());
+    if (population.size() > 1) {
+        while (fractions.size() < population.size() - 1) {
+            fractions.push_back(random_float());
         }
-        infile.close();
-    } else {
-        normal_param = result["normal"].as<unsigned>();
-        events_param = result["events"].as<size_t>();
-        smooth_param = result["smooth"].as<float>();
-
-        while (means.size() < normal_param) {
-            Covariant<3>::Event mean {random_float() * .8f + .1f, random_float() * .8f + .1f, random_float() * .8f + .1f};
-            means.push_back(mean);
-            stddevs.push_back(random_float() * 0.25f + 0.025f);
-        }
-        if (normal_param > 1) {
-            while (fractions.size() < normal_param - 1) {
-                fractions.push_back(random_float());
-            }
-            std::sort(fractions.begin(), fractions.end());
-        }
-
-        std::ofstream outfile("run_params.bin", std::ios::binary | std::ios::trunc);
-        outfile.write(reinterpret_cast<const char*>(&normal_param), sizeof(normal_param));
-        outfile.write(reinterpret_cast<const char*>(&events_param), sizeof(events_param));
-        outfile.write(reinterpret_cast<const char*>(&smooth_param), sizeof(smooth_param));
-        outfile.write(reinterpret_cast<const char*>(means.data()), means.size() * sizeof(Covariant<3>::Event));
-        outfile.write(reinterpret_cast<const char*>(stddevs.data()), stddevs.size() * sizeof(float));
-        if (!fractions.empty()) {
-            outfile.write(reinterpret_cast<const char*>(fractions.data()), fractions.size() * sizeof(float));
-        }
-        outfile.close();
+        std::sort(fractions.begin(), fractions.end());
     }
     
     std::cout << "Program running with --normal=" << normal_param << " and --events=" << events_param << " and --smooth=" << smooth_param << std::endl;
@@ -131,9 +115,9 @@ int main(int argc, char* argv[]) {
         std::cout << "Generating " << events_param << " events..." << std::endl;
         Covariant<2>::Event e;
         for (size_t x = 0; x < events_param; x++) {
-            int population = std::upper_bound(fractions.begin(), fractions.end(), random_float()) - fractions.begin();
-            for (unsigned i = 0; i < covariant.dimension; i++)
-                e[i] = random_normal(means[population][i], stddevs[population]);
+            int p = std::upper_bound(fractions.begin(), fractions.end(), random_float()) - fractions.begin();
+            population[p]->sample();
+            e = *population[p];
             events.push_back(e);
         }
 
@@ -186,6 +170,7 @@ int main(int argc, char* argv[]) {
     write_file("T1.bin", [&](size_t x) { return covariant.T(0, x); });
     write_file("T2.bin", [&](size_t x) { return covariant.T(1, x); });
     write_file("w.bin", [&](size_t x) { return covariant.w(x); });
+    write_file("R.bin", [&](size_t x) { return covariant.R(x); });
 
     std::ofstream mfile("M.bin", std::ios::binary | std::ios::trunc);
     size_t m_size = covariant.M().size();

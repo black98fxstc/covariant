@@ -69,6 +69,12 @@ data = fread(fid, inf, 'single');
 fclose(fid);
 T2 = permute(reshape(data, nx, ny), [2 1]);
 
+fid = fopen('R.bin', 'rb');
+fread(fid, 2, 'int32'); % Skip dimensions header
+data = fread(fid, inf, 'single');
+fclose(fid);
+R = permute(reshape(data, nx, ny), [2 1]);
+
 fid = fopen('M.bin', 'rb');
 num_M = fread(fid, 1, 'uint64');
 data = fread(fid, 2 * num_M, 'single');
@@ -160,6 +166,15 @@ colorbar;
 axis([0 1 0 1]);
 axis square;
 title('T2(x, y)');
+
+figure;
+surf(X, Y, R);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('R(x, y)');
 
 % figure;
 % surf(X, Y, L);

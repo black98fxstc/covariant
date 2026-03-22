@@ -3,6 +3,7 @@
 #include <vector>
 #include <fftw3.h>
 #include <assert.h>
+#include <random>
 
 template <unsigned Dimension>
 class Covariant
@@ -64,8 +65,9 @@ private:
     std::vector<Covariant<Dimension>::Event> _M;
     std::vector<float> _L;
     std::vector<float> _P;
-    std::vector<float> _R;
+    std::array<std::vector<float>, Dimension> _r;
     std::array<std::vector<float>, Dimension> _Q;
+    std::vector<float> _R;
 
     public:
     size_t size() const
@@ -128,6 +130,11 @@ private:
     const float &P(size_t x) const
     {
         return _P[x];
+    }
+
+    const float &R(size_t x) const
+    {
+        return _R[x];
     }
 
     std::vector<Covariant<Dimension>::Event> &M()
@@ -203,6 +210,19 @@ private:
                        { this->basis_functions(fiber); });
         for_each_fiber([this](Fiber &fiber)
                        { this->natural_parameters(fiber); });
+
+        for (size_t x = 0; x < _size; x++)
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                for (unsigned j = 0; j < Dimension; j++)
+                {
+                    if (j == i)
+                        continue;
+                    _r.at(i).at(x) += (_t.at(i).at(j).at(x) + _t.at(j).at(i).at(x)) * f(x);
+                }
+                _R.at(x) += _r.at(i).at(x);
+            }
+
         for (size_t x = 0; x < _size; x++)
             for (unsigned i = 0; i < Dimension; i++)
                 for (unsigned j = 0; j < Dimension; j++)
@@ -535,6 +555,7 @@ private:
             _f[i].resize(_size);
             _T[i].resize(_size);
             _S[i].resize(_size);
+            _r[i].resize(_size);
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);
@@ -543,6 +564,7 @@ private:
         }
         _L.resize(_size);
         _P.resize(_size);
+        _R.resize(_size);
         _weight = (float *)fftw_malloc(sizeof(float) * _size);
         _density = (float *)fftw_malloc(sizeof(float) * _size);
         DCT = (void *)fftwf_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
