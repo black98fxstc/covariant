@@ -1,19 +1,22 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -I. -g
 LIBS = -lfftw3 -lfftw3f -lm
-TARGET = covariant
-SRCS = main2.cpp
-OBJS = $(SRCS:.cpp=.o)
 
-all: $(TARGET)
+all: covariant2
 
-$(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
+covariant2: main2.o
+	$(CXX) $(CXXFLAGS) -o covariant2 main2.o $(LIBS)
+
+covariant3: main3.o
+	$(CXX) $(CXXFLAGS) -o covariant3 main3.o $(LIBS)
+
+main2.o: Covariant.hpp TestData.hpp
+main3.o: Covariant.hpp
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f main2.o main3.o covariant2 covariant3
 
 .PHONY: all clean

@@ -1,9 +1,10 @@
+#pragma once
+
 #include <cmath>
 #include <array>
 #include <vector>
 #include <fftw3.h>
 #include <assert.h>
-#include <random>
 
 template <unsigned Dimension>
 class Covariant
@@ -11,6 +12,7 @@ class Covariant
 public:
     typedef std::array<float, Dimension> Event;
     const unsigned dimension = Dimension;
+    int points[Dimension];
 
 private:
     struct Fiber
@@ -23,27 +25,27 @@ private:
         unsigned d;
         float &f(int i, int j)
         {
-            return cov._f.at(i).at(base + j * stride);
+            return cov._f[i][base + j * stride];
         }
         float &s(int i, int j)
         {
-            return cov._s.at(i).at(d).at(base + j * stride);
+            return cov._s[i][d][base + j * stride];
         }
         float &t(int i, int j)
         {
-            return cov._t.at(i).at(d).at(base + j * stride);
+            return cov._t[i][d][base + j * stride];
         }
         float &S(int j)
         {
-            return cov._S.at(d).at(base + j * stride);
+            return cov._S[d][base + j * stride];
         }
         float &T(int j)
         {
-            return cov._T.at(d).at(base + j * stride);
+            return cov._T[d][base + j * stride];
         }
         float &P(int j)
         {
-            return cov._P.at(base + j * stride);
+            return cov._QC[base + j * stride];
         }
         Fiber(Covariant &cov) : cov(cov) {};
     };
@@ -53,7 +55,6 @@ private:
     float *_weight;
     float *_density;
     size_t stride[Dimension];
-    int points[Dimension];
     fftw_r2r_kind kind[Dimension];
     void *DCT = nullptr;
     unsigned long fft_normalizer = 1;
@@ -64,8 +65,10 @@ private:
     std::array<std::vector<float>, Dimension> _T;
     std::vector<Covariant<Dimension>::Event> _M;
     std::vector<float> _L;
-    std::vector<float> _P;
+    std::vector<float> _QC;
     std::array<std::vector<float>, Dimension> _r;
+    std::array<std::vector<float>, Dimension> _q;
+    std::array<std::vector<float>, Dimension> _P;
     std::array<std::vector<float>, Dimension> _Q;
     std::vector<float> _R;
 
@@ -80,20 +83,24 @@ private:
         return _events;
     }
 
+    const float *w() const
+    {
+        return _weight;
+    }
+
     const float &w(size_t x) const
     {
         return _weight[x];
     }
 
-    const float &f(size_t x) const
+    const float *f() const
     {
-        assert(x < _size);
-        return _density[x];
+        return _density;
     }
 
-    const float &density(size_t x) const
+    const float *f(unsigned i) const
     {
-        return _density[x];
+        return _f[i].data();
     }
 
     const float &f(unsigned i, size_t x) const
@@ -112,9 +119,19 @@ private:
         return _t[i][j][x];
     }
 
+    const float *S(unsigned i) const
+    {
+        return _S[i].data();
+    }
+
     const float &S(unsigned i, size_t x) const
     {
         return _S[i][x];
+    }
+
+    const float *T(unsigned i) const
+    {
+        return _T[i].data();
     }
 
     const float &T(unsigned i, size_t x) const
@@ -127,9 +144,19 @@ private:
         return _L[x];
     }
 
-    const float &P(size_t x) const
+    const float * QC() const
     {
-        return _P[x];
+        return _QC.data();
+    }
+
+    const float &QC(size_t x) const
+    {
+        return _QC[x];
+    }
+
+    const float *R() const
+    {
+        return _R.data();
     }
 
     const float &R(size_t x) const
@@ -137,9 +164,13 @@ private:
         return _R[x];
     }
 
-    std::vector<Covariant<Dimension>::Event> &M()
+    const float *P(unsigned i) const
     {
-        return _M;
+        return _P[i].data();
+    }
+    const float *Q(unsigned i) const
+    {
+        return _Q[i].data();
     }
 
     bool event(const Event &event)
@@ -196,14 +227,22 @@ private:
         std::vector<float> sorted;
         std::copy(_density, _density + _size, std::back_inserter(sorted));
         std::sort(sorted.begin(), sorted.end());
-        std::vector<float> summed(sorted);
+        std::vector<float> summed;
+        summed.resize(sorted.size());
         double sum = 0.0;
         for (size_t x = 0; x < _size; x++)
             summed[x] = sum += sorted[x];
         for (size_t x = 0; x < _size; x++)
         {
-            _P[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin())) / sum;
+            _QC[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin())) / sum;
             _density[x] /= sum;
+            size_t y = x;
+            for (unsigned i = 0, j; i < Dimension; i++)
+            {
+                j = y % points[i];
+                y /= points[i];
+                _P[i][j] += _density[x];
+            }
         }
 
         for_each_fiber([this](Fiber &fiber)
@@ -212,136 +251,52 @@ private:
                        { this->natural_parameters(fiber); });
 
         for (size_t x = 0; x < _size; x++)
-            for (unsigned i = 0; i < Dimension; i++)
+        {
+            size_t y = x;
+            for (unsigned i = 0, j; i < Dimension; i++)
             {
-                for (unsigned j = 0; j < Dimension; j++)
+                double dual = 1.0;
+                for (j = 0; j < Dimension; j++)
                 {
                     if (j == i)
                         continue;
-                    _r.at(i).at(x) += (_t.at(i).at(j).at(x) + _t.at(j).at(i).at(x)) * f(x);
+                    if (_f[i][x] > 0.0f)
+                        _r[i][x] += (_t[i][j][x] + _t[j][i][x]) / _f[i][x] / _f[i][x];
+                    for (unsigned k = 0; k < Dimension; k++)
+                    {
+                        if (k == i || k == j)
+                            continue;
+                        if (_f[j][x] > 0.0f)
+                            _q[i][x] += (_t[j][k][x] + _t[k][j][x]) / _f[j][x] / _f[j][x];
+                    }
+                    dual *= _f[j][x];
                 }
-                _R.at(x) += _r.at(i).at(x);
+                j = y % points[i];
+                y /= points[i];
+                _R[x] += _r[i][x] * _density[x];
+                _Q[i][j] += _q[i][x] * dual * _P[i][j];
             }
+        }
 
         for (size_t x = 0; x < _size; x++)
             for (unsigned i = 0; i < Dimension; i++)
                 for (unsigned j = 0; j < Dimension; j++)
                 {
-                    _S.at(j).at(x) += _s.at(i).at(j).at(x);
-                    _T.at(j).at(x) += _s.at(i).at(j).at(x);
+                    _S[j][x] += _s[i][j][x];
+                    _T[j][x] += _s[i][j][x];
                 }
         for (size_t x = 0; x < _size; x++)
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _L[x] += _T[j][x];
-                if (_P[x] <= 0.05f)
+                if (_QC[x] <= 0.05f)
                     _L[x] = -1.0f;
             }
         for (unsigned j = 0; j < Dimension; j++)
         {
-            filter(_S[j].data(), 2, true);
-            filter(_T[j].data(), 2, true);
+            filter(_S[j].data(), percent, true);
+            filter(_T[j].data(), percent, true);
         }
-        // for_each_fiber([this](Fiber &fiber)
-        //                { comb_the_fibers(fiber); });
-        for_each_fiber([this](Fiber &fiber)
-                    { modal_clustering(fiber); });
-    }
-
-    void modal_clustering(Covariant<Dimension>::Fiber &fiber)
-    {
-        Covariant<Dimension>::Event e;
-        int j;
-        for (j = 0; j < points[fiber.d] - 1; j++)
-        {
-            if ((fiber.S(j) > 0.0f && fiber.S((j + 1)) <= 0.0f) || (fiber.S(j) <= 0.0f && fiber.S((j + 1)) > 0.0f))
-                if (fiber.T(j) < 0.0f && fiber.P(j) > .001f)
-                {
-                    size_t x = fiber.base + j * fiber.stride;
-                    for (unsigned i = 0; i < Dimension; i++)
-                    {
-                        e[i] = (double)(x % points[fiber.d]) * fiber.delta;
-                        x /= points[fiber.d];
-                    }
-                    _M.push_back(e);
-                }
-        }
-    }
-
-    void comb_the_fibers(Covariant<Dimension>::Fiber &fiber)
-    {
-        for (int pass = 0; pass < 32; pass++)
-        {
-            for (int i = 0; i < points[fiber.d] - 2; i++)
-            {
-                fiber.S(i) = (fiber.S(i) + fiber.S(i+1)) / 2.0f;
-                fiber.T(i) = (fiber.T(i) + fiber.T(i+1)) / 2.0f;
-            }
-            for (int i = points[fiber.d] - 1; i > 0; i--)
-            {
-                fiber.S(i) = (fiber.S(i) + fiber.S(i-1)) / 2.0f;
-                fiber.T(i) = (fiber.T(i) + fiber.T(i-1)) / 2.0f;
-            }
-        }
-    //     const double quantile = 0.001f, threshold = 0.005f;
-    //     int p = 0, q = 0;
-    //     double P = 0;
-    //     if (fiber.d == 0 && fiber.id == 27)
-    //         p = q;
-    //     // find first significant interval
-    //     while (q < points[fiber.d] && P < threshold)
-    //     {
-    //         P = 0;
-    //         while (q < points[fiber.d] && fiber.P(q) <= quantile)
-    //             q++;
-    //         p = q;
-    //         while (q < points[fiber.d] && fiber.P(q) > quantile)
-    //             P += f(fiber.base + q++ * fiber.stride);
-    //     }
-    //     // if none do something smooth
-    //     if (q == points[fiber.d])
-    //     {
-    //         for (int i = 0; i < points[fiber.d]; i++)
-    //         {
-    //             fiber.T(i) = 0.0f;
-    //             fiber.S(i) = 1.0f;
-    //         }
-    //         return;
-    //     }
-    //     // normal tail to minus infinity
-    //     for (int i = p; i > 0; i--)
-    //     {
-    //         fiber.T((i - 1)) = std::abs(fiber.T(i));
-    //         fiber.S((i - 1)) = fiber.S(i) + fiber.delta * fiber.T(i);
-    //     }
-    //     p = q;
-    //     // interpolate between significant intervales
-    //     while (q < points[fiber.d])
-    //     {
-    //         P = 0;
-    //         while (q < points[fiber.d] && P < threshold)
-    //         {
-    //             P = 0;
-    //             while (q < points[fiber.d] && fiber.P(q) <= quantile)
-    //                 q++;
-    //             while (q < points[fiber.d] && fiber.P(q) > quantile)
-    //                 P += f(fiber.base + q++ * fiber.stride);
-    //         }
-    //         if (q == points[fiber.d])
-    //             break;
-    //         for (int i = p + 1; i < q; i++)
-    //         {
-    //             fiber.T(i) = (fiber.S(q) - fiber.S(p)) / (double)(q - p);
-    //             fiber.S(i) = ((double)(i - p) * fiber.S(q) + (double)(q - i) * fiber.S(p)) / (double)(q - p);
-    //         }
-    //         p = q;
-    //     }
-    //     // normal tail on the other side
-    //     for (int i = p; i < points[fiber.d]; i++)
-    //     {
-    //         fiber.T(i) = std::abs(fiber.T((i - 1)));
-    //         fiber.S(i) = fiber.S(i - 1) - fiber.delta * fiber.T(i - 1);
-    //     }
     }
 
     double factorProbability()
@@ -352,7 +307,7 @@ private:
             double product = 1.0;
             for (unsigned i = 0; i < Dimension; i++)
                 product *= f(i, x);
-            double diff = product - f(x);
+            double diff = product - _density[x];
             diff = std::abs(diff);
             error += diff * _density[x];
         }
@@ -556,6 +511,9 @@ private:
             _T[i].resize(_size);
             _S[i].resize(_size);
             _r[i].resize(_size);
+            _q[i].resize(_size);
+            _P[i].resize( points[i] );
+            _Q[i].resize( points[i] );
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);
@@ -563,7 +521,7 @@ private:
             }
         }
         _L.resize(_size);
-        _P.resize(_size);
+        _QC.resize(_size);
         _R.resize(_size);
         _weight = (float *)fftw_malloc(sizeof(float) * _size);
         _density = (float *)fftw_malloc(sizeof(float) * _size);

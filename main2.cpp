@@ -1,6 +1,5 @@
 #include <iostream>
 #include <string>
-#include <random>
 #include <fstream>
 
 // A popular, header-only library for command-line parsing.
@@ -10,48 +9,7 @@
 
 // The Covariant class header.
 #include "Covariant.hpp"
-
-std::mt19937& get_rng() {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    return gen;
-}
-static auto& rng = get_rng();
-
-float random_float() {
-    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-    return dist(get_rng());
-}
-
-float random_normal(float mean, float stddev) {
-    std::normal_distribution<float> dist(mean, stddev);
-    return dist(get_rng());
-}
-
-class RandomEvent : public Covariant<2>::Event {
-public:
-    virtual void sample() = 0;
-};
-
-class Normal : public RandomEvent
-{
-public:
-    Covariant<2>::Event mean;
-    float stddev;
-
-    void sample()
-    {
-        for (unsigned i = 0; i < 2; i++)
-            at(i) = random_normal(mean[i], stddev);
-    };
-
-    Normal ()
-    {
-        for (unsigned i = 0; i < 2; i++)
-            mean[i] = random_float() * .8f + .1f;
-        stddev = random_float() * 0.25f + 0.025f;
-    }
-};
+#include "TestData.hpp"
 
 int main(int argc, char* argv[]) {
     // Set up the command-line options parser.
@@ -60,6 +18,8 @@ int main(int argc, char* argv[]) {
     // Add the command-line options.
     options.add_options()
         ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
+        ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
+        ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
         ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("1.0"))
         ("h,help", "Print usage")
@@ -73,66 +33,45 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    unsigned normal_param;
+    unsigned normal_param, snake_param;
     size_t events_param;
     float smooth_param;
-    std::vector<RandomEvent*> population;
-    std::vector<float> fractions;
 
     normal_param = result["normal"].as<unsigned>();
+    snake_param = result["snake"].as<unsigned>();
     events_param = result["events"].as<size_t>();
     smooth_param = result["smooth"].as<float>();
-
-    for (unsigned i = 0; i < normal_param; i++)
-        population.push_back(new Normal());
-    if (population.size() > 1) {
-        while (fractions.size() < population.size() - 1) {
-            fractions.push_back(random_float());
-        }
-        std::sort(fractions.begin(), fractions.end());
-    }
+    std::cout << "Program running with --normal=" << normal_param << " and --snake=" << snake_param << " and --events=" << events_param << " and --smooth=" << smooth_param << std::endl;
     
-    std::cout << "Program running with --normal=" << normal_param << " and --events=" << events_param << " and --smooth=" << smooth_param << std::endl;
-    
-    Covariant<2> covariant(256);
-    std::vector<Covariant<2>::Event> events;
-
+    TestData<2> events;
     if (result.count("load")) {
         std::string filename = result["load"].as<std::string>();
         std::cout << "Loading events from " << filename << "..." << std::endl;
         std::ifstream infile(filename, std::ios::binary);
-        if (!infile) {
+        if (!events.load(filename)) {
             std::cerr << "Error: Could not open event file for loading: " << filename << std::endl;
             return 1;
         }
-        size_t num_events;
-        infile.read(reinterpret_cast<char*>(&num_events), sizeof(num_events));
-        events.resize(num_events);
-        infile.read(reinterpret_cast<char*>(events.data()), events.size() * sizeof(Covariant<2>::Event));
-        infile.close();
         std::cout << "Loaded " << events.size() << " events." << std::endl;
     } else {
         std::cout << "Generating " << events_param << " events..." << std::endl;
-        Covariant<2>::Event e;
-        for (size_t x = 0; x < events_param; x++) {
-            int p = std::upper_bound(fractions.begin(), fractions.end(), random_float()) - fractions.begin();
-            population[p]->sample();
-            e = *population[p];
-            events.push_back(e);
-        }
+        TestData<2>::RandomSample test_sample;
+        for (unsigned i = 0; i < normal_param; i++)
+            test_sample.subpopulation(new TestData<2>::Normal());
+        for (unsigned i = 0; i < snake_param; i++)
+            test_sample.subpopulation(new TestData<2>::Snake());
+        events.generate(test_sample, events_param);
 
         if (result.count("save")) {
             std::string filename = result["save"].as<std::string>();
             std::cout << "Saving " << events.size() << " events to " << filename << "..." << std::endl;
             std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-            size_t num_events = events.size();
-            outfile.write(reinterpret_cast<const char*>(&num_events), sizeof(num_events));
-            outfile.write(reinterpret_cast<const char*>(events.data()), events.size() * sizeof(Covariant<3>::Event));
-            outfile.close();
+            events.save(filename);
         }
     }
 
     std::cout << "Processing " << events.size() << " events..." << std::endl;
+    Covariant<2> covariant(256);
     for (const auto& e : events)
         covariant.event(e);
 
@@ -148,35 +87,37 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Consistency checkes passed..." << std::endl;
     
-    // Write the P array to a binary file
     std::cout << "Writing data to files..." << std::endl;
-    auto write_file = [&](std::string filename, std::function<float(size_t)> get_val) {
+    auto write_joint = [&](std::string filename, const float * data) {
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-        int dims[2] = {257, 257};
-        outfile.write(reinterpret_cast<char*>(&dims), sizeof(dims));
-        for (size_t x = 0; x < covariant.size(); ++x) {
-            float val = get_val(x);
-            outfile.write(reinterpret_cast<char*>(&val), sizeof(float));
-        }
+        outfile.write(reinterpret_cast<const char*>(&covariant.points), sizeof(covariant.points));
+        outfile.write(reinterpret_cast<const char*>(data), covariant.size() * sizeof(float));
         outfile.close();
     };
 
-    write_file("P.bin", [&](size_t x) { return covariant.P(x); });
-    write_file("f.bin", [&](size_t x) { return covariant.f(x); });
-    write_file("f1.bin", [&](size_t x) { return covariant.f(0, x); });
-    write_file("f2.bin", [&](size_t x) { return covariant.f(1, x); });
-    write_file("S1.bin", [&](size_t x) { return covariant.S(0, x); });
-    write_file("S2.bin", [&](size_t x) { return covariant.S(1, x); });
-    write_file("T1.bin", [&](size_t x) { return covariant.T(0, x); });
-    write_file("T2.bin", [&](size_t x) { return covariant.T(1, x); });
-    write_file("w.bin", [&](size_t x) { return covariant.w(x); });
-    write_file("R.bin", [&](size_t x) { return covariant.R(x); });
+    write_joint("w.bin", covariant.w());
+    write_joint("f.bin", covariant.f());
+    write_joint("QC.bin", covariant.QC());
+    write_joint("f1.bin", covariant.f(0));
+    write_joint("f2.bin", covariant.f(1));
+    write_joint("S1.bin", covariant.S(0));
+    write_joint("S2.bin", covariant.S(1));
+    write_joint("T1.bin", covariant.T(0));
+    write_joint("T2.bin", covariant.T(1));
+    write_joint("R.bin", covariant.R());
 
-    std::ofstream mfile("M.bin", std::ios::binary | std::ios::trunc);
-    size_t m_size = covariant.M().size();
-    mfile.write(reinterpret_cast<char*>(&m_size), sizeof(m_size));
-    mfile.write(reinterpret_cast<char*>(covariant.M().data()), m_size * sizeof(Covariant<2>::Event));
-    mfile.close();
+    auto write_marginal = [&](std::string filename, const int marginal, const float * data) {
+        std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
+        int  m = marginal;
+        outfile.write(reinterpret_cast<const char*>(&covariant.points[m]), sizeof(covariant.points[m]));
+        outfile.write(reinterpret_cast<const char*>(data), covariant.points[m] * sizeof(float));
+        outfile.close();
+    };
+
+    write_marginal("P1.bin", 0, covariant.P(0));
+    write_marginal("P2.bin", 1, covariant.P(1));
+    write_marginal("Q1.bin", 0, covariant.Q(0));
+    write_marginal("Q2.bin", 1, covariant.Q(1));
 
     std::cout << "Data written successfully." << std::endl;
     
