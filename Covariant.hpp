@@ -5,12 +5,13 @@
 #include <vector>
 #include <fftw3.h>
 #include <assert.h>
+#include <type_traits>
 
-template <unsigned Dimension>
+template <unsigned Dimension, typename Float = float>
 class Covariant
 {
 public:
-    typedef std::array<float, Dimension> Event;
+    typedef std::array<Float, Dimension> Event;
     const unsigned dimension = Dimension;
     int points[Dimension];
 
@@ -23,27 +24,27 @@ private:
         size_t stride;
         double delta;
         unsigned d;
-        float &f(int i, int j)
+        Float &f(int i, int j)
         {
             return cov._f[i][base + j * stride];
         }
-        float &s(int i, int j)
+        Float &s(int i, int j)
         {
             return cov._s[i][d][base + j * stride];
         }
-        float &t(int i, int j)
+        Float &t(int i, int j)
         {
             return cov._t[i][d][base + j * stride];
         }
-        float &S(int j)
+        Float &S(int j)
         {
             return cov._S[d][base + j * stride];
         }
-        float &T(int j)
+        Float &T(int j)
         {
             return cov._T[d][base + j * stride];
         }
-        float &P(int j)
+        Float &P(int j)
         {
             return cov._QC[base + j * stride];
         }
@@ -52,27 +53,35 @@ private:
 
     size_t _size;
     size_t _events = 0;
-    float *_weight;
-    float *_density;
+    Float *_weight;
+    Float *_density;
     size_t stride[Dimension];
     fftw_r2r_kind kind[Dimension];
     void *DCT = nullptr;
     unsigned long fft_normalizer = 1;
-    std::array<std::vector<float>, Dimension> _f;
-    std::array<std::array<std::vector<float>, Dimension>, Dimension> _s;
-    std::array<std::array<std::vector<float>, Dimension>, Dimension> _t;
-    std::array<std::vector<float>, Dimension> _S;
-    std::array<std::vector<float>, Dimension> _T;
-    std::vector<Covariant<Dimension>::Event> _M;
-    std::vector<float> _L;
-    std::vector<float> _QC;
-    std::array<std::vector<float>, Dimension> _r;
-    std::array<std::vector<float>, Dimension> _q;
-    std::array<std::vector<float>, Dimension> _P;
-    std::array<std::vector<float>, Dimension> _Q;
-    std::vector<float> _R;
+    std::array<std::vector<Float>, Dimension> _f;
+    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _s;
+    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _t;
+    std::array<std::vector<Float>, Dimension> _S;
+    std::array<std::vector<Float>, Dimension> _T;
+    std::vector<Covariant<Dimension, Float>::Event> _M;
+    std::vector<Float> _L;
+    std::vector<Float> _QC;
+    std::array<std::vector<Float>, Dimension> _r;
+    std::array<std::vector<Float>, Dimension> _q;
+    std::array<std::vector<Float>, Dimension> _P;
+    std::array<std::vector<Float>, Dimension> _Q;
+    std::array<std::vector<Float>, Dimension> _var_Q;
+    std::array<Float, Dimension> _tot_Q;
+    std::array<Float, Dimension> _var_tot_Q;
+    std::vector<Float> _R;
+    Float _tot_R = 0.0f;
+    Float _var_R = 0.0f;
+    Float s_max = 0.0f, s_min = std::numeric_limits<Float>::max(), t_max = 0.0f, t_min = std::numeric_limits<Float>::max();
+    double _differential_error = 0.0;
+    double _factor_error = 0.0;
 
-    public:
+public:
     size_t size() const
     {
         return _size;
@@ -83,92 +92,107 @@ private:
         return _events;
     }
 
-    const float *w() const
+    const Float *w() const
     {
         return _weight;
     }
 
-    const float &w(size_t x) const
+    const Float &w(size_t x) const
     {
         return _weight[x];
     }
 
-    const float *f() const
+    const Float *f() const
     {
         return _density;
     }
 
-    const float *f(unsigned i) const
+    const Float *f(unsigned i) const
     {
         return _f[i].data();
     }
 
-    const float &f(unsigned i, size_t x) const
+    const Float &f(unsigned i, size_t x) const
     {
         assert(x < _size);
         return _f[i][x];
     }
 
-    const float &s(unsigned i, unsigned j, size_t x) const
+    const Float &s(unsigned i, unsigned j, size_t x) const
     {
         return _s[i][j][x];
     }
 
-    const float &t(unsigned i, unsigned j, size_t x) const
+    const Float *t(unsigned i, unsigned j) const
+    {
+        return _t[i][j].data();
+    }
+
+    const Float &t(unsigned i, unsigned j, size_t x) const
     {
         return _t[i][j][x];
     }
 
-    const float *S(unsigned i) const
+    const Float *S(unsigned i) const
     {
         return _S[i].data();
     }
 
-    const float &S(unsigned i, size_t x) const
+    const Float &S(unsigned i, size_t x) const
     {
         return _S[i][x];
     }
 
-    const float *T(unsigned i) const
+    const Float *T(unsigned i) const
     {
         return _T[i].data();
     }
 
-    const float &T(unsigned i, size_t x) const
+    const Float &T(unsigned i, size_t x) const
     {
         return _T[i][x];
     }
 
-    const float &L(size_t x) const
+    const Float &L(size_t x) const
     {
         return _L[x];
     }
 
-    const float * QC() const
+    const Float *QC() const
     {
         return _QC.data();
     }
 
-    const float &QC(size_t x) const
+    const Float &QC(size_t x) const
     {
         return _QC[x];
     }
 
-    const float *R() const
+    const Float *R() const
     {
         return _R.data();
     }
 
-    const float &R(size_t x) const
+    const Float &R(size_t x) const
     {
         return _R[x];
     }
 
-    const float *P(unsigned i) const
+    const Float &tot_R() const
+    {
+        return _tot_R;
+    }
+
+    const Float &var_R() const
+    {
+        return _var_R;
+    }
+
+    const Float *P(unsigned i) const
     {
         return _P[i].data();
     }
-    const float *Q(unsigned i) const
+    const Float *Q(unsigned i) const
     {
         return _Q[i].data();
     }
@@ -210,7 +234,14 @@ private:
         return true;
     }
 
-    void parameters(float percent = 1.0f)
+    void trim(std::vector<Float> &data, Float threshold)
+    {
+        for (size_t x = 0; x < _size; x++)
+            if (_QC[x] < threshold)
+                data[x] = std::numeric_limits<Float>::quiet_NaN();
+    }
+
+    void parameters(Float percent = 1.0f, Float threshold = 0.001f)
     {
         if (percent > 0.0f)
         {
@@ -224,10 +255,10 @@ private:
             std::copy(_weight, _weight + _size, _density);
         }
 
-        std::vector<float> sorted;
+        std::vector<Float> sorted;
         std::copy(_density, _density + _size, std::back_inserter(sorted));
         std::sort(sorted.begin(), sorted.end());
-        std::vector<float> summed;
+        std::vector<Float> summed;
         summed.resize(sorted.size());
         double sum = 0.0;
         for (size_t x = 0; x < _size; x++)
@@ -252,90 +283,101 @@ private:
 
         for (size_t x = 0; x < _size; x++)
         {
+            if (_density[x] <= 0.0f)
+                continue;
+            double product = 1.0;
+            for (unsigned i = 0; i < Dimension; i++)
+                product *= _f[i][x];
+            double error = std::abs(product - _density[x]);
+            _factor_error += error * _density[x];
+        }
+        for_each_fiber([this](Fiber &fiber)
+                       { this->differential_error(fiber); });
+
+        if (percent > 0.0f)
+            for (unsigned j = 0; j < Dimension; j++)
+                for (unsigned i = 0; i < Dimension; i++)
+                {
+                    filter(_s[i][j].data(), percent, true);
+                    filter(_t[i][j].data(), percent, true);
+                }
+
+        for (size_t x = 0; x < _size; x++)
+        {
             size_t y = x;
             for (unsigned i = 0, j; i < Dimension; i++)
             {
-                double dual = 1.0;
+                double dual;
+                dual = 1.0;
                 for (j = 0; j < Dimension; j++)
                 {
+                    _S[j][x] += _s[i][j][x];
+                    _T[j][x] += _t[i][j][x];
+
                     if (j == i)
                         continue;
                     if (_f[i][x] > 0.0f)
-                        _r[i][x] += (_t[i][j][x] + _t[j][i][x]) / _f[i][x] / _f[i][x];
+                        _r[i][x] += (_t[i][j][x] + _t[j][i][x]) / squared(_f[i][x]);
                     for (unsigned k = 0; k < Dimension; k++)
                     {
                         if (k == i || k == j)
                             continue;
                         if (_f[j][x] > 0.0f)
-                            _q[i][x] += (_t[j][k][x] + _t[k][j][x]) / _f[j][x] / _f[j][x];
+                            _q[i][x] += (_t[j][k][x] + _t[k][j][x]) / squared(_f[j][x]);
                     }
                     dual *= _f[j][x];
                 }
+                _L[x] += _T[i][x];
+                _R[x] += _r[i][x];
+
                 j = y % points[i];
                 y /= points[i];
-                _R[x] += _r[i][x] * _density[x];
-                _Q[i][j] += _q[i][x] * dual * _P[i][j];
+                if (_QC[x] < threshold)
+                    continue;
+                _Q[i][j] += _q[i][x] * dual;
+                _tot_Q[i] += _Q[i][j] * _P[i][j];
             }
+            if (_QC[x] >= threshold)
+                _tot_R += _R[x] * _density[x];
         }
 
         for (size_t x = 0; x < _size; x++)
-            for (unsigned i = 0; i < Dimension; i++)
-                for (unsigned j = 0; j < Dimension; j++)
-                {
-                    _S[j][x] += _s[i][j][x];
-                    _T[j][x] += _s[i][j][x];
-                }
-        for (size_t x = 0; x < _size; x++)
+        {
+            if (_QC[x] < threshold)
+                continue;
+            size_t y = x;
+            for (unsigned i = 0, j; i < Dimension; i++)
+            {
+                j = y % points[i];
+                y /= points[i];
+                _var_Q[i][j] += squared(_Q[i][j] - _tot_Q[i]);
+                _var_tot_Q[i] = _var_Q[i][j] * _P[i][j];
+            }
+            _var_R += squared(_R[x] - _tot_R) * _density[x];
+        }
+
+        trim(_R, threshold);
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            trim(_f[i], threshold);
+            trim(_S[i], threshold);
+            trim(_T[i], threshold);
             for (unsigned j = 0; j < Dimension; j++)
             {
-                _L[x] += _T[j][x];
-                if (_QC[x] <= 0.05f)
-                    _L[x] = -1.0f;
+                trim(_s[i][j], threshold);
+                trim(_t[i][j], threshold);
             }
-        for (unsigned j = 0; j < Dimension; j++)
-        {
-            filter(_S[j].data(), percent, true);
-            filter(_T[j].data(), percent, true);
         }
     }
 
     double factorProbability()
     {
-        double error = 0.0;
-        for (size_t x = 0; x < _size; x++)
-        {
-            double product = 1.0;
-            for (unsigned i = 0; i < Dimension; i++)
-                product *= f(i, x);
-            double diff = product - _density[x];
-            diff = std::abs(diff);
-            error += diff * _density[x];
-        }
-        return error;
+        return _factor_error;
     }
 
     double differentialEquation()
     {
-        double error = 0.0;
-        for_each_fiber([this, &error](Fiber &fiber)
-                       {
-            double t, s_diff, t_diff, delta = 1.0 / (points[fiber.d] - 1);
-            for (unsigned int i = 0; i < Dimension; i++)
-            {
-                for (int k = 0; k < points[fiber.d] - 1; k++)
-                {
-                    if (fiber.f(i, k + 1) > 0 && fiber.f(i, k) > 0) {
-                        t = -2.0 * ((std::log(fiber.f(i, k + 1)) - std::log(fiber.f(i, k))) / delta / delta - fiber.s(i, k) / delta);
-                        t_diff = std::abs((t - fiber.t(i, k))/fiber.t(i,k));
-                    }
-                    s_diff = std::abs((fiber.s(i, k + 1) - (-fiber.t(i, k)/(points[fiber.d] - 1) + fiber.s(i, k))) / fiber.s(i, k));
-                    if (s_diff > error)
-                        error = s_diff;
-                    if (t_diff > error)
-                        error = t_diff;
-                }
-            } });
-        return error;
+        return _differential_error;
     }
 
     Covariant(int points[Dimension]) : points(points)
@@ -352,22 +394,28 @@ private:
 
     ~Covariant()
     {
-        fftwf_destroy_plan((fftwf_plan)DCT);
-        fftwf_free(_weight);
-        fftwf_free(_density);
+        if constexpr (std::is_same_v<Float, double>)
+            fftw_destroy_plan((fftw_plan)DCT);
+        else
+            fftwf_destroy_plan((fftwf_plan)DCT);
+        fftw_free(_weight);
+        fftw_free(_density);
     }
 
 private:
-    void filter(float *input, float *output, float percent = 1.0f, bool normalize = false)
+    void filter(Float *input, Float *output, Float percent = 1.0f, bool normalize = false)
     {
-        float *cosine = (float *)fftw_malloc(sizeof(float) * _size);
-        fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
+        Float *cosine = (Float *)fftw_malloc(sizeof(Float) * _size);
+        if constexpr (std::is_same_v<Float, double>)
+            fftw_execute_r2r((fftw_plan)DCT, input, cosine);
+        else
+            fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
         double **kernel = new double *[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
         {
             const double pi = 3.14159265358979323846;
             double *k = kernel[i] = new double[points[i]];
-            double radius = percent / 100.0f;
+            double radius = percent / 100.0;
             for (int j = 0; j < points[i]; j++)
                 k[j] = exp(-j * j * radius * radius * pi * pi * 2);
         }
@@ -381,17 +429,20 @@ private:
             }
             cosine[x] *= k;
         }
-        fftwf_execute_r2r((fftwf_plan)DCT, cosine, output);
-        fftwf_free(cosine);
+        if constexpr (std::is_same_v<Float, double>)
+            fftw_execute_r2r((fftw_plan)DCT, cosine, output);
+        else
+            fftwf_execute_r2r((fftwf_plan)DCT, cosine, output);
+        fftw_free(cosine);
         for (unsigned i = 0; i < Dimension; i++)
             free(kernel[i]);
         delete[] kernel;
         if (normalize)
             for (unsigned x = 0; x < _size; x++)
-                output[x] /= (double)fft_normalizer;
+                output[x] /= (Float)fft_normalizer;
     }
 
-    void filter(float *data, float percent = 1.0f, bool normalize = false)
+    void filter(Float *data, Float percent = 1.0f, bool normalize = false)
     {
         filter(data, data, percent, normalize);
     }
@@ -418,10 +469,10 @@ private:
     {
         for (unsigned i = 0; i < Dimension; i++)
         {
-            float max = 0.0f;
-            if (fiber.d > 0)
-                max = 0.0f;
+            Float max;
+            max = 0.0f;
             int m = points[fiber.d] - 1;
+            fiber.t(i, m) = 1.0 / squared(fiber.delta);
             for (int k = 0; k < points[fiber.d]; k++)
             {
                 if (fiber.f(i, k) > max)
@@ -443,11 +494,19 @@ private:
                     t = -2.0 * ((std::log(fiber.f(i, j)) - std::log(fiber.f(i, k))) / squared(fiber.delta * (j - k)) - fiber.s(i, k) / fiber.delta / (j - k));
                 while (k < j)
                 {
-                    fiber.t(i, k) = (float)t;
+                    fiber.t(i, k) = (Float)t;
+                    if (t > t_max)
+                        t_max = t;
+                    if (t < t_min)
+                        t_min = t;
                     if (k != points[fiber.d] - 1)
                     {
                         double s = -t * fiber.delta + fiber.s(i, k);
-                        fiber.s(i, k + 1) = (float)s;
+                        if (s > s_max)
+                            s_max = s;
+                        if (s < s_min)
+                            s_min = s;
+                        fiber.s(i, k + 1) = (Float)s;
                     }
                     k++;
                 }
@@ -457,20 +516,52 @@ private:
                 j = k - 1;
                 while (j > 0 && fiber.f(i, j) <= 0.0)
                     j--;
-                if (fiber.f(i, j) <= 0.0)
+                if (fiber.f(i, j) <= 0.0 || fiber.f(i, k) <= 0.0)
                     t = 1.0 / squared(fiber.delta);
                 else
                     t = 2.0 * ((std::log(fiber.f(i, k)) - std::log(fiber.f(i, j))) / squared(fiber.delta * (k - j)) - fiber.s(i, k) / fiber.delta / (k - j));
+                if (t > t_max)
+                    t_max = t;
+                if (t < t_min)
+                    t_min = t;
                 while (k > j)
                 {
-                    fiber.t(i, k - 1) = (float)t;
+                    fiber.t(i, k - 1) = (Float)t;
                     double s = t * fiber.delta + fiber.s(i, k);
-                    fiber.s(i, k - 1) = (float)s;
+                    if (s > s_max)
+                        s_max = s;
+                    if (s < s_min)
+                        s_min = s;
+                    fiber.s(i, k - 1) = (Float)s;
                     k--;
                 }
             }
         }
         return nullptr;
+    }
+
+    void differential_error(Fiber &fiber)
+    {
+        double t, s_diff, t_diff;
+        for (unsigned int i = 0; i < Dimension; i++)
+        {
+            for (int k = 0; k < points[fiber.d] - 1; k++)
+            {
+                if (fiber.f(i, k + 1) > 0 && fiber.f(i, k) > 0) 
+                {
+                    t = -2.0 * ((std::log(fiber.f(i, k + 1)) - std::log(fiber.f(i, k))) / squared(fiber.delta) - fiber.s(i, k) / fiber.delta);
+                    t_diff = std::abs((t - fiber.t(i, k)) / (t_max - t_min));
+                    if (t_diff > _differential_error)
+                        _differential_error = t_diff;
+                }
+                if (fiber.s(i, k + 1) != 0)
+                {
+                    s_diff = std::abs((fiber.s(i, k + 1) - (-fiber.t(i, k) * fiber.delta + fiber.s(i, k))) / (s_max - s_min));
+                    if (s_diff > _differential_error)
+                        _differential_error = s_diff;
+                }
+            }
+        }
     }
 
     void for_each_fiber(std::function<void(Fiber &)> func)
@@ -512,8 +603,9 @@ private:
             _S[i].resize(_size);
             _r[i].resize(_size);
             _q[i].resize(_size);
-            _P[i].resize( points[i] );
-            _Q[i].resize( points[i] );
+            _P[i].resize(points[i]);
+            _Q[i].resize(points[i]);
+            _var_Q[i].resize(points[i]);
             for (unsigned j = 0; j < Dimension; j++)
             {
                 _s[i][j].resize(_size);
@@ -523,9 +615,13 @@ private:
         _L.resize(_size);
         _QC.resize(_size);
         _R.resize(_size);
-        _weight = (float *)fftw_malloc(sizeof(float) * _size);
-        _density = (float *)fftw_malloc(sizeof(float) * _size);
-        DCT = (void *)fftwf_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
+        _weight = (Float *)fftw_malloc(sizeof(Float) * _size);
+        _density = (Float *)fftw_malloc(sizeof(Float) * _size);
+        assert((std::is_same_v<Float, float> || std::is_same_v<Float, double>));
+        if constexpr (std::is_same_v<Float, double>)
+            DCT = (void *)fftw_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
+        else
+            DCT = (void *)fftwf_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
         assert(DCT);
     }
 };

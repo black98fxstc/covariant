@@ -1,6 +1,9 @@
 %% 
 %% 
 %% 
+%% 
+%% 
+%% 
 
 function [ data, nx, ny ] = read_joint(filename)
 fid = fopen(filename, 'rb');
@@ -28,6 +31,10 @@ end
 [ S2, nx, ny ] = read_joint('S2.bin');
 [ T1, nx, ny ] = read_joint('T1.bin');
 [ T2, nx, ny ] = read_joint('T2.bin');
+[ t11, nx, ny ] = read_joint('t11.bin');
+[ t12, nx, ny ] = read_joint('t12.bin');
+[ t21, nx, ny ] = read_joint('t21.bin');
+[ t22, nx, ny ] = read_joint('t22.bin');
 [ R, nx, ny ] = read_joint('R.bin');
 
 P1 = read_marginal('P1.bin');
@@ -126,6 +133,42 @@ colorbar;
 axis([0 1 0 1]);
 axis square;
 title('T2(x, y)');
+
+figure;
+surf(X, Y, t11);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('t11(x, y)');
+
+figure;
+surf(X, Y, t12);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('t12(x, y)');
+
+figure;
+surf(X, Y, t21);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('t21(x, y)');
+
+figure;
+surf(X, Y, t22);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('t22(x, y)');
 
 figure;
 surf(X, Y, R);
