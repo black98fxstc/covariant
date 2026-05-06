@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Analyzing the sample..." << std::endl;
 
-    covariant.parameters(smooth_param,0.01);
+    covariant.parameters(smooth_param);
     if(covariant.factorProbability() > 0.0001) {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
     }

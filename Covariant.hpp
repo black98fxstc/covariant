@@ -13,7 +13,7 @@ class Covariant
 public:
     typedef std::array<Float, Dimension> Event;
     const unsigned dimension = Dimension;
-    int points[Dimension];
+    unsigned points[Dimension];
 
 private:
     struct Fiber
@@ -77,7 +77,8 @@ private:
     std::vector<Float> _R;
     Float _tot_R = 0.0f;
     Float _var_R = 0.0f;
-    Float s_max = 0.0f, s_min = std::numeric_limits<Float>::max(), t_max = 0.0f, t_min = std::numeric_limits<Float>::max();
+    Float s_max = std::numeric_limits<Float>::lowest(), s_min = std::numeric_limits<Float>::max();
+    Float t_max = std::numeric_limits<Float>::lowest(), t_min = std::numeric_limits<Float>::max();
     double _differential_error = 0.0;
     double _factor_error = 0.0;
 
@@ -227,18 +228,10 @@ public:
                     weight *= 1.0f - rem[i];
                 }
             }
-            assert(x + offset < _size);
             _weight[x + offset] += weight;
         }
         ++_events;
         return true;
-    }
-
-    void trim(std::vector<Float> &data, Float threshold)
-    {
-        for (size_t x = 0; x < _size; x++)
-            if (_QC[x] < threshold)
-                data[x] = std::numeric_limits<Float>::quiet_NaN();
     }
 
     void parameters(Float percent = 1.0f, Float threshold = 0.001f)
@@ -337,8 +330,9 @@ public:
                 _Q[i][j] += _q[i][x] * dual;
                 _tot_Q[i] += _Q[i][j] * _P[i][j];
             }
+            _R[x] *= _density[x] / (Float)_size;
             if (_QC[x] >= threshold)
-                _tot_R += _R[x] * _density[x];
+                _tot_R += _R[x];
         }
 
         for (size_t x = 0; x < _size; x++)
@@ -380,12 +374,12 @@ public:
         return _differential_error;
     }
 
-    Covariant(int points[Dimension]) : points(points)
+    Covariant(unsigned points[Dimension]) : points(points)
     {
         init();
     }
 
-    Covariant(int grid = 256)
+    Covariant(unsigned grid = 256)
     {
         for (unsigned i = 0; i < Dimension; i++)
             points[i] = grid + 1;
@@ -403,77 +397,30 @@ public:
     }
 
 private:
-    void filter(Float *input, Float *output, Float percent = 1.0f, bool normalize = false)
-    {
-        Float *cosine = (Float *)fftw_malloc(sizeof(Float) * _size);
-        if constexpr (std::is_same_v<Float, double>)
-            fftw_execute_r2r((fftw_plan)DCT, input, cosine);
-        else
-            fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
-        double **kernel = new double *[Dimension];
-        for (unsigned i = 0; i < Dimension; i++)
-        {
-            const double pi = 3.14159265358979323846;
-            double *k = kernel[i] = new double[points[i]];
-            double radius = percent / 100.0;
-            for (int j = 0; j < points[i]; j++)
-                k[j] = exp(-j * j * radius * radius * pi * pi * 2);
-        }
-        for (size_t x = 0; x < _size; x++)
-        {
-            double k = 1.0;
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                unsigned j = (x / stride[i]) % points[i];
-                k *= kernel[i][j];
-            }
-            cosine[x] *= k;
-        }
-        if constexpr (std::is_same_v<Float, double>)
-            fftw_execute_r2r((fftw_plan)DCT, cosine, output);
-        else
-            fftwf_execute_r2r((fftwf_plan)DCT, cosine, output);
-        fftw_free(cosine);
-        for (unsigned i = 0; i < Dimension; i++)
-            free(kernel[i]);
-        delete[] kernel;
-        if (normalize)
-            for (unsigned x = 0; x < _size; x++)
-                output[x] /= (Float)fft_normalizer;
-    }
-
-    void filter(Float *data, Float percent = 1.0f, bool normalize = false)
-    {
-        filter(data, data, percent, normalize);
-    }
-
-    void *basis_functions(Fiber &fiber)
+    void basis_functions(Fiber &fiber)
     {
         double marginal = (_density[fiber.base] + _density[fiber.base + (points[fiber.d] - 1) * fiber.stride]) / 2.0;
-        for (int i = 1; i < points[fiber.d] - 1; i++)
+        for (unsigned i = 1; i < points[fiber.d] - 1; i++)
         {
             marginal += _density[fiber.base + i * fiber.stride];
         }
         if (marginal < 1.0 / (double)_events)
-            for (int i = 0; i < points[fiber.d]; i++)
+            for (unsigned i = 0; i < points[fiber.d]; i++)
                 fiber.f(fiber.d, i) = 0.0f;
         else
-            for (int i = 0; i < points[fiber.d]; i++)
+            for (unsigned i = 0; i < points[fiber.d]; i++)
                 fiber.f(fiber.d, i) = _density[fiber.base + i * fiber.stride] / marginal;
-        return nullptr;
     }
 
-    inline double squared(double x) { return x * x; };
-
-    void *natural_parameters(Fiber &fiber)
+    void natural_parameters(Fiber &fiber)
     {
         for (unsigned i = 0; i < Dimension; i++)
         {
             Float max;
             max = 0.0f;
             int m = points[fiber.d] - 1;
-            fiber.t(i, m) = 1.0 / squared(fiber.delta);
-            for (int k = 0; k < points[fiber.d]; k++)
+            fiber.t(i, m) = 1.0 / fiber.delta;
+            for (unsigned k = 0; k < points[fiber.d]; k++)
             {
                 if (fiber.f(i, k) > max)
                 {
@@ -481,15 +428,16 @@ private:
                     m = k;
                 }
             }
+
             double t;
             fiber.s(i, m) = 0.0;
-            for (int k = m, j; k < points[fiber.d] - 1;)
+            for (unsigned k = m, j; k < points[fiber.d] - 1;)
             {
                 j = k + 1;
                 while (fiber.f(i, j) <= 0.0 && j < points[fiber.d] - 1)
                     j++;
                 if (fiber.f(i, j) <= 0.0)
-                    t = 1.0 / squared(fiber.delta);
+                    t = 1.0 / fiber.delta;
                 else
                     t = -2.0 * ((std::log(fiber.f(i, j)) - std::log(fiber.f(i, k))) / squared(fiber.delta * (j - k)) - fiber.s(i, k) / fiber.delta / (j - k));
                 while (k < j)
@@ -537,7 +485,6 @@ private:
                 }
             }
         }
-        return nullptr;
     }
 
     void differential_error(Fiber &fiber)
@@ -545,7 +492,7 @@ private:
         double t, s_diff, t_diff;
         for (unsigned int i = 0; i < Dimension; i++)
         {
-            for (int k = 0; k < points[fiber.d] - 1; k++)
+            for (unsigned k = 0; k < points[fiber.d] - 1; k++)
             {
                 if (fiber.f(i, k + 1) > 0 && fiber.f(i, k) > 0) 
                 {
@@ -586,6 +533,59 @@ private:
         }
     }
 
+    inline double squared(double x) { return x * x; };
+
+    void filter(Float *input, Float *output, Float percent = 1.0f, bool normalize = false)
+    {
+        Float *cosine = (Float *)fftw_malloc(sizeof(Float) * _size);
+        if constexpr (std::is_same_v<Float, double>)
+            fftw_execute_r2r((fftw_plan)DCT, input, cosine);
+        else
+            fftwf_execute_r2r((fftwf_plan)DCT, input, cosine);
+        double **kernel = new double *[Dimension];
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            const double pi = 3.14159265358979323846;
+            double *k = kernel[i] = new double[points[i]];
+            double radius = percent / 100.0;
+            for (unsigned j = 0; j < points[i]; j++)
+                k[j] = exp(-2.0 * squared(j * radius * pi));
+        }
+        for (size_t x = 0; x < _size; x++)
+        {
+            double k = 1.0;
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                unsigned j = (x / stride[i]) % points[i];
+                k *= kernel[i][j];
+            }
+            cosine[x] *= k;
+        }
+        if constexpr (std::is_same_v<Float, double>)
+            fftw_execute_r2r((fftw_plan)DCT, cosine, output);
+        else
+            fftwf_execute_r2r((fftwf_plan)DCT, cosine, output);
+        fftw_free(cosine);
+        for (unsigned i = 0; i < Dimension; i++)
+            free(kernel[i]);
+        delete[] kernel;
+        if (normalize)
+            for (unsigned x = 0; x < _size; x++)
+                output[x] /= (Float)fft_normalizer;
+    }
+
+    void filter(Float *data, Float percent = 1.0f, bool normalize = false)
+    {
+        filter(data, data, percent, normalize);
+    }
+
+    void trim(std::vector<Float> &data, Float threshold)
+    {
+        for (size_t x = 0; x < _size; x++)
+            if (_QC[x] < threshold)
+                data[x] = std::numeric_limits<Float>::quiet_NaN();
+    }
+
     void init()
     {
         _size = 1;
@@ -619,9 +619,9 @@ private:
         _density = (Float *)fftw_malloc(sizeof(Float) * _size);
         assert((std::is_same_v<Float, float> || std::is_same_v<Float, double>));
         if constexpr (std::is_same_v<Float, double>)
-            DCT = (void *)fftw_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
+            DCT = (void *)fftw_plan_r2r(Dimension, reinterpret_cast<const int *>(&points), _weight, _density, kind, 0);
         else
-            DCT = (void *)fftwf_plan_r2r(Dimension, (const int *)&points, _weight, _density, kind, 0);
+            DCT = (void *)fftwf_plan_r2r(Dimension, reinterpret_cast<const int *>(&points), _weight, _density, kind, 0);
         assert(DCT);
     }
 };
