@@ -76,7 +76,6 @@ private:
     std::array<Float, Dimension> _var_tot_Q;
     std::vector<Float> _R;
     Float _tot_R = 0.0f;
-    Float _var_R = 0.0f;
     Float s_max = std::numeric_limits<Float>::lowest(), s_min = std::numeric_limits<Float>::max();
     Float t_max = std::numeric_limits<Float>::lowest(), t_min = std::numeric_limits<Float>::max();
     double _differential_error = 0.0;
@@ -182,11 +181,6 @@ public:
     const Float &tot_R() const
     {
         return _tot_R;
-    }
-
-    const Float &var_R() const
-    {
-        return _var_R;
     }
 
     const Float *P(unsigned i) const
@@ -347,7 +341,6 @@ public:
                 _var_Q[i][j] += squared(_Q[i][j] - _tot_Q[i]);
                 _var_tot_Q[i] = _var_Q[i][j] * _P[i][j];
             }
-            _var_R += squared(_R[x] - _tot_R) * _density[x];
         }
 
         trim(_R, threshold);

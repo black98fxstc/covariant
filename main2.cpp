@@ -25,6 +25,7 @@ int main(int argc, char* argv[]) {
         ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
         ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("1.0"))
+        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
         ("h,help", "Print usage")
         ("save", "Save generated data to a file.", cxxopts::value<std::string>()->implicit_value("covariant.dat"))
         ("load", "Load data from a file instead of generating.", cxxopts::value<std::string>()->implicit_value("covariant.dat"));
@@ -38,19 +39,20 @@ int main(int argc, char* argv[]) {
 
     unsigned normal_param, snake_param, exponential_param;
     size_t events_param;
-    float smooth_param;
+    float smooth_param, threshold_param;
 
     normal_param = result["normal"].as<unsigned>();
     snake_param = result["snake"].as<unsigned>();
     exponential_param = result["exponential"].as<unsigned>();
     events_param = result["events"].as<size_t>();
     smooth_param = result["smooth"].as<float>();
+    threshold_param = result["threshold"].as<float>();
 
     
     TestData<Dimension, Float> events;
     if (result.count("load")) {
         std::string filename = result["load"].as<std::string>();
-        std::cout << "Program running with --load=" << filename << " --smooth=" << smooth_param << std::endl;
+        std::cout << "Program running with --load=" << filename << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
         std::cout << "Loading events from " << filename << "..." << std::endl;
         std::ifstream infile(filename, std::ios::binary);
         if (!events.load(filename)) {
@@ -59,7 +61,7 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "Loaded " << events.size() << " events." << std::endl;
     } else {
-        std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --events=" << events_param << " --smooth=" << smooth_param << std::endl;
+        std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --events=" << events_param << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
         std::cout << "Generating " << events_param << " events..." << std::endl;
         TestData<Dimension, Float>::RandomSample test_sample;
         for (unsigned i = 0; i < normal_param; i++)
@@ -85,11 +87,11 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Analyzing the sample..." << std::endl;
 
-    covariant.parameters(smooth_param);
-    if(covariant.factorProbability() > 0.0001) {
+    covariant.parameters(smooth_param, threshold_param);
+    if(covariant.factorProbability() > .0001) {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
     }
-    else if(covariant.differentialEquation() > 0.0001) {
+    else if(covariant.differentialEquation() > .0001) {
         std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
     }
     else {
@@ -134,7 +136,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Data written successfully." << std::endl;
  
-    std::cout << "total R: " << covariant.tot_R() << "  var R: " << covariant.var_R() << "  Significance: " << covariant.tot_R() / std::sqrt(covariant.var_R()) << std::endl;
+    std::cout << "total R: " << covariant.tot_R() << std::endl;
    
     return 0;
 }

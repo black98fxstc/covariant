@@ -72,6 +72,7 @@ figure;
 hold on;
 contour(X, Y, QC, 0.1:0.1:0.9, 'k');
 contour(X, Y, QC, [0.001 0.001], 'r');
+contour(X, Y, QC, [0.01 0.01], 'r');
 contour(X, Y, S1, [0 0], 'b');
 contour(X, Y, S2, [0 0], 'g');
 % contour(X, Y, L', [0 0], 'g', 'LineWidth', 2);
