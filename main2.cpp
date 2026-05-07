@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "Processing " << events.size() << " events..." << std::endl;
-    Covariant<Dimension, Float> covariant(256);
+    Covariant<Dimension, Float> covariant(256, true);
     for (const auto& e : events)
         covariant.event(e);
 

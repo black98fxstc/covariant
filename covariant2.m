@@ -1,9 +1,3 @@
-%% 
-%% 
-%% 
-%% 
-%% 
-%% 
 
 function [ data, nx, ny ] = read_joint(filename)
 fid = fopen(filename, 'rb');
@@ -12,7 +6,8 @@ nx = dims(1);
 ny = dims(2);
 data = fread(fid, inf, 'single');
 fclose(fid);
-data = permute(reshape(data, nx, ny), [2 1]);
+%data = permute(reshape(data, nx, ny), [2 1]);
+data = reshape(data, nx, ny);
 end
 
 function data = read_marginal(filename)
@@ -80,6 +75,15 @@ axis([0 1 0 1]);
 axis square;
 title('Quantile Contours');
 hold off
+
+figure;
+surf(X, Y, QC);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('Quantile Colors');
 
 figure;
 plot(x, P1);

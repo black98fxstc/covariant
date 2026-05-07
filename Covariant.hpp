@@ -292,9 +292,9 @@ public:
         for (size_t x = 0; x < _size; x++)
         {
             size_t y = x;
+            double dual;
             for (unsigned i = 0, j; i < Dimension; i++)
             {
-                double dual;
                 dual = 1.0;
                 for (j = 0; j < Dimension; j++)
                 {
@@ -367,16 +367,16 @@ public:
         return _differential_error;
     }
 
-    Covariant(unsigned points[Dimension]) : points(points)
+    Covariant(unsigned points[Dimension], bool column_major = false) : points(points)
     {
-        init();
+        init(column_major);
     }
 
-    Covariant(unsigned grid = 256)
+    Covariant(unsigned grid = 256, bool column_major = false)
     {
         for (unsigned i = 0; i < Dimension; i++)
             points[i] = grid + 1;
-        init();
+        init(column_major);
     }
 
     ~Covariant()
@@ -517,10 +517,7 @@ private:
             {
                 size_t smaller = fiber.id % stride[fiber.d];
                 size_t larger = fiber.id / stride[fiber.d];
-                if (fiber.d == Dimension - 1)
-                    fiber.base = smaller;
-                else
-                    fiber.base = larger * points[fiber.d] * stride[fiber.d] + smaller;
+                fiber.base = larger * points[fiber.d] * stride[fiber.d] + smaller;
                 func(fiber);
             }
         }
@@ -579,15 +576,23 @@ private:
                 data[x] = std::numeric_limits<Float>::quiet_NaN();
     }
 
-    void init()
+    void init(bool colum_major)
     {
         _size = 1;
-        for (unsigned i = 0; i < Dimension; i++)
-        {
-            stride[i] = _size;
-            kind[i] = FFTW_REDFT00;
-            _size *= points[i];
-        }
+        if (colum_major)
+            for (int i = Dimension - 1; i >= 0; i--)
+            {
+                stride[i] = _size;
+                kind[i] = FFTW_REDFT00;
+                _size *= points[i];
+            }
+        else
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                stride[i] = _size;
+                kind[i] = FFTW_REDFT00;
+                _size *= points[i];
+            }
         for (unsigned i = 0; i < Dimension; i++)
         {
             fft_normalizer *= 2 * (points[i] - 1);
