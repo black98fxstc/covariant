@@ -576,10 +576,10 @@ private:
                 data[x] = std::numeric_limits<Float>::quiet_NaN();
     }
 
-    void init(bool colum_major)
+    void init(bool column_major)
     {
         _size = 1;
-        if (colum_major)
+        if (column_major)
             for (int i = Dimension - 1; i >= 0; i--)
             {
                 stride[i] = _size;
@@ -616,10 +616,14 @@ private:
         _weight = (Float *)fftw_malloc(sizeof(Float) * _size);
         _density = (Float *)fftw_malloc(sizeof(Float) * _size);
         assert((std::is_same_v<Float, float> || std::is_same_v<Float, double>));
+        int fftw_n[Dimension];
+        std::copy(points, points + Dimension, fftw_n);
+        if (column_major)
+            std::reverse(fftw_n, fftw_n + Dimension);
         if constexpr (std::is_same_v<Float, double>)
-            DCT = (void *)fftw_plan_r2r(Dimension, reinterpret_cast<const int *>(&points), _weight, _density, kind, 0);
+            DCT = (void *)fftw_plan_r2r(Dimension, fftw_n, _weight, _density, kind, 0);
         else
-            DCT = (void *)fftwf_plan_r2r(Dimension, reinterpret_cast<const int *>(&points), _weight, _density, kind, 0);
+            DCT = (void *)fftwf_plan_r2r(Dimension, fftw_n, _weight, _density, kind, 0);
         assert(DCT);
     }
 };
