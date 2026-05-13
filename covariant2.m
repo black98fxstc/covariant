@@ -17,6 +17,18 @@ data = fread(fid, points, 'single');
 fclose(fid);
 end
 
+function cmap = hueMap(n)
+h = linspace(.6666, 0, n).';                 % column vector of hues
+s = ones(n,1);                             % saturation = 1
+v = 0.75 * ones(n,1);                      % value = 0.75
+cmap = hsv2rgb([h s v]);                   % convert to RGB
+end
+
+% Generate a colormap for visualization
+nColors = 256; % Number of colors in the colormap
+cmap = hueMap(nColors);
+qmap = hueMap(10);
+
 [ F, nx, ny ] = read_joint('f.bin');
 [ QC, nx, ny ] = read_joint('QC.bin');
 [ W, nx, ny ] = read_joint('w.bin');
@@ -48,121 +60,136 @@ surf(X, Y, W);
 shading interp;
 view(2);
 colorbar;
+colormap(cmap);
 axis([0 1 0 1]);
 axis square;
 title('Weights w(x, y)');
 
-figure;
-surf(X, Y, F);
-shading interp;
-view(2); % Top-down view
-colorbar;
-axis([0 1 0 1]);
-axis square;
-xlabel('x');
-ylabel('y');
-title('Function f(x, y)');
+% figure;
+% surf(X, Y, F);
+% shading interp;
+% view(2); % Top-down view
+% colorbar;
+% axis([0 1 0 1]);
+% axis square;
+% xlabel('x');
+% ylabel('y');
+% title('Function f(x, y)');
+
+% figure;
+% hold on;
+% contour(X, Y, QC, 0.1:0.1:0.9, 'k');
+% contour(X, Y, QC, [0.001 0.001], 'r');
+% contour(X, Y, QC, [0.01 0.01], 'r');
+% contour(X, Y, S1, [0 0], 'b');
+% contour(X, Y, S2, [0 0], 'g');
+% % contour(X, Y, L', [0 0], 'g', 'LineWidth', 2);
+% axis([0 1 0 1]);
+% axis square;
+% title('Quantile Contours');
+% hold off
 
 figure;
-hold on;
-contour(X, Y, QC, 0.1:0.1:0.9, 'k');
-contour(X, Y, QC, [0.001 0.001], 'r');
-contour(X, Y, QC, [0.01 0.01], 'r');
-contour(X, Y, S1, [0 0], 'b');
-contour(X, Y, S2, [0 0], 'g');
-% contour(X, Y, L', [0 0], 'g', 'LineWidth', 2);
+contour(X, Y, QC, 'k', 'LineWidth', 1, 'FaceColor', 'flat');
+colorbar;
+colormap(cmap);
 axis([0 1 0 1]);
 axis square;
 title('Quantile Contours');
-hold off
 
-figure;
-surf(X, Y, QC);
-shading interp;
-view(2);
-colorbar;
-axis([0 1 0 1]);
-axis square;
-title('Quantile Colors');
+% figure;
+% surf(X, Y, QC);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(qmap);
+% axis([0 1 0 1]);
+% axis square;
+% title('Quantile Colors');
 
-figure;
-plot(x, P1);
-title('Marginal P1(x)');
-xlabel('x');
-ylabel('P1');
-grid on;
+% figure;
+% plot(x, P1);
+% title('Marginal P1(x)');
+% xlabel('x');
+% ylabel('P1');
+% grid on;
 
-figure;
-plot(y, P2);
-title('Marginal P2(y)');
-xlabel('y');
-ylabel('P2');
-grid on;
+% figure;
+% plot(y, P2);
+% title('Marginal P2(y)');
+% xlabel('y');
+% ylabel('P2');
+% grid on;
 
-figure;
-surf(X, Y, f1);
-shading interp;
-view(2);
-colorbar;
-axis([0 1 0 1]);
-axis square;
-title('f1(x, y)');
+% figure;
+% surf(X, Y, f1);
+% shading interp;
+% view(2);
+% colorbar;
+% axis([0 1 0 1]);
+% axis square;
+% title('f1(x, y)');
 
-figure;
-surf(X, Y, f2);
-shading interp;
-view(2);
-colorbar;
-axis([0 1 0 1]);
-axis square;
-title('f2(x, y)');
+% figure;
+% surf(X, Y, f2);
+% shading interp;
+% view(2);
+% colorbar;
+% axis([0 1 0 1]);
+% axis square;
+% title('f2(x, y)');
 
 
-figure;
-surf(X, Y, S1);
-shading interp;
-view(2);
-colorbar;
-clim([-64 64]);
-axis([0 1 0 1]);
-axis square;
-title('S1(x, y)');
+% figure;
+% surf(X, Y, S1);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-64 64]);
+% axis([0 1 0 1]);
+% axis square;
+% title('S1(x, y)');
 
-figure;
-surf(X, Y, S2);
-shading interp;
-view(2);
-colorbar;
-clim([-64 64]);
-axis([0 1 0 1]);
-axis square;
-title('S2(x, y)');
+% figure;
+% surf(X, Y, S2);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-64 64]);
+% axis([0 1 0 1]);
+% axis square;
+% title('S2(x, y)');
 
-figure;
-surf(X, Y, T1);
-shading interp;
-view(2);
-colorbar;
-clim([-500 500]);
-axis([0 1 0 1]);
-axis square;
-title('T1(x, y)');
+% figure;
+% surf(X, Y, T1);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-500 500]);
+% axis([0 1 0 1]);
+% axis square;
+% title('T1(x, y)');
 
-figure;
-surf(X, Y, T2);
-shading interp;
-view(2);
-colorbar;
-clim([-500 500]);
-axis([0 1 0 1]);
-axis square;
-title('T2(x, y)');
+% figure;
+% surf(X, Y, T2);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-500 500]);
+% axis([0 1 0 1]);
+% axis square;
+% title('T2(x, y)');
 
 figure;
 surf(X, Y, t11);
 shading interp;
 view(2);
 colorbar;
+colormap(cmap);
 clim([-500 500]);
 axis([0 1 0 1]);
 axis square;
@@ -173,6 +200,7 @@ surf(X, Y, t12);
 shading interp;
 view(2);
 colorbar;
+colormap(cmap);
 clim([-500 500]);
 axis([0 1 0 1]);
 axis square;
@@ -183,6 +211,7 @@ surf(X, Y, t21);
 shading interp;
 view(2);
 colorbar;
+colormap(cmap);
 clim([-500 500]);
 axis([0 1 0 1]);
 axis square;
@@ -193,6 +222,7 @@ surf(X, Y, t22);
 shading interp;
 view(2);
 colorbar;
+colormap(cmap);
 clim([-500 500]);
 axis([0 1 0 1]);
 axis square;
@@ -203,7 +233,9 @@ surf(X, Y, R);
 shading interp;
 view(2);
 colorbar;
-clim([-1 1]);
+colormap(cmap);
+clim([-500 500]);
+%clim([-1 1]);
 axis([0 1 0 1]);
 axis square;
 title('R(x, y)');

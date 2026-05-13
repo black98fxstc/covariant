@@ -19,7 +19,7 @@ class TestData : public std::vector<typename Covariant<Dimension, Float>::Event>
             thread_local std::shuffle_order_engine<std::mt19937, 256> shuffle_gen(gen);
             return gen;
         }
-        typename std::uniform_real_distribution<Float>::param_type stddev_param{0.05f, 0.25f};
+        typename std::uniform_real_distribution<Float>::param_type stddev_param{0.0125f, 0.1f};
         typename std::uniform_real_distribution<Float>::param_type mean_param{0.1f, 0.9f};
         typename std::uniform_real_distribution<Float>::param_type fraction_param{0.0f, 1.0f};
         typename std::uniform_real_distribution<Float>::param_type angle_param{0.0f, 3.14159265358979323846f};
@@ -53,9 +53,9 @@ public:
 
         Normal()
         {
-            for (unsigned i = 0; i < Dimension; i++)
-                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::mean_param);
             stddev = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::stddev_param);
+            for (unsigned i = 0; i < Dimension; i++)
+                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<Float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
         }
     };
 
@@ -63,6 +63,7 @@ public:
     {
     public:
         const double pi = 3.14159265358979323846;
+        const float half_pi = (float)(pi / 2);
         typename Covariant<Dimension>::Event mean;
         unsigned X, Y;
         Float stddev;
@@ -70,9 +71,13 @@ public:
 
         void sample(typename Covariant<Dimension, Float>::Event &event)
         {
-            double delta = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::fraction_param);
-            double delta_x = delta - 0.5;
-            double delta_y = std::sin(delta_x * pi * 0.75) / std::sin(pi * 0.375) / 2;
+            double delta_x, delta_y;
+            double theta = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<Float>::param_type{-half_pi, half_pi});
+            if (theta > 0)
+                delta_x = .5 - .5 * std::cos(theta);
+            else
+                delta_x = -.5 + .5 * std::cos(theta);
+            delta_y = .5 * std::sin(theta);
             for (unsigned i = 0; i < Dimension; i++)
             {
                 if (i == X)

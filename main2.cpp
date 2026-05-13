@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "Loaded " << events.size() << " events." << std::endl;
     } else {
-        std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --events=" << events_param << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
+        std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --exponential=" << exponential_param << " --events=" << events_param << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
         std::cout << "Generating " << events_param << " events..." << std::endl;
         TestData<Dimension, Float>::RandomSample test_sample;
         for (unsigned i = 0; i < normal_param; i++)

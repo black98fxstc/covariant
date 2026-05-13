@@ -285,8 +285,8 @@ public:
             for (unsigned j = 0; j < Dimension; j++)
                 for (unsigned i = 0; i < Dimension; i++)
                 {
-                    filter(_s[i][j].data(), percent, true);
-                    filter(_t[i][j].data(), percent, true);
+                    filter(_s[i][j].data(), 100.0f/(float)(points[j] - 1), true);
+                    filter(_t[i][j].data(), 100.0f/(float)(points[j] - 1), true);
                 }
 
         for (size_t x = 0; x < _size; x++)
@@ -304,13 +304,13 @@ public:
                     if (j == i)
                         continue;
                     if (_f[i][x] > 0.0f)
-                        _r[i][x] += (_t[i][j][x] + _t[j][i][x]) / squared(_f[i][x]);
+                        _r[i][x] += (_t[i][j][x] + _t[j][i][x]);// / squared(_f[i][x]);
                     for (unsigned k = 0; k < Dimension; k++)
                     {
                         if (k == i || k == j)
                             continue;
                         if (_f[j][x] > 0.0f)
-                            _q[i][x] += (_t[j][k][x] + _t[k][j][x]) / squared(_f[j][x]);
+                            _q[i][x] += (_t[j][k][x] + _t[k][j][x]);// / squared(_f[j][x]);
                     }
                     dual *= _f[j][x];
                 }
@@ -324,7 +324,7 @@ public:
                 _Q[i][j] += _q[i][x] * dual;
                 _tot_Q[i] += _Q[i][j] * _P[i][j];
             }
-            _R[x] *= _density[x] / (Float)_size;
+            _R[x] *= 0.25f;// _density[x] / (Float)_size;
             if (_QC[x] >= threshold)
                 _tot_R += _R[x];
         }
