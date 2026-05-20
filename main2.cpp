@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
         ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
-        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("1.0"))
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
         ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
         ("h,help", "Print usage")
         ("save", "Save generated data to a file.", cxxopts::value<std::string>()->implicit_value("covariant.dat"))
@@ -98,6 +98,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Consistency checkes passed..." << std::endl;
     }
     
+    std::cout << "Performing Laplacian clustering..." << std::endl;
+    unsigned found = covariant.bluster();
+    std::cout << "Found " << found << " clusters." << std::endl;
+
     std::cout << "Writing data to files..." << std::endl;
     auto write_joint = [&](std::string filename, const Float * data) {
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
@@ -120,6 +124,8 @@ int main(int argc, char* argv[]) {
     write_joint("T1.bin", covariant.T(0));
     write_joint("T2.bin", covariant.T(1));
     write_joint("R.bin", covariant.R());
+    write_joint("L.bin", covariant.L());
+    write_joint("classes.bin", covariant.classes());
 
     auto write_marginal = [&](std::string filename, const int marginal, const Float * data) {
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);

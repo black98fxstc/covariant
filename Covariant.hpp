@@ -18,7 +18,7 @@ public:
 private:
     struct Fiber
     {
-        Covariant &cov;
+        Covariant<Dimension, Float> &cov;
         size_t id;
         size_t base;
         size_t stride;
@@ -51,6 +51,52 @@ private:
         Fiber(Covariant &cov) : cov(cov) {};
     };
 
+    class Hypercube
+    {
+    private:
+        Covariant<Dimension, Float> &cov;
+        size_t x;
+
+    public:
+        enum state { unknown, outlier, ambiguous, contiguous, assigned };
+
+        Hypercube(Covariant<Dimension, Float> &cov, size_t x) : cov(cov), x(x) 
+        {
+            cov._status[x] = unknown;
+        };
+
+        Float density() const
+        {
+            return cov._density[x];
+        }
+
+        Float quantile() const
+        {
+            return cov._QC[x];
+        }
+
+        Float lapacian() const
+        {
+            return cov._L[x];
+        }
+
+        Float &cluster()
+        {
+            return cov._cluster[x];
+        }
+
+        state &status() const
+        {
+            return cov._status[x];
+        }
+
+        Hypercube &operator=(const Hypercube &other)
+        {
+            x = other.x;
+            return *this;
+        }
+    };
+
     size_t _size;
     size_t _events = 0;
     Float *_weight;
@@ -58,15 +104,20 @@ private:
     size_t stride[Dimension];
     fftw_r2r_kind kind[Dimension];
     void *DCT = nullptr;
+    Float _tot_R = 0.0f;
+    Float s_max = std::numeric_limits<Float>::lowest(), s_min = std::numeric_limits<Float>::max();
+    Float t_max = std::numeric_limits<Float>::lowest(), t_min = std::numeric_limits<Float>::max();
+    double _differential_error = 0.0;
+    double _factor_error = 0.0;
     unsigned long fft_normalizer = 1;
-    std::array<std::vector<Float>, Dimension> _f;
-    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _s;
-    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _t;
-    std::array<std::vector<Float>, Dimension> _S;
-    std::array<std::vector<Float>, Dimension> _T;
-    std::vector<Covariant<Dimension, Float>::Event> _M;
     std::vector<Float> _L;
     std::vector<Float> _QC;
+    std::vector<Float> _R;
+    std::vector<Float> _cluster;
+    std::vector<typename Hypercube::state> _status;
+    std::array<std::vector<Float>, Dimension> _f;
+    std::array<std::vector<Float>, Dimension> _S;
+    std::array<std::vector<Float>, Dimension> _T;
     std::array<std::vector<Float>, Dimension> _r;
     std::array<std::vector<Float>, Dimension> _q;
     std::array<std::vector<Float>, Dimension> _P;
@@ -74,12 +125,8 @@ private:
     std::array<std::vector<Float>, Dimension> _var_Q;
     std::array<Float, Dimension> _tot_Q;
     std::array<Float, Dimension> _var_tot_Q;
-    std::vector<Float> _R;
-    Float _tot_R = 0.0f;
-    Float s_max = std::numeric_limits<Float>::lowest(), s_min = std::numeric_limits<Float>::max();
-    Float t_max = std::numeric_limits<Float>::lowest(), t_min = std::numeric_limits<Float>::max();
-    double _differential_error = 0.0;
-    double _factor_error = 0.0;
+    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _s;
+    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _t;
 
 public:
     size_t size() const
@@ -153,6 +200,11 @@ public:
         return _T[i][x];
     }
 
+    const Float *L() const
+    {
+        return _L.data();
+    }
+
     const Float &L(size_t x) const
     {
         return _L[x];
@@ -192,6 +244,11 @@ public:
         return _Q[i].data();
     }
 
+    const Float *classes() const
+    {
+        return _cluster.data();
+    }
+
     bool event(const Event &event)
     {
         size_t x = 0;
@@ -228,11 +285,11 @@ public:
         return true;
     }
 
-    void parameters(Float percent = 1.0f, Float threshold = 0.001f)
+    void parameters(Float smoothing = .01f, Float threshold = 0.001f)
     {
-        if (percent > 0.0f)
+        if (smoothing > 0.0f)
         {
-            filter(_weight, _density, percent = 1.0f);
+            filter(_weight, _density, smoothing);
             for (size_t x = 0; x < _size; x++)
                 if (_density[x] < 0.0f)
                     _density[x] = 0.0f;
@@ -281,12 +338,12 @@ public:
         for_each_fiber([this](Fiber &fiber)
                        { this->differential_error(fiber); });
 
-        if (percent > 0.0f)
+        if (smoothing > 0.0f)
             for (unsigned j = 0; j < Dimension; j++)
                 for (unsigned i = 0; i < Dimension; i++)
                 {
-                    filter(_s[i][j].data(), 100.0f/(float)(points[j] - 1), true);
-                    filter(_t[i][j].data(), 100.0f/(float)(points[j] - 1), true);
+                    filter(_s[i][j].data(), 1.0f/(float)(points[j] - 1), true);
+                    filter(_t[i][j].data(), 1.0f/(float)(points[j] - 1), true);
                 }
 
         for (size_t x = 0; x < _size; x++)
@@ -343,6 +400,7 @@ public:
             }
         }
 
+        trim(_L, threshold);
         trim(_R, threshold);
         for (unsigned i = 0; i < Dimension; i++)
         {
@@ -355,6 +413,68 @@ public:
                 trim(_t[i][j], threshold);
             }
         }
+    }
+
+    unsigned bluster(Float threshold = 0.001f)
+    {
+        for (unsigned x = 0; x < _size; x++)
+            if (std::isnan(_L[x]))
+                _cluster[x] = std::numeric_limits<Float>::quiet_NaN();
+            else if (_L[x] <= 0.0f)
+                _cluster[x] = std::numeric_limits<Float>::quiet_NaN();
+            else
+                _cluster[x] = _L[x];
+        return 0;
+    }
+
+    unsigned cluster(Float threshold = 0.001f)
+    {
+        unsigned clusters = 0;
+        std::vector<Hypercube> cubes;
+        cubes.reserve(_size);
+        for (size_t x = 0; x < _size; x++)
+            cubes.emplace_back(*this, x);
+        auto outliers = std::partition(cubes.begin(), cubes.end(), [threshold](const Hypercube &cube)
+                       { return cube.quantile() >= threshold; });
+        for (auto it = outliers; it != cubes.end(); ++it)
+            it->status() = Hypercube::outlier;
+        auto precision = std::partition(cubes.begin(), outliers, [](const Hypercube &cube)
+                       { return cube.lapacian() > 0.0f; });
+        for (auto it = precision; it != outliers; ++it)
+            it->status() = Hypercube::ambiguous;
+        std::sort(cubes.begin(), precision, [](const Hypercube &a, const Hypercube &b)
+                  { return a.density() > b.density(); });
+        for (auto clustered = cubes.begin(); clustered != precision;)
+        {
+            clusters++;
+            clustered->status() = Hypercube::contiguous;
+            auto contiguous = clustered + 1;
+            while (true)
+            {
+                for (auto it = clustered; it != contiguous; ++it)
+                {
+                    size_t x = it - cubes.begin();
+                    cubes[x].cluster() = clusters;
+                    cubes[x].status() = Hypercube::assigned;
+                    size_t y = x;
+                    for (unsigned i = 0; i < Dimension; i++)
+                    { 
+                        unsigned j = y % points[i];
+                        y /= points[i];
+                        if (j < points[i] - 1 && cubes[x + stride[i]].status() == Hypercube::unknown)
+                            cubes[x + stride[i]].status() = Hypercube::contiguous;
+                        if (j > 0 && cubes[x - stride[i]].status() == Hypercube::unknown)
+                            cubes[x - stride[i]].status() = Hypercube::contiguous;
+                    }
+                }
+                clustered = contiguous;
+                contiguous = std::partition(clustered, precision, [](const Hypercube &cube)
+                        { return cube.status() == Hypercube::contiguous; });
+                if (contiguous == clustered)
+                    break;
+            }
+        }
+        return clusters;
     }
 
     double factorProbability()
@@ -525,7 +645,7 @@ private:
 
     inline double squared(double x) { return x * x; };
 
-    void filter(Float *input, Float *output, Float percent = 1.0f, bool normalize = false)
+    void filter(Float *input, Float *output, Float radius = 0.01f, bool normalize = false)
     {
         Float *cosine = (Float *)fftw_malloc(sizeof(Float) * _size);
         if constexpr (std::is_same_v<Float, double>)
@@ -537,7 +657,6 @@ private:
         {
             const double pi = 3.14159265358979323846;
             double *k = kernel[i] = new double[points[i]];
-            double radius = percent / 100.0;
             for (unsigned j = 0; j < points[i]; j++)
                 k[j] = exp(-2.0 * squared(j * radius * pi));
         }
@@ -613,6 +732,8 @@ private:
         _L.resize(_size);
         _QC.resize(_size);
         _R.resize(_size);
+        _cluster.resize(_size);
+        _status.resize(_size);
         _weight = (Float *)fftw_malloc(sizeof(Float) * _size);
         _density = (Float *)fftw_malloc(sizeof(Float) * _size);
         assert((std::is_same_v<Float, float> || std::is_same_v<Float, double>));
