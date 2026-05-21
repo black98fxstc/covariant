@@ -1,5 +1,3 @@
-%% 
-
 function [ data, nx, ny ] = read_joint(filename)
 fid = fopen(filename, 'rb');
 dims = fread(fid, 2, 'int32');
@@ -293,7 +291,7 @@ shading interp;
 view(2);
 colorbar;
 colormap(cmap);
-clim([-512 512]);
+%clim([-512 512]);
 %clim([-1 1]);
 axis([0 1 0 1]);
 axis square;

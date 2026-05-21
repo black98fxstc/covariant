@@ -55,10 +55,11 @@ private:
     {
     private:
         Covariant<Dimension, Float> &cov;
-        size_t x;
 
     public:
         enum state { unknown, outlier, ambiguous, contiguous, assigned };
+
+        size_t x;
 
         Hypercube(Covariant<Dimension, Float> &cov, size_t x) : cov(cov), x(x) 
         {
@@ -125,8 +126,8 @@ private:
     std::array<std::vector<Float>, Dimension> _var_Q;
     std::array<Float, Dimension> _tot_Q;
     std::array<Float, Dimension> _var_tot_Q;
-    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _s;
-    std::array<std::array<std::vector<Float>, Dimension>, Dimension> _t;
+    std::array<std::array<Float*, Dimension>, Dimension> _s;
+    std::array<std::array<Float*, Dimension>, Dimension> _t;
 
 public:
     size_t size() const
@@ -172,7 +173,7 @@ public:
 
     const Float *t(unsigned i, unsigned j) const
     {
-        return _t[i][j].data();
+        return _t[i][j];
     }
 
     const Float &t(unsigned i, unsigned j, size_t x) const
@@ -285,6 +286,19 @@ public:
         return true;
     }
 
+    unsigned short classify(const Event &event)
+    {
+        size_t x = 0;
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            if (event[i] < 0.0f || event[i] >= 1.0f)
+                return 0;
+            unsigned floor = static_cast<unsigned>(event[i] * (points[i] - 1));
+            x += floor * stride[i];
+        }
+        return (int)(_cluster[x]);
+    }
+
     void parameters(Float smoothing = .01f, Float threshold = 0.001f)
     {
         if (smoothing > 0.0f)
@@ -311,11 +325,9 @@ public:
         {
             _QC[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), _density[x]) - sorted.begin())) / sum;
             _density[x] /= sum;
-            size_t y = x;
-            for (unsigned i = 0, j; i < Dimension; i++)
+            for (unsigned i = 0; i < Dimension; i++)
             {
-                j = y % points[i];
-                y /= points[i];
+                unsigned j = (x / stride[i]) % points[i];
                 _P[i][j] += _density[x];
             }
         }
@@ -342,18 +354,17 @@ public:
             for (unsigned j = 0; j < Dimension; j++)
                 for (unsigned i = 0; i < Dimension; i++)
                 {
-                    filter(_s[i][j].data(), 1.0f/(float)(points[j] - 1), true);
-                    filter(_t[i][j].data(), 1.0f/(float)(points[j] - 1), true);
+                    filter(_s[i][j], 1.0f/(float)(points[j] - 1), true);
+                    filter(_t[i][j], 1.0f/(float)(points[j] - 1), true);
                 }
 
         for (size_t x = 0; x < _size; x++)
         {
-            size_t y = x;
             double dual;
-            for (unsigned i = 0, j; i < Dimension; i++)
+            for (unsigned i = 0; i < Dimension; i++)
             {
                 dual = 1.0;
-                for (j = 0; j < Dimension; j++)
+                for (unsigned j = 0; j < Dimension; j++)
                 {
                     _S[j][x] += _s[i][j][x];
                     _T[j][x] += _t[i][j][x];
@@ -371,16 +382,16 @@ public:
                     }
                     dual *= _f[j][x];
                 }
-                _L[x] += _T[i][x];
                 _R[x] += _r[i][x];
 
-                j = y % points[i];
-                y /= points[i];
                 if (_QC[x] < threshold)
                     continue;
+                unsigned j = (x / stride[i]) % points[i];
                 _Q[i][j] += _q[i][x] * dual;
                 _tot_Q[i] += _Q[i][j] * _P[i][j];
             }
+            for (unsigned i = 0; i < Dimension; i++)
+                _L[x] += _T[i][x];
             _R[x] *= 0.25f;// _density[x] / (Float)_size;
             if (_QC[x] >= threshold)
                 _tot_R += _R[x];
@@ -390,11 +401,9 @@ public:
         {
             if (_QC[x] < threshold)
                 continue;
-            size_t y = x;
-            for (unsigned i = 0, j; i < Dimension; i++)
+            for (unsigned i = 0; i < Dimension; i++)
             {
-                j = y % points[i];
-                y /= points[i];
+                unsigned j = (x / stride[i]) % points[i];
                 _var_Q[i][j] += squared(_Q[i][j] - _tot_Q[i]);
                 _var_tot_Q[i] = _var_Q[i][j] * _P[i][j];
             }
@@ -427,7 +436,7 @@ public:
         return 0;
     }
 
-    unsigned cluster(Float threshold = 0.001f)
+    unsigned cluster(Float threshold = 0.001f, bool grow = false)
     {
         unsigned clusters = 0;
         std::vector<Hypercube> cubes;
@@ -436,12 +445,8 @@ public:
             cubes.emplace_back(*this, x);
         auto outliers = std::partition(cubes.begin(), cubes.end(), [threshold](const Hypercube &cube)
                        { return cube.quantile() >= threshold; });
-        for (auto it = outliers; it != cubes.end(); ++it)
-            it->status() = Hypercube::outlier;
         auto precision = std::partition(cubes.begin(), outliers, [](const Hypercube &cube)
                        { return cube.lapacian() > 0.0f; });
-        for (auto it = precision; it != outliers; ++it)
-            it->status() = Hypercube::ambiguous;
         std::sort(cubes.begin(), precision, [](const Hypercube &a, const Hypercube &b)
                   { return a.density() > b.density(); });
         for (auto clustered = cubes.begin(); clustered != precision;)
@@ -453,22 +458,65 @@ public:
             {
                 for (auto it = clustered; it != contiguous; ++it)
                 {
-                    size_t x = it - cubes.begin();
-                    cubes[x].cluster() = clusters;
-                    cubes[x].status() = Hypercube::assigned;
-                    size_t y = x;
+                    it->status() = Hypercube::assigned;
+                    it->cluster() = clusters;
+                    size_t x = it->x, y = it->x;
                     for (unsigned i = 0; i < Dimension; i++)
                     { 
                         unsigned j = y % points[i];
                         y /= points[i];
-                        if (j < points[i] - 1 && cubes[x + stride[i]].status() == Hypercube::unknown)
-                            cubes[x + stride[i]].status() = Hypercube::contiguous;
-                        if (j > 0 && cubes[x - stride[i]].status() == Hypercube::unknown)
-                            cubes[x - stride[i]].status() = Hypercube::contiguous;
+                        if (j < points[i] - 1 && _status[x + stride[i]] == Hypercube::unknown)
+                            _status[x + stride[i]] = Hypercube::contiguous;
+                        if (j > 0 && _status[x - stride[i]] == Hypercube::unknown)
+                            _status[x - stride[i]] = Hypercube::contiguous;
                     }
                 }
                 clustered = contiguous;
                 contiguous = std::partition(clustered, precision, [](const Hypercube &cube)
+                        { return cube.status() == Hypercube::contiguous; });
+                if (contiguous == clustered)
+                    break;
+            }
+        }
+        if (!grow)
+        {
+            for (auto it = precision; it != outliers; ++it)
+            {
+                it->status() = Hypercube::ambiguous;
+                it->cluster() = std::numeric_limits<Float>::quiet_NaN();
+            }
+            for (auto it = outliers; it != cubes.end(); ++it)
+                {
+                    it->status() = Hypercube::outlier;
+                    it->cluster() = std::numeric_limits<Float>::quiet_NaN();
+                }
+        }
+        else
+        {
+            auto contiguous = precision;
+            for (auto clustered = cubes.begin(); clustered != cubes.end(); )
+            {
+                for (auto it = clustered; it != contiguous; ++it)
+                {
+                    size_t x = it->x, y = it->x;
+                    for (unsigned i = 0; i < Dimension; i++)
+                    { 
+                        unsigned j = y % points[i];
+                        y /= points[i];
+                        if (j < points[i] - 1 && _status[x + stride[i]] == Hypercube::unknown)
+                        {
+                            _status[x + stride[i]] = Hypercube::contiguous;
+                            _cluster[x + stride[i]] = it->cluster();
+                        }
+                        if (j > 0 && _status[x + stride[i]] == Hypercube::unknown)
+                        {
+                            _status[x - stride[i]] = Hypercube::contiguous;
+                            _cluster[x - stride[i]] = it->cluster();
+                        }
+                    }
+                }
+                clustered = contiguous;
+                contiguous = std::partition(clustered, cubes.end(), [](const Hypercube &cube)
                         { return cube.status() == Hypercube::contiguous; });
                 if (contiguous == clustered)
                     break;
@@ -507,6 +555,12 @@ public:
             fftwf_destroy_plan((fftwf_plan)DCT);
         fftw_free(_weight);
         fftw_free(_density);
+        for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned j = 0; j < Dimension; j++)
+            {
+                fftw_free(_s[i][j]);
+                fftw_free(_t[i][j]);
+            }
     }
 
 private:
@@ -683,12 +737,17 @@ private:
                 output[x] /= (Float)fft_normalizer;
     }
 
-    void filter(Float *data, Float percent = 1.0f, bool normalize = false)
+    void filter(Float *data, Float radius = 0.01f, bool normalize = false)
     {
-        filter(data, data, percent, normalize);
+        filter(data, data, radius, normalize);
     }
 
     void trim(std::vector<Float> &data, Float threshold)
+    {
+        trim(data.data(), threshold);
+    }
+
+    void trim(Float *data, Float threshold)
     {
         for (size_t x = 0; x < _size; x++)
             if (_QC[x] < threshold)
@@ -725,8 +784,8 @@ private:
             _var_Q[i].resize(points[i]);
             for (unsigned j = 0; j < Dimension; j++)
             {
-                _s[i][j].resize(_size);
-                _t[i][j].resize(_size);
+                _s[i][j] = (Float *)fftw_malloc(sizeof(Float) * _size);
+                _t[i][j] = (Float *)fftw_malloc(sizeof(Float) * _size);
             }
         }
         _L.resize(_size);

@@ -99,10 +99,17 @@ int main(int argc, char* argv[]) {
     }
     
     std::cout << "Performing Laplacian clustering..." << std::endl;
-    unsigned found = covariant.bluster();
+    unsigned found = covariant.cluster(threshold_param);
+    std::vector<unsigned short> classes(events.size());
+    for (const auto& e : events)
+        classes.push_back(covariant.classify(e));
     std::cout << "Found " << found << " clusters." << std::endl;
 
     std::cout << "Writing data to files..." << std::endl;
+    std::ofstream outfile("class.bin", std::ios::binary | std::ios::trunc);
+    outfile.write(reinterpret_cast<const char*>(classes.data()), classes.size() * sizeof(unsigned short));
+    outfile.close();
+
     auto write_joint = [&](std::string filename, const Float * data) {
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
         outfile.write(reinterpret_cast<const char*>(&covariant.points), sizeof(covariant.points));
