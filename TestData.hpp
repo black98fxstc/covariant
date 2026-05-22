@@ -1,12 +1,15 @@
+#pragma once
+
 #include <random>
 #include <fstream>
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <iostream>
+#include "Weighty.hpp"
 
-template <unsigned Dimension, typename Float = float>
-class TestData : public std::vector<typename Covariant<Dimension, Float>::Event>
+template <unsigned Dimension>
+class TestData : public std::vector<typename Weighty<Dimension>::Event>
 {
     class RandomEvent
     {
@@ -19,20 +22,20 @@ class TestData : public std::vector<typename Covariant<Dimension, Float>::Event>
             thread_local std::shuffle_order_engine<std::mt19937, 256> shuffle_gen(gen);
             return gen;
         }
-        typename std::uniform_real_distribution<Float>::param_type stddev_param{0.0125f, 0.1f};
-        typename std::uniform_real_distribution<Float>::param_type mean_param{0.1f, 0.9f};
-        typename std::uniform_real_distribution<Float>::param_type fraction_param{0.0f, 1.0f};
-        typename std::uniform_real_distribution<Float>::param_type angle_param{0.0f, 3.14159265358979323846f};
-        typename std::uniform_real_distribution<Float>::param_type lambda_param{0.25f, 2.5f};
-        typename std::normal_distribution<Float>::param_type halfish_param{0.5f, 0.125f};
+        typename std::uniform_real_distribution<float>::param_type stddev_param{0.0125f, 0.1f};
+        typename std::uniform_real_distribution<float>::param_type mean_param{0.1f, 0.9f};
+        typename std::uniform_real_distribution<float>::param_type fraction_param{0.0f, 1.0f};
+        typename std::uniform_real_distribution<float>::param_type angle_param{0.0f, 3.14159265358979323846f};
+        typename std::uniform_real_distribution<float>::param_type lambda_param{0.25f, 2.5f};
+        typename std::normal_distribution<float>::param_type halfish_param{0.5f, 0.125f};
 
         typename std::uniform_int_distribution<unsigned> dimension_distribution{0, Dimension - 1};
-        typename std::uniform_real_distribution<Float> uniform_distribution{0.0f, 1.0f};
-        typename std::normal_distribution<Float> normal_distribution{0.0f, 1.0f};
-        typename std::exponential_distribution<Float> exponential_distribution{1.0f};
+        typename std::uniform_real_distribution<float> uniform_distribution{0.0f, 1.0f};
+        typename std::normal_distribution<float> normal_distribution{0.0f, 1.0f};
+        typename std::exponential_distribution<float> exponential_distribution{1.0f};
 
     public:
-        virtual void sample(typename Covariant<Dimension, Float>::Event &event) = 0;
+        virtual void sample(typename Weighty<Dimension>::Event &event) = 0;
         virtual ~RandomEvent() = default;
     };
 
@@ -40,14 +43,14 @@ public:
     class Normal : public RandomEvent
     {
     public:
-        typename Covariant<Dimension>::Event mean;
-        Float stddev;
+        typename Weighty<Dimension>::Event mean;
+        float stddev;
 
-        void sample(typename Covariant<Dimension, Float>::Event &event)
+        void sample(typename Weighty<Dimension>::Event &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
             {
-                event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<Float>::param_type{mean[i], stddev});
+                event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
             }
         };
 
@@ -55,7 +58,7 @@ public:
         {
             stddev = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::stddev_param);
             for (unsigned i = 0; i < Dimension; i++)
-                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<Float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
+                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
         }
     };
 
@@ -64,15 +67,15 @@ public:
     public:
         const double pi = 3.14159265358979323846;
         const float half_pi = (float)(pi / 2);
-        typename Covariant<Dimension>::Event mean;
+        typename Weighty<Dimension>::Event mean;
         unsigned X, Y;
-        Float stddev;
+        float stddev;
         double s, c;
 
-        void sample(typename Covariant<Dimension, Float>::Event &event)
+        void sample(typename Weighty<Dimension>::Event &event)
         {
             double delta_x, delta_y;
-            double theta = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<Float>::param_type{-half_pi, half_pi});
+            double theta = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<float>::param_type{-half_pi, half_pi});
             if (theta > 0)
                 delta_x = .5 - .5 * std::cos(theta);
             else
@@ -81,11 +84,11 @@ public:
             for (unsigned i = 0; i < Dimension; i++)
             {
                 if (i == X)
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<Float>::param_type{(Float)(mean[i] + c * delta_x + s * delta_y), stddev});
+                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_x + s * delta_y), stddev});
                 else if (i == Y)
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<Float>::param_type{(Float)(mean[i] + c * delta_y - s * delta_x), stddev});
+                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_y - s * delta_x), stddev});
                 else
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<Float>::param_type{mean[i], stddev});
+                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
             }
         };
 
@@ -111,18 +114,18 @@ public:
     class Exponential : public RandomEvent
     {
         unsigned X;
-        Float lambda;
-        typename Covariant<Dimension>::Event mean;
-        Float stddev;
+        float lambda;
+        typename Weighty<Dimension>::Event mean;
+        float stddev;
 
     public:
-        void sample(typename Covariant<Dimension, Float>::Event &event)
+        void sample(typename Weighty<Dimension>::Event &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
                 if (i == X)
-                    event[i] = RandomEvent::exponential_distribution(RandomEvent::rng(), typename std::exponential_distribution<Float>::param_type{lambda});
+                    event[i] = RandomEvent::exponential_distribution(RandomEvent::rng(), typename std::exponential_distribution<float>::param_type{lambda});
                 else
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<Float>::param_type{mean[i], stddev});
+                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
         };
 
         Exponential()
@@ -138,7 +141,7 @@ public:
     class RandomSample : public RandomEvent
     {
         std::vector<RandomEvent *> population;
-        std::vector<Float> fractions;
+        std::vector<float> fractions;
 
     public:
         void subpopulation(RandomEvent *sub)
@@ -157,7 +160,7 @@ public:
             }
 
             unsigned n = 0;
-            Float max = fractions[0];
+            float max = fractions[0];
             for (unsigned i = 1; i < fractions.size(); i++)
             {
                 if (fractions[i] - fractions[i - 1] > max)
@@ -172,7 +175,7 @@ public:
                 fractions.insert(fractions.begin() + n, fractions[n - 1] + max * RandomEvent::normal_distribution(RandomEvent::rng(), RandomEvent::halfish_param));
         }
 
-        void sample(typename Covariant<Dimension, Float>::Event &event)
+        void sample(typename Weighty<Dimension>::Event &event)
         {
             int p = std::upper_bound(fractions.begin(), fractions.end(), RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::fraction_param)) - fractions.begin();
             population[p]->sample(event);
@@ -197,7 +200,7 @@ public:
         std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
         size_t num_events = this->size();
         outfile.write(reinterpret_cast<const char *>(&num_events), sizeof(num_events));
-        outfile.write(reinterpret_cast<const char *>(this->data()), num_events * sizeof(typename Covariant<Dimension, Float>::Event));
+        outfile.write(reinterpret_cast<const char *>(this->data()), num_events * sizeof(typename Weighty<Dimension>::Event));
         outfile.close();
     }
 
@@ -210,7 +213,7 @@ public:
         size_t num_events;
         infile.read(reinterpret_cast<char *>(&num_events), sizeof(num_events));
         this->resize(num_events);
-        infile.read(reinterpret_cast<char *>(this->data()), num_events * sizeof(typename Covariant<Dimension, Float>::Event));
+        infile.read(reinterpret_cast<char *>(this->data()), num_events * sizeof(typename Weighty<Dimension>::Event));
         infile.close();
         return true;
     }
