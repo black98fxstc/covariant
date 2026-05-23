@@ -15,7 +15,7 @@ const unsigned Dimension = 2;
 
 int main(int argc, char *argv[])
 {
-    std::string filename_param;
+    std::string file_param;
     unsigned dimension_param, normal_param, snake_param, exponential_param;
     size_t events_param;
 
@@ -23,9 +23,16 @@ int main(int argc, char *argv[])
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
 
     // Add the command-line options.
-    options.add_options()("f,filename", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data.dat"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))("h,help", "Print usage");
+    options.add_options()
+        ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
+        ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
+        ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
+        ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
+        ("h,help", "Print usage");
 
-    options.parse_positional({"filename"});
+    options.parse_positional({"file"});
 
     auto result = options.parse(argc, argv);
 
@@ -35,7 +42,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    filename_param = result["filename"].as<std::string>();
+    file_param = result["file"].as<std::string>();
     dimension_param = result["dimension"].as<unsigned>();
     normal_param = result["normal"].as<unsigned>();
     snake_param = result["snake"].as<unsigned>();
@@ -58,8 +65,8 @@ int main(int argc, char *argv[])
         for (unsigned i = 0; i < exponential_param; i++)
             test_sample.subpopulation(new TestData<2>::Exponential());
         test_data.generate(test_sample, events_param);
-        std::cout << "Saving " << test_data.size() << " events to " << filename_param << "..." << std::endl;
-        test_data.save(filename_param + ".dat");
+        std::cout << "Saving " << test_data.size() << " events to " << file_param << "..." << std::endl;
+        test_data.save(file_param + ".dat");
     }
     break;
     case 3:
@@ -73,8 +80,8 @@ int main(int argc, char *argv[])
         for (unsigned i = 0; i < exponential_param; i++)
             test_sample.subpopulation(new TestData<3>::Exponential());
         test_data.generate(test_sample, events_param);
-        std::cout << "Saving " << test_data.size() << " events to " << filename_param << "..." << std::endl;
-        test_data.save(filename_param + ".dat");
+        std::cout << "Saving " << test_data.size() << " events to " << file_param << "..." << std::endl;
+        test_data.save(file_param + ".dat");
     }
     break;
     default:
