@@ -7,17 +7,103 @@
 #include <assert.h>
 
 template <unsigned Dimension>
-class Weighty
+class Dimensions
 {
+    template <unsigned Dimension2>
+    friend class Function;
+protected:
+    unsigned _points[Dimension];
+    size_t _stride[Dimension];
+    size_t _size;
+
 public:
     const unsigned dimension = Dimension;
     const bool column_major;
 
-    typedef std::array<float, Dimension> Event;
-
     size_t inline size() const
     {
         return _size;
+    }
+
+    unsigned inline points(unsigned i)
+    {
+        return _points[i];
+    }
+
+    size_t inline stride(unsigned i)
+    {
+        return _stride[i];
+    }
+
+    Dimensions(const unsigned *p, bool column_major = false) : column_major(column_major)
+    {
+        _size = 1;
+        if (column_major)
+        {
+            for (int i = Dimension - 1; i >= 0; i--)
+            {
+                _stride[i] = _size;
+                _points[i] = p[i];
+                _size *= _points[i];
+            }
+        }
+        else
+        {
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                _stride[i] = _size;
+                _points[i] = p[i];
+                _size *= _points[i];
+            }
+        }
+    }
+
+    Dimensions(unsigned grid, bool column_major = false) : column_major(column_major)
+    {
+        _size = 1;
+        if (column_major)
+        {
+            for (int i = Dimension - 1; i >= 0; i--)
+            {
+                _stride[i] = _size;
+                _points[i] = grid + 1;
+                _size *= _points[i];
+            }
+        }
+        else
+        {
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                _stride[i] = _size;
+                _points[i] = grid + 1;
+                _size *= _points[i];
+            }
+        }
+    }
+};
+
+template <unsigned Dimension>
+class Weighty : public Dimensions<Dimension>
+{
+public:
+    // const unsigned dimension = Dimension;
+    // const bool column_major;
+
+    typedef std::array<float, Dimension> Event;
+
+    size_t size()
+    {
+        return Dimensions<Dimension>::size();
+    }
+
+    size_t stride(unsigned i)
+    {
+        return Dimensions<Dimension>::stride(i);
+    }
+
+    unsigned points(unsigned i)
+    {
+        return Dimensions<Dimension>::points(i);
     }
 
     size_t inline events() const
@@ -49,25 +135,25 @@ public:
         Coordinate(Weighty<Dimension> &weighty) : weighty(weighty) {}
     };
 
-    struct
-    {
-        template <unsigned Dimension2>
-        friend class Weighty;
+    // struct
+    // {
+    //     template <unsigned Dimension2>
+    //     friend class Weighty;
 
-    private:
-        unsigned data[Dimension];
+    // private:
+    //     unsigned data[Dimension];
 
-        unsigned inline &operator[](unsigned i)
-        {
-            return data[i];
-        }
+    //     unsigned inline &operator[](unsigned i)
+    //     {
+    //         return data[i];
+    //     }
 
-    public:
-        unsigned inline operator()(unsigned i) const
-        {
-            return data[i];
-        }
-    } points, stride;
+    // public:
+    //     unsigned inline operator()(unsigned i) const
+    //     {
+    //         return data[i];
+    //     }
+    // } points, stride;
 
     template <typename Type>
     class Function
@@ -86,7 +172,7 @@ public:
         Type *data;
 
     protected:
-        Type inline &operator[](size_t x)
+        Type &operator[](size_t x)
         {
             return data[x];
         }
@@ -104,8 +190,8 @@ public:
 
         void write(std::ostream &out) const
         {
-            out.write(reinterpret_cast<const char *>(points.data), Dimension * sizeof(unsigned));
-            out.write(reinterpret_cast<const char *>(data), size() * sizeof(Type));
+            out.write(reinterpret_cast<const char *>(Dimensions::_points), Dimension * sizeof(unsigned));
+            out.write(reinterpret_cast<const char *>(data), Dimensions::size() * sizeof(Type));
         }
 
         void write(std::string filename) const
@@ -117,12 +203,16 @@ public:
 
         Function(Weighty<Dimension> &weighty) : weighty(weighty)
         {
-            data = (Type *)fftw_malloc(weighty.size() * sizeof(Type));
+            // data = (Type *)fftwf_malloc(weighty.size() * sizeof(Type));
+            data = (Type *)malloc(weighty.size() * sizeof(Type));
+            Type x = *data;
+            *data = x;
         }
 
         ~Function()
         {
-            fftw_free(data);
+            // fftwf_free(data);
+            free(data);
         }
     };
 
@@ -185,7 +275,7 @@ public:
             x.stride = stride(i);
             x.delta = 1.0 / (double)(points(x.d) - 1);
 
-            for (x.id = 0; x.id < _size / points(x.d); x.id++)
+            for (x.id = 0; x.id < size() / points(x.d); x.id++)
             {
                 size_t smaller = x.id % stride(x.d);
                 size_t larger = x.id / stride(x.d);
@@ -209,7 +299,7 @@ public:
             for (unsigned j = 0; j < points(i); j++)
                 k[j] = exp(-2.0 * squared(j * radius * pi));
         }
-        for (size_t x = 0; x < _size; x++)
+        for (size_t x = 0; x < size(); x++)
         {
             double k = 1.0;
             for (unsigned i = 0; i < Dimension; i++)
@@ -224,7 +314,7 @@ public:
             free(kernel[i]);
         delete[] kernel;
         if (normalize)
-            for (unsigned x = 0; x < _size; x++)
+            for (unsigned x = 0; x < size(); x++)
                 output[x] /= (float)fft_normalizer;
     }
 
@@ -288,24 +378,26 @@ public:
         if (smoothing > 0.0f)
         {
             filter(weight, density, smoothing);
-            for (size_t x = 0; x < _size; x++)
+            float x = density[0];
+            density[0] = x;
+            for (size_t x = 0; x < size(); x++)
                 if (density[x] < 0.0f)
                     density[x] = 0.0f;
         }
         else
         {
-            std::copy(weight.data, weight.data + _size, density.data);
+            std::copy(weight.data, weight.data + size(), density.data);
         }
 
         std::vector<float> sorted;
-        std::copy(density.data, density.data + _size, std::back_inserter(sorted));
+        std::copy(density.data, density.data + size(), std::back_inserter(sorted));
         std::sort(sorted.begin(), sorted.end());
         std::vector<float> summed;
         summed.resize(sorted.size());
         double sum = 0.0;
-        for (size_t x = 0; x < _size; x++)
+        for (size_t x = 0; x < size(); x++)
             summed[x] = sum += sorted[x];
-        for (size_t x = 0; x < _size; x++)
+        for (size_t x = 0; x < size(); x++)
         {
             quantile[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), density[x]) - sorted.begin())) / sum;
             density[x] /= sum;
@@ -329,27 +421,23 @@ public:
 
     void trim(float *data, float threshold)
     {
-        for (size_t x = 0; x < _size; x++)
+        for (size_t x = 0; x < size(); x++)
             if (quantile[x] < threshold)
                 data[x] = std::numeric_limits<float>::quiet_NaN();
     }
 
-    Weighty(const unsigned *points, bool column_major = false) : column_major(column_major)
+    Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(column_major)
     {
-        std::copy(points, points + Dimension, this->points);
         init();
     }
 
-    Weighty(unsigned grid, bool column_major = false) : column_major(column_major)
+    Weighty(unsigned grid, bool column_major = false) : Dimensions<Dimension>(grid, column_major)
     {
-        for (unsigned i = 0; i < Dimension; i++)
-            points[i] = grid - 1;
         init();
     }
 
 private:
-    size_t _size;
-    size_t _events;
+    size_t _events = 0;
     fftw_r2r_kind kind[Dimension];
     void *DCT;
     unsigned long fft_normalizer = 1;
@@ -358,27 +446,14 @@ private:
 
     void init()
     {
-        _size = 1;
-        if (column_major)
-            for (int i = Dimension - 1; i >= 0; i--)
-            {
-                stride[i] = _size;
-                _size *= points[i];
-            }
-        else
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                stride[i] = _size;
-                _size *= points[i];
-            }
+        int fftw_n[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
         {
             kind[i] = FFTW_REDFT00;
-            fft_normalizer *= 2 * (points[i] - 1);
+            fft_normalizer *= 2 * (points(i) - 1);
+            fftw_n[i] = points(i);
         }
-        int fftw_n[Dimension];
-        std::copy(points.data, points.data + Dimension, fftw_n);
-        if (column_major)
+        if (Dimensions<Dimension>::column_major)
             std::reverse(fftw_n, fftw_n + Dimension);
         DCT = (void *)fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, 0);
         assert(DCT);
