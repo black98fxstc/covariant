@@ -11,7 +11,6 @@
 #include "Covariant.hpp"
 #include "TestData.hpp"
 
-typedef float Float;
 const unsigned Dimension = 2;
 
 int main(int argc, char* argv[]) {
@@ -49,7 +48,7 @@ int main(int argc, char* argv[]) {
     threshold_param = result["threshold"].as<float>();
 
     
-    TestData<Dimension, Float> events;
+    TestData<Dimension> events;
     if (result.count("load")) {
         std::string filename = result["load"].as<std::string>();
         std::cout << "Program running with --load=" << filename << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
@@ -63,25 +62,22 @@ int main(int argc, char* argv[]) {
     } else {
         std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --exponential=" << exponential_param << " --events=" << events_param << " --smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
         std::cout << "Generating " << events_param << " events..." << std::endl;
-        TestData<Dimension, Float>::RandomSample test_sample;
+        TestData<Dimension>::RandomSample test_sample;
         for (unsigned i = 0; i < normal_param; i++)
-            test_sample.subpopulation(new TestData<Dimension, Float>::Normal());
+            test_sample.subpopulation(new TestData<Dimension>::Normal());
         for (unsigned i = 0; i < snake_param; i++)
-            test_sample.subpopulation(new TestData<Dimension, Float>::Snake());
+            test_sample.subpopulation(new TestData<Dimension>::Snake());
         for (unsigned i = 0; i < exponential_param; i++)
-            test_sample.subpopulation(new TestData<Dimension, Float>::Exponential());
+            test_sample.subpopulation(new TestData<Dimension>::Exponential());
         events.generate(test_sample, events_param);
 
         if (result.count("save")) {
             std::string filename = result["save"].as<std::string>();
-            std::cout << "Saving " << events.size() << " events to " << filename << "..." << std::endl;
-            std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-            events.save(filename);
         }
     }
 
     std::cout << "Processing " << events.size() << " events..." << std::endl;
-    Covariant<Dimension, Float> covariant(256, true);
+    Covariant<Dimension> covariant(256, true);
     for (const auto& e : events)
         covariant.event(e);
 
@@ -101,8 +97,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Performing Laplacian clustering..." << std::endl;
     unsigned found = covariant.cluster(threshold_param);
     std::vector<unsigned short> classes(events.size());
-    for (const auto& e : events)
-        classes.push_back(covariant.classify(e));
+    // for (const auto& e : events)
+    //     classes.push_back(covariant.classify(e));
     std::cout << "Found " << found << " clusters." << std::endl;
 
     std::cout << "Writing data to files..." << std::endl;
@@ -110,46 +106,46 @@ int main(int argc, char* argv[]) {
     outfile.write(reinterpret_cast<const char*>(classes.data()), classes.size() * sizeof(unsigned short));
     outfile.close();
 
-    auto write_joint = [&](std::string filename, const Float * data) {
-        std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-        outfile.write(reinterpret_cast<const char*>(&covariant.points), sizeof(covariant.points));
-        outfile.write(reinterpret_cast<const char*>(data), covariant.size() * sizeof(Float));
-        outfile.close();
-    };
+    // auto write_joint = [&](std::string filename, const float * data) {
+    //     std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
+    //     outfile.write(reinterpret_cast<const char*>(&covariant.points), sizeof(covariant.points));
+    //     outfile.write(reinterpret_cast<const char*>(data), covariant.size() * sizeof(float));
+    //     outfile.close();
+    // };
 
-    write_joint("w.bin", covariant.w());
-    write_joint("f.bin", covariant.f());
-    write_joint("QC.bin", covariant.QC());
-    write_joint("f1.bin", covariant.f(0));
-    write_joint("f2.bin", covariant.f(1));
-    write_joint("t11.bin", covariant.t(0, 0));
-    write_joint("t12.bin", covariant.t(0, 1));
-    write_joint("t21.bin", covariant.t(1, 0));
-    write_joint("t22.bin", covariant.t(1, 1));
-    write_joint("S1.bin", covariant.S(0));
-    write_joint("S2.bin", covariant.S(1));
-    write_joint("T1.bin", covariant.T(0));
-    write_joint("T2.bin", covariant.T(1));
-    write_joint("R.bin", covariant.R());
-    write_joint("L.bin", covariant.L());
-    write_joint("classes.bin", covariant.classes());
+    // write_joint("w.bin", covariant.w());
+    // write_joint("f.bin", covariant.f());
+    // write_joint("QC.bin", covariant.QC());
+    // write_joint("f1.bin", covariant.f(0));
+    // write_joint("f2.bin", covariant.f(1));
+    // write_joint("t11.bin", covariant.t(0, 0));
+    // write_joint("t12.bin", covariant.t(0, 1));
+    // write_joint("t21.bin", covariant.t(1, 0));
+    // write_joint("t22.bin", covariant.t(1, 1));
+    // write_joint("S1.bin", covariant.S(0));
+    // write_joint("S2.bin", covariant.S(1));
+    // write_joint("T1.bin", covariant.T(0));
+    // write_joint("T2.bin", covariant.T(1));
+    // write_joint("R.bin", covariant.R());
+    // write_joint("L.bin", covariant.L());
+    // write_joint("classes.bin", covariant.classes());
 
-    auto write_marginal = [&](std::string filename, const int marginal, const Float * data) {
-        std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-        int  m = marginal;
-        outfile.write(reinterpret_cast<const char*>(&covariant.points[m]), sizeof(covariant.points[m]));
-        outfile.write(reinterpret_cast<const char*>(data), covariant.points[m] * sizeof(Float));
-        outfile.close();
-    };
+    // auto write_marginal = [&](std::string filename, const int marginal, const float * data) {
+    //     std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
+    //     int  m = marginal;
+    //     outfile.write(reinterpret_cast<const char*>(covariant.points[m]), sizeof(covariant.points[m]));
+    //     outfile.write(reinterpret_cast<const char*>(data), covariant.points[m] * sizeof(float));
+    //     outfile.close();
+    // };
 
-    write_marginal("P1.bin", 0, covariant.P(0));
-    write_marginal("P2.bin", 1, covariant.P(1));
-    write_marginal("Q1.bin", 0, covariant.Q(0));
-    write_marginal("Q2.bin", 1, covariant.Q(1));
+    // write_marginal("P1.bin", 0, covariant.P(0));
+    // write_marginal("P2.bin", 1, covariant.P(1));
+    // write_marginal("Q1.bin", 0, covariant.Q(0));
+    // write_marginal("Q2.bin", 1, covariant.Q(1));
 
     std::cout << "Data written successfully." << std::endl;
  
-    std::cout << "total R: " << covariant.tot_R() << std::endl;
+    // std::cout << "total R: " << covariant.tot_R() << std::endl;
    
     return 0;
 }
