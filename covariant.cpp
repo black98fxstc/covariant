@@ -15,6 +15,7 @@ int main(int argc, char *argv[])
     std::string filename_param;
     unsigned dimension_param, cluster_param;
     float smooth_param, threshold_param;
+    bool visual_param, verbose_param;
 
     // Set up the command-line options parser.
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
@@ -26,6 +27,8 @@ int main(int argc, char *argv[])
         ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
         ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
         ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
+        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
     options.parse_positional({"file"});
@@ -43,6 +46,8 @@ int main(int argc, char *argv[])
     cluster_param = result["dimension"].as<unsigned>();
     smooth_param = result["smooth"].as<float>();
     threshold_param = result["threshold"].as<float>();
+    visual_param = result["visual"].as<bool>();
+    verbose_param = result["verbose"].as<bool>();
 
     std::cout << "Program running with dimension=" << dimension_param << " filename=" << filename_param << "smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
     std::cout << "Analyzing events in " << dimension_param << " dimensions..." << std::endl;
@@ -62,6 +67,8 @@ int main(int argc, char *argv[])
         std::cout << "Loaded " << events.size() << " events." << std::endl;
 
         Covariant<2> covariant(256, true);
+        covariant.visualize = visual_param;
+        covariant.verbose = verbose_param;
         size_t valid_events = 0;
         if (result.count("cluster"))
         {

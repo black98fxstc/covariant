@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
     std::string file_param;
     unsigned dimension_param;
     float smooth_param, threshold_param;
+    bool visual_param, verbose_param;
 
     // Set up the command-line options parser.
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
@@ -30,6 +31,8 @@ int main(int argc, char *argv[])
     ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
     ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
     ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+    ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
+    ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage");
 
     options.parse_positional({"file"});
@@ -46,6 +49,8 @@ int main(int argc, char *argv[])
     dimension_param = result["dimension"].as<unsigned>();
     smooth_param = result["smooth"].as<float>();
     threshold_param = result["threshold"].as<float>();
+    visual_param = result["visual"].as<bool>();
+    verbose_param = result["verbose"].as<bool>();
 
     std::cout << "Program running with dimension=" << dimension_param << " filename=" << file_param << " smooth=" << smooth_param << " threshold=" << threshold_param << std::endl;
 
@@ -65,6 +70,8 @@ int main(int argc, char *argv[])
 
         std::cout << "Processing " << events.size() << " events..." << std::endl;
         Laplacian<2> laplace(256, true);
+        laplace.visualize = visual_param;
+        laplace.verbose = verbose_param;
         for (const auto &e : events)
             laplace.event(e);
 

@@ -127,14 +127,20 @@ public:
             }
         }
         
-        f[0].write("f1.bin");
-        f[1].write("f2.bin");
-        t[0][0].write("t11.bin");
-        t[0][1].write("t12.bin");
-        t[1][0].write("t21.bin");
-        t[1][1].write("t22.bin");
-
-        R.write("R.bin");
+        if (this->visualize)
+        {
+            R.write("R.bin");
+            this->L.write("L.bin");
+            if (this->verbose)
+            {
+                f[0].write("f1.bin");
+                f[1].write("f2.bin");
+                t[0][0].write("t11.bin");
+                t[0][1].write("t12.bin");
+                t[1][0].write("t21.bin");
+                t[1][1].write("t22.bin");
+            }
+        }
     }
 
     double factorProbability()

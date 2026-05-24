@@ -87,7 +87,12 @@ public:
         this->for_each_line([this](const Line &fiber)
             { this->differential_error(fiber); });
 
+        // Supress ringing
         this->filter(L, std::pow(this->size(), -1.0f / (float)Dimension), true);
+
+        this->trim(L, threshold);
+        L.write("laplacian.bin");
+        klass.write("classes.bin"); 
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
