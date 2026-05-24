@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++20 -Wall -Wextra -I. -g
 LIBS = -lfftw3 -lfftw3f -lm
-HEADERS = Weighty.hpp Laplacian.hpp Covariant.hpp TestData.hpp
+HEADERS = Dimensions.hpp Function.hpp Weighty.hpp Laplacian.hpp Covariant.hpp TestData.hpp
 
 all: covariant laplacian testdata
 

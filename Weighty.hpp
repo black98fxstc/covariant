@@ -12,83 +12,6 @@
 #include <assert.h>
 
 template <unsigned Dimension>
-class Dimensions
-{
-    template <unsigned Dimension2>
-    friend class Function;
-
-protected:
-    unsigned _points[Dimension];
-    size_t _stride[Dimension];
-    size_t _size;
-
-public:
-    const unsigned dimension = Dimension;
-    const bool column_major;
-
-    size_t inline size() const
-    {
-        return _size;
-    }
-
-    unsigned inline points(unsigned i)
-    {
-        return _points[i];
-    }
-
-    size_t inline stride(unsigned i)
-    {
-        return _stride[i];
-    }
-
-    Dimensions(const unsigned *p, bool column_major = false) : column_major(column_major)
-    {
-        _size = 1;
-        if (column_major)
-        {
-            for (int i = Dimension - 1; i >= 0; i--)
-            {
-                _stride[i] = _size;
-                _points[i] = p[i];
-                _size *= _points[i];
-            }
-        }
-        else
-        {
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                _stride[i] = _size;
-                _points[i] = p[i];
-                _size *= _points[i];
-            }
-        }
-    }
-
-    Dimensions(unsigned grid, bool column_major = false) : column_major(column_major)
-    {
-        _size = 1;
-        if (column_major)
-        {
-            for (int i = Dimension - 1; i >= 0; i--)
-            {
-                _stride[i] = _size;
-                _points[i] = grid + 1;
-                _size *= _points[i];
-            }
-        }
-        else
-        {
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                _stride[i] = _size;
-                _points[i] = grid + 1;
-                _size *= _points[i];
-            }
-        }
-    }
-};
-
-template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>
 {
 private:
@@ -120,184 +43,19 @@ public:
         return Weighty<Dimension>::_events;
     }
 
-    class Coordinate : public std::array<unsigned, Dimension>
-    {
-    private:
-        Weighty<Dimension> &weighty;
+    Function<Dimension, float> weight = Function<Dimension, float>(*this);
+    Function<Dimension, float> density = Function<Dimension, float>(*this);
+    Function<Dimension, float> quantile = Function<Dimension, float>(*this);
+    Function<Dimension, unsigned short> klass = Function<Dimension, unsigned short>(*this);
 
-    public:
-        Coordinate inline &operator=(const size_t x)
-        {
-            for (unsigned i = 0; i < Dimension; i++)
-                (*this)[i] = (x / weighty.stride(i)) % weighty.points(i);
-            return *this;
-        }
+    MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
+    MarginalFunction<Dimension, float> Q = MarginalFunction<Dimension, float>(*this);
 
-        operator size_t() const
-        {
-            unsigned long x = 0;
-            for (unsigned i = 0; i < Dimension; i++)
-                x += (*this)[i] * weighty.stride(i);
-            return x;
-        }
-
-        Coordinate(Weighty<Dimension> &weighty) : weighty(weighty) {}
-    };
-
-    template <typename Type>
-    class Function
-    {
-        template <unsigned Dimension2>
-        friend class Weighty;
-
-        template <unsigned Dimension2>
-        friend class Laplacian;
-
-        template <unsigned Dimension2>
-        friend class Covariant;
-
-    private:
-        Weighty<Dimension> &weighty;
-        Type *data;
-
-    protected:
-        Type &operator[](size_t x)
-        {
-            return data[x];
-        }
-
-    public:
-        Type inline operator()(size_t x)
-        {
-            return data[x];
-        }
-
-        void write(std::ostream &out) const
-        {
-            out.write(reinterpret_cast<const char *>(weighty._points), Dimension * sizeof(unsigned));
-            out.write(reinterpret_cast<const char *>(data), weighty.size() * sizeof(Type));
-        }
-
-        void write(std::string filename) const
-        {
-            std::ofstream out(filename, std::ios::binary | std::ios::trunc);
-            write(out);
-            out.close();
-        }
-
-        Function(Weighty<Dimension> &weighty) : weighty(weighty), data(nullptr)
-        {
-            data = (Type *)fftwf_malloc(weighty.size() * sizeof(Type));
-            assert(data != nullptr);
-        }
-
-        ~Function()
-        {
-            fftwf_free(data);
-        }
-
-        // Rule of Five: Handle move and disable copy to prevent double-free
-        Function(const Function&) = delete;
-        Function& operator=(const Function&) = delete;
-
-        Function(Function&& other) noexcept : weighty(other.weighty), data(other.data) { other.data = nullptr; }
-        Function& operator=(Function&&) = delete; // Cannot rebind reference member
-    };
-
-    template <typename Type>
-    class FunctionVector : public std::vector<Function<Type>>
-    {
-    public:
-        FunctionVector(Weighty<Dimension> &weighty)
-        {
-            this->reserve(Dimension);
-            for (unsigned i = 0; i < Dimension; i++)
-                this->emplace_back(weighty);
-        }
-    };
-
-    template <typename Type>
-    class FunctionMatrix : public std::vector<std::vector<Function<Type>>>
-    {
-    public:
-        FunctionMatrix(Weighty<Dimension> &weighty)
-        {
-            this->reserve(Dimension);
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                this->emplace_back(std::vector<Function<Type>>());
-                this->back().reserve(Dimension);
-                for (unsigned j = 0; j < Dimension; j++)
-                    this->back().emplace_back(weighty);
-    }
-        }
-    };
-
-    Function<float> weight = Function<float>(*this);
-    Function<float> density = Function<float>(*this);
-    Function<float> quantile = Function<float>(*this);
-    Function<unsigned short> klass = Function<unsigned short>(*this);
-
-    class MarginalFunction : std::array<std::vector<float>, Dimension>
-    {
-        friend class Weighty<Dimension>;
-        
-    public:
-        const std::vector<float> &operator()(unsigned i) const
-        {
-            return this->at(i);
-        }
-
-        MarginalFunction(Dimensions<Dimension> &dimensions)
-        {
-            for (unsigned i = 0; i < Dimension; i++)
-                this->at(i).resize(dimensions.points(i));
-        }
-    };
-
-    MarginalFunction P = MarginalFunction(*this);
-    MarginalFunction Q = MarginalFunction(*this);
-
-    struct Line
-    {
-        size_t id;
-        size_t base;
-        size_t stride;
-        float delta;
-        unsigned d;
-        unsigned points;
-
-        size_t inline operator[](unsigned i) const
-        {
-            return base + i * stride;
-        }
-    };
-
-    void for_each_line(std::function<void(const Line &)> func)
-    {
-        Line x;
-        for (unsigned i = 0; i < Dimension; ++i)
-        {
-            x.d = i;
-            x.points = points(i);
-            x.stride = stride(i);
-            x.delta = 1.0 / (double)(points(x.d) - 1);
-
-            for (x.id = 0; x.id < size() / points(x.d); x.id++)
-            {
-                size_t smaller = x.id % stride(x.d);
-                size_t larger = x.id / stride(x.d);
-                x.base = larger * points(x.d) * stride(x.d) + smaller;
-                func(x);
-            }
-        }
-    }
-
-    void filter(Function<float> &input, Function<float> &output, float radius = 0.01f, bool normalize = false)
+    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
     {
         // Apply a Gaussian filter to the input function using the DCT.
         // The radius is specified as a fraction of the total size of the grid.
-        Function<float> cosine = Function<float>(*this);
+        Function<Dimension, float> cosine = Function<Dimension, float>(*this);
         fftwf_execute_r2r((fftwf_plan)DCT, input.data, cosine.data);
         double **kernel = new double *[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
@@ -326,7 +84,7 @@ public:
                 output[x] /= (float)fft_normalizer;
     }
 
-    void filter(Function<float> &data, float radius = 0.01f, bool normalize = false)
+    void filter(Function<Dimension, float> &data, float radius = 0.01f, bool normalize = false)
     {
         filter(data, data, radius, normalize);
     }
@@ -368,16 +126,24 @@ public:
         return true;
     }
 
-    unsigned short classify(const Event &event) const
+    static constexpr Coordinate<Dimension> OOB = Coordinate<Dimension>(nullptr);
+
+    bool locate(const Event &event, Coordinate<Dimension> &coord)
     {
-        size_t x = 0;
         for (unsigned i = 0; i < Dimension; i++)
-        {
             if (event[i] < 0.0f || event[i] > 1.0f)
-                return 0;
-            unsigned floor = static_cast<unsigned>(event[i] * (points[i] - 1));
-            x += floor * stride[i];
-        }
+                return false;
+            else
+                coord[i] = static_cast<unsigned>(event[i] * (points(i) - 1));
+        return coord;
+    }
+
+    unsigned short classify(const Event &event)
+    {
+        Coordinate<Dimension> coord(*this);
+        if (!locate(event, coord))
+            return false;
+        size_t x = coord;
         return (unsigned short)(klass[x]);
     }
 
@@ -423,7 +189,7 @@ public:
         trim(data.data(), threshold);
     }
 
-    void trim(Function<float> &func, float threshold)
+    void trim(Function<Dimension, float> &func, float threshold)
     {
         trim(func.data, threshold);
     }

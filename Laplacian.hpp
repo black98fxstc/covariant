@@ -71,28 +71,28 @@ private:
         }
     };
 
-    Weighty<Dimension>::template Function<float> klass = typename Weighty<Dimension>::Function<float>(*this);
-    Weighty<Dimension>::template Function<typename Hypercube::State> status = typename Weighty<Dimension>::Function<typename Hypercube::State>(*this);
+    Function<Dimension, float> klass = Function<Dimension, float>(*this);
+    Function<Dimension, typename Hypercube::State> status = Function<Dimension, typename Hypercube::State>(*this);
 
 protected:
-    Weighty<Dimension>::template Function<float> L = typename Weighty<Dimension>::Function<float>(*this);
+    Function<Dimension, float> L = Function<Dimension, float>(*this);
 
 public:
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
         this->prepare(smoothing);
 
-        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
-                                          { this->second_derivatives(fiber); });
-        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
-                                          { this->differential_error(fiber); });
+        this->for_each_line([this](const Line &fiber)
+            { this->second_derivatives(fiber); });
+        this->for_each_line([this](const Line &fiber)
+            { this->differential_error(fiber); });
 
         this->filter(L, std::pow(this->size(), -1.0f / (float)Dimension), true);
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
     {
-        typename Weighty<Dimension>::Coordinate coord(*this);
+        Coordinate coord(*this);
         unsigned clusters = 0;
         std::vector<Hypercube> cubes;
         cubes.reserve(this->size());
@@ -189,7 +189,7 @@ public:
     Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) {}
 
 private:
-    void second_derivatives(const Weighty<Dimension>::Line &x)
+    void second_derivatives(const Line &x)
     {
         std::vector<float> S(x.points, 0.0f);
         std::vector<float> T(x.points, 0.0f);
@@ -266,7 +266,7 @@ private:
             L[x[k]] += T[k];
     }
 
-    void differential_error(const Weighty<Dimension>::Line &x)
+    void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;
         std::vector<float> S(x.points, 0.0f);

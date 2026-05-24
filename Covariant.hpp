@@ -4,6 +4,8 @@
 #include <fftw3.h>
 #include <assert.h>
 
+#include "Dimensions.hpp"
+#include "Function.hpp"
 #include "Weighty.hpp"
 #include "Laplacian.hpp"
 #include "TestData.hpp"
@@ -20,23 +22,17 @@ private:
     float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
     double _differential_error = 0.0;
     double _factor_error = 0.0;
-    // std::vector<float> _cluster;
-    std::array<std::vector<float>, Dimension> _P;
-    std::array<std::vector<float>, Dimension> _Q;
-    std::array<std::vector<float>, Dimension> _var_Q;
-    std::array<float, Dimension> _tot_Q;
-    std::array<float, Dimension> _var_tot_Q;
 
-    Weighty<Dimension>::template FunctionVector<float> f = typename Weighty<Dimension>::FunctionVector<float>(*this);
-    Weighty<Dimension>::template FunctionMatrix<float> s = typename Weighty<Dimension>::FunctionMatrix<float>(*this);
-    Weighty<Dimension>::template FunctionMatrix<float> t = typename Weighty<Dimension>::FunctionMatrix<float>(*this);
-    Weighty<Dimension>::template FunctionVector<float> q = typename Weighty<Dimension>::FunctionVector<float>(*this);
-    Weighty<Dimension>::template FunctionVector<float> r = typename Weighty<Dimension>::FunctionVector<float>(*this);
+    FunctionVector<Dimension, float> f = FunctionVector<Dimension, float>(*this);
+    FunctionMatrix<Dimension, float> s = FunctionMatrix<Dimension, float>(*this);
+    FunctionMatrix<Dimension, float> t = FunctionMatrix<Dimension, float>(*this);
+    FunctionVector<Dimension, float> q = FunctionVector<Dimension, float>(*this);
+    FunctionVector<Dimension, float> r = FunctionVector<Dimension, float>(*this);
 
-    Weighty<Dimension>::template FunctionVector<float> S = typename Weighty<Dimension>::FunctionVector<float>(*this);
-    Weighty<Dimension>::template FunctionVector<float> T = typename Weighty<Dimension>::FunctionVector<float>(*this);
+    FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
+    FunctionVector<Dimension, float> T = FunctionVector<Dimension, float>(*this);
 
-    Weighty<Dimension>::template Function<float> R = typename Weighty<Dimension>::Function<float>(*this);
+    Function<Dimension, float> R = Function<Dimension, float>(*this);
 
 public:
     bool inline event(const Weighty<Dimension>::Event &event)
@@ -46,26 +42,31 @@ public:
 
     void analyse(float smoothing = .01f, float threshold = 0.001f)
     {
-        Weighty<Dimension>::prepare(smoothing);
+        this->prepare(smoothing);
 
-        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
-                                          { this->basis_functions(fiber); });
-        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
-                                          { this->natural_parameters(fiber); });
-
-        for (size_t x = 0; x < Weighty<Dimension>::size(); x++)
+        // Find the basis functions
+        this->for_each_line([this](const Line &fiber)
+            { this->basis_functions(fiber); });
+        // verify that they factor the density
+        for (size_t x = 0; x < this->size(); x++)
         {
-            if (Weighty<Dimension>::density[x] <= 0.0f)
+            if (this->density[x] <= 0.0f)
                 continue;
             double product = 1.0;
             for (unsigned i = 0; i < Dimension; i++)
                 product *= f[i][x];
-            double error = std::abs(product - Weighty<Dimension>::density[x]);
-            _factor_error += error * Weighty<Dimension>::density[x];
+            double error = std::abs(product - this->density[x]);
+            _factor_error += error * this->density[x];
         }
-        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
-                                          { this->differential_error(fiber); });
 
+        // Find the natural parameters
+        this->for_each_line([this](const Line &fiber)
+            { this->natural_parameters(fiber); });
+        // Evaluate the solutions to the differential equations
+        this->for_each_line([this](const Line &fiber)
+            { this->differential_error(fiber); });
+
+        // Supress ringing
         if (smoothing > 0.0f)
             for (unsigned j = 0; j < Dimension; j++)
                 for (unsigned i = 0; i < Dimension; i++)
@@ -74,7 +75,7 @@ public:
                     this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
                 }
 
-        typename Weighty<Dimension>::Coordinate coord(*this);
+        Coordinate<Dimension> coord(*this);
         for (size_t x = 0; x < this->size(); x++)
         {
             coord = x;
@@ -104,8 +105,7 @@ public:
 
                 if (this->quantile[x] < threshold)
                     continue;
-                _Q[i][coord[i]] += q[i][x] * dual;
-                _tot_Q[i] += _Q[i][coord[i]] * _P[i][coord[i]];
+                this->Q[i][coord[i]] += q[i][x] * dual;
             }
             for (unsigned i = 0; i < Dimension; i++)
                 this->L[x] += T[i][x];
@@ -157,7 +157,7 @@ public:
     }
 
 private:
-    void basis_functions(const Weighty<Dimension>::Line &x)
+    void basis_functions(const Line &x)
     {
         double marginal = (this->density(x[0]) + this->density(x[x.points - 1])) / 2.0;
         for (unsigned i = 1; i < x.points - 1; i++)
@@ -172,7 +172,7 @@ private:
                 f[x.d][x[i]] = this->density(x[i]) / marginal;
     }
 
-    void natural_parameters(const Weighty<Dimension>::Line &x)
+    void natural_parameters(const Line &x)
     {
         for (unsigned i = 0; i < Dimension; i++)
         {
@@ -247,7 +247,7 @@ private:
         }
     }
 
-    void differential_error(const Weighty<Dimension>::Line &x)
+    void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;
         for (unsigned int i = 0; i < Dimension; i++)
@@ -272,11 +272,5 @@ private:
 
     void init()
     {
-        for (unsigned i = 0; i < Dimension; i++)
-        {
-            _P[i].resize(Weighty<Dimension>::points(i));
-            _Q[i].resize(Weighty<Dimension>::points(i));
-            _var_Q[i].resize(Weighty<Dimension>::points(i));
-        }
     }
 };
