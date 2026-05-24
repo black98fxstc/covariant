@@ -1,20 +1,30 @@
-#pragma once
-
 #include <cmath>
 #include <array>
 #include <vector>
+#include <algorithm>
+
 #include "Weighty.hpp"
+
+
+template <unsigned Dimension>
+class Weighty;
 
 template <unsigned Dimension>
 class Laplacian : public Weighty<Dimension>
 {
 private:
+    float s_max = std::numeric_limits<float>::lowest(), s_min = std::numeric_limits<float>::max();
+    float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
+    double _differential_error = 0.0;
+
     class Hypercube
     {
     private:
         Laplacian<Dimension> &laplace;
 
     public:
+        size_t x;
+
         enum State
         {
             unknown,
@@ -24,8 +34,6 @@ private:
             assigned
         };
 
-        size_t x;
-
         Hypercube(Laplacian<Dimension> &laplace, size_t x) : laplace(laplace), x(x)
         {
             laplace.status[x] = unknown;
@@ -33,12 +41,12 @@ private:
 
         float density() const
         {
-            return laplace.Weighty<Dimension>::density(x);
+            return laplace.density[x];
         }
 
         float quantile() const
         {
-            return laplace.Weighty<Dimension>::quantile(x);
+            return laplace.quantile[x];
         }
 
         float lapacian() const
@@ -46,7 +54,7 @@ private:
             return laplace.L[x];
         }
 
-        unsigned short &cluster()
+        float &cluster()
         {
             return laplace.klass[x];
         }
@@ -63,26 +71,23 @@ private:
         }
     };
 
-    Weighty<Dimension>::template Function<float> L = typename Weighty<Dimension>::Function<float>(*this);
-    Weighty<Dimension>::template Function<unsigned short> klass = typename Weighty<Dimension>::Function<unsigned short>(*this);
+    Weighty<Dimension>::template Function<float> klass = typename Weighty<Dimension>::Function<float>(*this);
     Weighty<Dimension>::template Function<typename Hypercube::State> status = typename Weighty<Dimension>::Function<typename Hypercube::State>(*this);
+
+protected:
+    Weighty<Dimension>::template Function<float> L = typename Weighty<Dimension>::Function<float>(*this);
 
 public:
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
-        Weighty<Dimension>::prepare(smoothing);
+        this->prepare(smoothing);
 
         Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
                                           { this->second_derivatives(fiber); });
+        Weighty<Dimension>::for_each_line([this](const Weighty<Dimension>::Line &fiber)
+                                          { this->differential_error(fiber); });
 
-        Weighty<Dimension>::filter(L, std::pow(Weighty<Dimension>::size(), -1.0f / (float)Dimension), true);
-
-        Weighty<Dimension>::trim(L, threshold);
-    }
-
-    double differentialEquation()
-    {
-        return _differential_error;
+        this->filter(L, std::pow(this->size(), -1.0f / (float)Dimension), true);
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
@@ -90,8 +95,8 @@ public:
         typename Weighty<Dimension>::Coordinate coord(*this);
         unsigned clusters = 0;
         std::vector<Hypercube> cubes;
-        cubes.reserve(Weighty<Dimension>::size());
-        for (size_t x = 0; x < Weighty<Dimension>::size(); x++)
+        cubes.reserve(this->size());
+        for (size_t x = 0; x < this->size(); x++)
             cubes.emplace_back(*this, x);
         auto outliers = std::partition(cubes.begin(), cubes.end(), [threshold](const Hypercube &cube)
                                        { return cube.quantile() >= threshold; });
@@ -114,10 +119,10 @@ public:
                     coord = x;
                     for (unsigned i = 0; i < Dimension; i++)
                     {
-                        if (coord[i] < Weighty<Dimension>::points(i) - 1 && status[x + Weighty<Dimension>::stride(i)] == Hypercube::unknown)
-                            status[x + Weighty<Dimension>::stride(i)] = Hypercube::contiguous;
-                        if (coord[i] > 0 && status[x - Weighty<Dimension>::stride(i)] == Hypercube::unknown)
-                            status[x - Weighty<Dimension>::stride(i)] = Hypercube::contiguous;
+                        if (coord[i] < this->points(i) - 1 && status[x + this->stride(i)] == Hypercube::unknown)
+                            status[x + this->stride(i)] = Hypercube::contiguous;
+                        if (coord[i] > 0 && status[x - this->stride(i)] == Hypercube::unknown)
+                            status[x - this->stride(i)] = Hypercube::contiguous;
                     }
                 }
                 clustered = contiguous;
@@ -151,15 +156,15 @@ public:
                     coord = x;
                     for (unsigned i = 0; i < Dimension; i++)
                     {
-                        if (coord[i] < Weighty<Dimension>::points(i) - 1 && status[x + Weighty<Dimension>::stride(i)] == Hypercube::unknown)
+                        if (coord[i] < this->points(i) - 1 && status[x + this->stride(i)] == Hypercube::unknown)
                         {
-                            status[x + Weighty<Dimension>::stride(i)] = Hypercube::contiguous;
-                            klass[x + Weighty<Dimension>::stride(i)] = it->cluster();
+                            status[x + this->stride(i)] = Hypercube::contiguous;
+                            klass[x + this->stride(i)] = it->cluster();
                         }
-                        if (coord[i] > 0 && status[x - Weighty<Dimension>::stride(i)] == Hypercube::unknown)
+                        if (coord[i] > 0 && status[x - this->stride(i)] == Hypercube::unknown)
                         {
-                            status[x - Weighty<Dimension>::stride(i)] = Hypercube::contiguous;
-                            klass[x - Weighty<Dimension>::stride(i)] = it->cluster();
+                            status[x - this->stride(i)] = Hypercube::contiguous;
+                            klass[x - this->stride(i)] = it->cluster();
                         }
                     }
                 }
@@ -170,7 +175,15 @@ public:
                     break;
             }
         }
+        this->trim(L, threshold);
+        L.write("laplacian.bin");
+        klass.write("classes.bin");
         return clusters;
+    }
+
+    double differentialEquation()
+    {
+        return _differential_error;
     }
 
     Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) {}
@@ -187,9 +200,9 @@ private:
         T[m] = 1.0 / x.delta;
         for (unsigned k = 0; k < x.points; k++)
         {
-            if (Weighty<Dimension>::density[x[k]] > max)
+            if (this->density[x[k]] > max)
             {
-                max = Weighty<Dimension>::density[x[k]];
+                max = this->density[x[k]];
                 m = k;
             }
         }
@@ -199,12 +212,12 @@ private:
         for (unsigned k = m, j; k < x.points - 1;)
         {
             j = k + 1;
-            while (Weighty<Dimension>::density[x[j]] <= 0.0 && j < x.points - 1)
+            while (this->density[x[j]] <= 0.0 && j < x.points - 1)
                 j++;
-            if (Weighty<Dimension>::density[x[j]] <= 0.0)
+            if (this->density[x[j]] <= 0.0)
                 tt = 1.0 / x.delta;
             else
-                tt = -2.0 * ((std::log(Weighty<Dimension>::density[x[j]]) - std::log(Weighty<Dimension>::density[x[k]])) / squared(x.delta * (j - k)) - S[x[k]] / x.delta / (j - k));
+                tt = -2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (j - k)) - S[k] / (x.delta * (j - k)));
             while (k < j)
             {
                 T[k] = (float)tt;
@@ -214,7 +227,7 @@ private:
                     t_min = tt;
                 if (k != x.points - 1)
                 {
-                    double ss = -tt * x.delta + S[x[k]];
+                    double ss = -tt * x.delta + S[k];
                     if (ss > s_max)
                         s_max = ss;
                     if (ss < s_min)
@@ -227,12 +240,12 @@ private:
         for (unsigned k = m, j; k > 0;)
         {
             j = k - 1;
-            while (j > 0 && Weighty<Dimension>::density[x[j]] <= 0.0)
+            while (j > 0 && this->density[x[j]] <= 0.0)
                 j--;
-            if (Weighty<Dimension>::density[x[j]] <= 0.0 || Weighty<Dimension>::density[x[k]] <= 0.0)
+            if (this->density[x[j]] <= 0.0 || this->density[x[k]] <= 0.0)
                 tt = 1.0 / squared(x.delta);
             else
-                tt = 2.0 * ((std::log(Weighty<Dimension>::density[x[j]]) - std::log(Weighty<Dimension>::density[x[k]])) / squared(x.delta * (k - j)) - S[x[k]] / x.delta / (k - j));
+                tt = 2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (k - j)) - S[k] / (x.delta * (k - j)));
             if (tt > t_max)
                 t_max = tt;
             if (tt < t_min)
@@ -240,7 +253,7 @@ private:
             while (k > j)
             {
                 T[k - 1] = (float)tt;
-                double ss = tt * x.delta + S[x[k]];
+                double ss = tt * x.delta + S[k];
                 if (ss > s_max)
                     s_max = ss;
                 if (ss < s_min)
@@ -253,9 +266,29 @@ private:
             L[x[k]] += T[k];
     }
 
+    void differential_error(const Weighty<Dimension>::Line &x)
+    {
+        double tt, s_diff, t_diff;
+        std::vector<float> S(x.points, 0.0f);
+        std::vector<float> T(x.points, 0.0f);
+
+        for (unsigned k = 0; k < x.points - 1; k++)
+        {
+            if (this->density[x[k+1]] > 0 && this->density[x[k]] > 0)
+            {
+                tt = -2.0 * ((std::log(this->density[x[k+1]]) - std::log(this->density[x[k]])) / squared(x.delta) - S[x[k]] / x.delta);
+                t_diff = std::abs(T[k] - tt);
+                if (t_diff > t_max - t_min)
+                    t_diff = 1.0f;
+                else
+                    t_diff /= t_max - t_min;
+            }
+            s_diff = std::abs((S[k + 1] - (-T[k] * x.delta + S[k])) / (s_max - s_min));
+            if (s_diff > _differential_error)
+                _differential_error = s_diff;
+        }
+    }
+
     inline double squared(double x) { return x * x; };
 
-    float s_max = std::numeric_limits<float>::lowest(), s_min = std::numeric_limits<float>::max();
-    float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
-    double _differential_error = 0.0;
 };

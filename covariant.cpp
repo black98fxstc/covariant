@@ -1,18 +1,14 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <functional>
 
 // A popular, header-only library for command-line parsing.
 // See setup instructions below.
 #include <cxxopts.hpp>
-#include <functional>
 
 // The Covariant class header.
-#include "Weighty.hpp"
-#include "TestData.hpp"
 #include "Covariant.hpp"
-
-const unsigned Dimension = 2;
 
 int main(int argc, char *argv[])
 {
@@ -24,9 +20,14 @@ int main(int argc, char *argv[])
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
 
     // Add the command-line options.
-    options.add_options()("f,filename", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data.dat"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("h,help", "Print usage");
+    options.add_options()
+        ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("h,help", "Print usage");
 
-    options.parse_positional({"filename"});
+    options.parse_positional({"file"});
 
     auto result = options.parse(argc, argv);
 
@@ -36,7 +37,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    filename_param = result["filename"].as<std::string>();
+    filename_param = result["file"].as<std::string>();
     dimension_param = result["dimension"].as<unsigned>();
     smooth_param = result["smooth"].as<float>();
     threshold_param = result["threshold"].as<float>();
@@ -50,7 +51,7 @@ int main(int argc, char *argv[])
     {
         TestData<2> events;
         std::cout << "Loading events from " << filename_param << "..." << std::endl;
-        std::ifstream infile(filename_param, std::ios::binary);
+        // std::ifstream infile(filename_param + ".dat", std::ios::binary);
         if (!events.load(filename_param + ".dat"))
         {
             std::cerr << "Error: Could not open event file for loading: " << filename_param + ".dat" << std::endl;
@@ -78,6 +79,13 @@ int main(int argc, char *argv[])
         {
             std::cout << "Consistency checkes passed..." << std::endl;
         }
+
+        std::cout << "Performing Laplacian clustering..." << std::endl;
+        unsigned found = covariant.cluster(threshold_param);
+        std::vector<unsigned short> classes(events.size());
+        // for (const auto& e : events)
+        //     classes.push_back(laplace.classify(e));
+        std::cout << "Found " << found << " clusters." << std::endl;
     }
     break;
     case 3:

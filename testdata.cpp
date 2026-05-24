@@ -1,17 +1,14 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <functional>
 
 // A popular, header-only library for command-line parsing.
 // See setup instructions below.
 #include <cxxopts.hpp>
-#include <functional>
 
 // The Covariant class header.
-#include "Weighty.hpp"
-#include "TestData.hpp"
-
-const unsigned Dimension = 2;
+#include "Covariant.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -88,4 +85,4 @@ int main(int argc, char *argv[])
         std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
         return 1;
     }
-};
+}

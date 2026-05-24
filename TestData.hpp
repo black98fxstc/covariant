@@ -5,8 +5,11 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <cmath>
 #include <iostream>
-#include "Weighty.hpp"
+
+template <unsigned Dimension>
+class Weighty;
 
 template <unsigned Dimension>
 class TestData : public std::vector<typename Weighty<Dimension>::Event>
@@ -50,7 +53,7 @@ public:
         {
             for (unsigned i = 0; i < Dimension; i++)
             {
-                event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
+                event[i] = RandomEvent::normal_distribution(RandomEvent::RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
             }
         };
 
@@ -177,7 +180,7 @@ public:
 
         void sample(typename Weighty<Dimension>::Event &event)
         {
-            int p = std::upper_bound(fractions.begin(), fractions.end(), RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::fraction_param)) - fractions.begin();
+            int p = std::upper_bound(fractions.begin(), fractions.end(), RandomEvent::RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::fraction_param)) - fractions.begin();
             population[p]->sample(event);
         }
 

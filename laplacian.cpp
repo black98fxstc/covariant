@@ -8,9 +8,10 @@
 #include <functional>
 
 // The Covariant class header.
-#include "Weighty.hpp"
-#include "Laplacian.hpp"
-#include "TestData.hpp"
+// #include "Weighty.hpp"
+// #include "Weighty.hpp"
+// #include "Laplacian.hpp"
+#include "Covariant.hpp"
 
 const unsigned Dimension = 2;
 
@@ -46,7 +47,7 @@ int main(int argc, char *argv[])
     smooth_param = result["smooth"].as<float>();
     threshold_param = result["threshold"].as<float>();
 
-    std::cout << "Program running with dimension=" << dimension_param << " filename=" << file_param << "smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
+    std::cout << "Program running with dimension=" << dimension_param << " filename=" << file_param << " smooth=" << smooth_param << " threshold=" << threshold_param << std::endl;
 
     switch (dimension_param)
     {

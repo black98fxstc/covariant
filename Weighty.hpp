@@ -3,6 +3,11 @@
 #include <cmath>
 #include <array>
 #include <vector>
+#include <string>
+#include <fstream>
+#include <iostream>
+#include <algorithm>
+#include <functional>
 #include <fftw3.h>
 #include <assert.h>
 
@@ -11,6 +16,7 @@ class Dimensions
 {
     template <unsigned Dimension2>
     friend class Function;
+
 protected:
     unsigned _points[Dimension];
     size_t _stride[Dimension];
@@ -85,10 +91,13 @@ public:
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>
 {
-public:
-    // const unsigned dimension = Dimension;
-    // const bool column_major;
+private:
+    size_t _events = 0;
+    fftw_r2r_kind kind[Dimension];
+    void *DCT;
+    unsigned long fft_normalizer = 1;
 
+public:
     typedef std::array<float, Dimension> Event;
 
     size_t size()
@@ -108,7 +117,7 @@ public:
 
     size_t inline events() const
     {
-        return _events;
+        return Weighty<Dimension>::_events;
     }
 
     class Coordinate : public std::array<unsigned, Dimension>
@@ -120,7 +129,7 @@ public:
         Coordinate inline &operator=(const size_t x)
         {
             for (unsigned i = 0; i < Dimension; i++)
-                this[i] = (x / weighty.stride(i)) % weighty.points(i);
+                (*this)[i] = (x / weighty.stride(i)) % weighty.points(i);
             return *this;
         }
 
@@ -128,32 +137,12 @@ public:
         {
             unsigned long x = 0;
             for (unsigned i = 0; i < Dimension; i++)
-                x += *this[i] * weighty.stride(i);
+                x += (*this)[i] * weighty.stride(i);
             return x;
         }
 
         Coordinate(Weighty<Dimension> &weighty) : weighty(weighty) {}
     };
-
-    // struct
-    // {
-    //     template <unsigned Dimension2>
-    //     friend class Weighty;
-
-    // private:
-    //     unsigned data[Dimension];
-
-    //     unsigned inline &operator[](unsigned i)
-    //     {
-    //         return data[i];
-    //     }
-
-    // public:
-    //     unsigned inline operator()(unsigned i) const
-    //     {
-    //         return data[i];
-    //     }
-    // } points, stride;
 
     template <typename Type>
     class Function
@@ -183,15 +172,10 @@ public:
             return data[x];
         }
 
-        const Type inline *operator()() const
-        {
-            return data;
-        }
-
         void write(std::ostream &out) const
         {
-            out.write(reinterpret_cast<const char *>(Dimensions::_points), Dimension * sizeof(unsigned));
-            out.write(reinterpret_cast<const char *>(data), Dimensions::size() * sizeof(Type));
+            out.write(reinterpret_cast<const char *>(weighty._points), Dimension * sizeof(unsigned));
+            out.write(reinterpret_cast<const char *>(data), weighty.size() * sizeof(Type));
         }
 
         void write(std::string filename) const
@@ -201,19 +185,23 @@ public:
             out.close();
         }
 
-        Function(Weighty<Dimension> &weighty) : weighty(weighty)
+        Function(Weighty<Dimension> &weighty) : weighty(weighty), data(nullptr)
         {
-            // data = (Type *)fftwf_malloc(weighty.size() * sizeof(Type));
-            data = (Type *)malloc(weighty.size() * sizeof(Type));
-            Type x = *data;
-            *data = x;
+            data = (Type *)fftwf_malloc(weighty.size() * sizeof(Type));
+            assert(data != nullptr);
         }
 
         ~Function()
         {
-            // fftwf_free(data);
-            free(data);
+            fftwf_free(data);
         }
+
+        // Rule of Five: Handle move and disable copy to prevent double-free
+        Function(const Function&) = delete;
+        Function& operator=(const Function&) = delete;
+
+        Function(Function&& other) noexcept : weighty(other.weighty), data(other.data) { other.data = nullptr; }
+        Function& operator=(Function&&) = delete; // Cannot rebind reference member
     };
 
     template <typename Type>
@@ -241,7 +229,7 @@ public:
                 this->back().reserve(Dimension);
                 for (unsigned j = 0; j < Dimension; j++)
                     this->back().emplace_back(weighty);
-            }
+    }
         }
     };
 
@@ -249,6 +237,26 @@ public:
     Function<float> density = Function<float>(*this);
     Function<float> quantile = Function<float>(*this);
     Function<unsigned short> klass = Function<unsigned short>(*this);
+
+    class MarginalFunction : std::array<std::vector<float>, Dimension>
+    {
+        friend class Weighty<Dimension>;
+        
+    public:
+        const std::vector<float> &operator()(unsigned i) const
+        {
+            return this->at(i);
+        }
+
+        MarginalFunction(Dimensions<Dimension> &dimensions)
+        {
+            for (unsigned i = 0; i < Dimension; i++)
+                this->at(i).resize(dimensions.points(i));
+        }
+    };
+
+    MarginalFunction P = MarginalFunction(*this);
+    MarginalFunction Q = MarginalFunction(*this);
 
     struct Line
     {
@@ -285,7 +293,7 @@ public:
         }
     }
 
-    void filter(Function<float> input, Function<float> output, float radius = 0.01f, bool normalize = false)
+    void filter(Function<float> &input, Function<float> &output, float radius = 0.01f, bool normalize = false)
     {
         // Apply a Gaussian filter to the input function using the DCT.
         // The radius is specified as a fraction of the total size of the grid.
@@ -318,7 +326,7 @@ public:
                 output[x] /= (float)fft_normalizer;
     }
 
-    void filter(Function<float> data, float radius = 0.01f, bool normalize = false)
+    void filter(Function<float> &data, float radius = 0.01f, bool normalize = false)
     {
         filter(data, data, radius, normalize);
     }
@@ -397,16 +405,17 @@ public:
         double sum = 0.0;
         for (size_t x = 0; x < size(); x++)
             summed[x] = sum += sorted[x];
+        Coordinate coord(*this);
         for (size_t x = 0; x < size(); x++)
         {
             quantile[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), density[x]) - sorted.begin())) / sum;
             density[x] /= sum;
-            // for (unsigned i = 0; i < Dimension; i++)
-            // {
-            //     unsigned j = (x / stride[i]) % points[i];
-            //     // _P[i][j] += density[x];
-            // }
+            coord = x;
+            for (unsigned i = 0; i < Dimension; i++)
+                P[i][coord[i]] += density[x];
         }
+        density.write("density.bin");
+        quantile.write("quantile.bin");
     }
 
     void trim(std::vector<float> &data, float threshold)
@@ -414,7 +423,7 @@ public:
         trim(data.data(), threshold);
     }
 
-    void trim(Function<float> func, float threshold)
+    void trim(Function<float> &func, float threshold)
     {
         trim(func.data, threshold);
     }
@@ -426,7 +435,7 @@ public:
                 data[x] = std::numeric_limits<float>::quiet_NaN();
     }
 
-    Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(column_major)
+    Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
     {
         init();
     }
@@ -437,11 +446,6 @@ public:
     }
 
 private:
-    size_t _events = 0;
-    fftw_r2r_kind kind[Dimension];
-    void *DCT;
-    unsigned long fft_normalizer = 1;
-
     inline double squared(double x) { return x * x; };
 
     void init()

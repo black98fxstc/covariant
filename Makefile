@@ -3,13 +3,7 @@ CXXFLAGS = -std=c++20 -Wall -Wextra -I. -g
 LIBS = -lfftw3 -lfftw3f -lm
 HEADERS = Weighty.hpp Laplacian.hpp Covariant.hpp TestData.hpp
 
-all: laplacian covariant testdata
-
-covariant2: main2.o
-	$(CXX) $(CXXFLAGS) -o covariant2 main2.o $(LIBS)
-
-covariant3: main3.o
-	$(CXX) $(CXXFLAGS) -o covariant3 main3.o $(LIBS)
+all: covariant laplacian testdata
 
 testdata: testdata.o $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o testdata testdata.o $(LIBS)
@@ -30,6 +24,7 @@ main3.o: $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f main2.o main3.o covariant2 covariant3 covariant.o laplacian.o laplacian covariant testdata.o testdata
-
+	rm -f *.o laplacian covariant testdata
+	rm -f *.exe
+	
 .PHONY: all clean

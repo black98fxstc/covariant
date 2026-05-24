@@ -1,3 +1,4 @@
+%% 
 function [ data, nx, ny ] = read_joint(filename)
 fid = fopen(filename, 'rb');
 dims = fread(fid, 2, 'int32');
@@ -28,28 +29,28 @@ nColors = 256; % Number of colors in the colormap
 cmap = hueMap(nColors);
 qmap = hueMap(10);
 
-[ F, nx, ny ] = read_joint('f.bin');
-[ QC, nx, ny ] = read_joint('QC.bin');
-[ W, nx, ny ] = read_joint('w.bin');
+[ F, nx, ny ] = read_joint('density.bin');
+[ QC, nx, ny ] = read_joint('quantile.bin');
+% [ W, nx, ny ] = read_joint('w.bin');
 [ f1, nx, ny ] = read_joint('f1.bin');
 [ f2, nx, ny ] = read_joint('f2.bin');
-[ S1, nx, ny ] = read_joint('S1.bin');
-[ S2, nx, ny ] = read_joint('S2.bin');
-[ T1, nx, ny ] = read_joint('T1.bin');
-[ T2, nx, ny ] = read_joint('T2.bin');
+% [ S1, nx, ny ] = read_joint('S1.bin');
+% [ S2, nx, ny ] = read_joint('S2.bin');
+% [ T1, nx, ny ] = read_joint('T1.bin');
+% [ T2, nx, ny ] = read_joint('T2.bin');
 [ t11, nx, ny ] = read_joint('t11.bin');
 [ t12, nx, ny ] = read_joint('t12.bin');
 [ t21, nx, ny ] = read_joint('t21.bin');
 [ t22, nx, ny ] = read_joint('t22.bin');
-[ R, nx, ny ] = read_joint('R.bin');
-[ R, nx, ny ] = read_joint('R.bin');
-[ L, nx, ny ] = read_joint('L.bin');
+% [ R, nx, ny ] = read_joint('R.bin');
+% [ R, nx, ny ] = read_joint('R.bin');
+[ L, nx, ny ] = read_joint('laplacian.bin');
 [ klass, nx, ny ] = read_joint('classes.bin');
 
-P1 = read_marginal('P1.bin');
-P2 = read_marginal('P2.bin');
-Q1 = read_marginal('Q1.bin');
-Q2 = read_marginal('Q2.bin');
+% P1 = read_marginal('P1.bin');
+% P2 = read_marginal('P2.bin');
+% Q1 = read_marginal('Q1.bin');
+% Q2 = read_marginal('Q2.bin');
 
 % Create grid coordinates
 x = linspace(0, 1, nx);
@@ -67,29 +68,29 @@ y = linspace(0, 1, ny);
 % axis square;
 % title('Weights w(x, y)');
 
-% figure;
-% surf(X, Y, F);
-% shading interp;
-% view(2); % Top-down view
-% colorbar;
-% axis([0 1 0 1]);
-% axis square;
-% xlabel('x');
-% ylabel('y');
-% title('Function f(x, y)');
+figure;
+surf(X, Y, F);
+shading interp;
+view(2); % Top-down view
+colorbar;
+axis([0 1 0 1]);
+axis square;
+xlabel('x');
+ylabel('y');
+title('Function f(x, y)');
 
-% figure;
-% hold on;
-% contour(X, Y, QC, 0.1:0.1:0.9, 'k');
-% contour(X, Y, QC, [0.001 0.001], 'r');
-% contour(X, Y, QC, [0.01 0.01], 'r');
+figure;
+hold on;
+contour(X, Y, QC, 0.1:0.1:0.9, 'k');
+contour(X, Y, QC, [0.001 0.001], 'r');
+contour(X, Y, QC, [0.01 0.01], 'r');
 % contour(X, Y, S1, [0 0], 'b');
 % contour(X, Y, S2, [0 0], 'g');
-% % contour(X, Y, L', [0 0], 'g', 'LineWidth', 2);
-% axis([0 1 0 1]);
-% axis square;
-% title('Quantile Contours');
-% hold off
+% contour(X, Y, L', [0 0], 'g', 'LineWidth', 2);
+axis([0 1 0 1]);
+axis square;
+title('Quantile Contours');
+hold off
 
 % figure;
 % contour(X, Y, QC, 'k', 'LineWidth', 1, 'FaceColor', 'flat');
@@ -123,23 +124,23 @@ y = linspace(0, 1, ny);
 % ylabel('P2');
 % grid on;
 
-% figure;
-% surf(X, Y, f1);
-% shading interp;
-% view(2);
-% colorbar;
-% axis([0 1 0 1]);
-% axis square;
-% title('f1(x, y)');
+figure;
+surf(X, Y, f1);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('f1(x, y)');
 
-% figure;
-% surf(X, Y, f2);
-% shading interp;
-% view(2);
-% colorbar;
-% axis([0 1 0 1]);
-% axis square;
-% title('f2(x, y)');
+figure;
+surf(X, Y, f2);
+shading interp;
+view(2);
+colorbar;
+axis([0 1 0 1]);
+axis square;
+title('f2(x, y)');
 
 
 % figure;
@@ -186,49 +187,49 @@ y = linspace(0, 1, ny);
 % axis square;
 % title('T2(x, y)');
 
-% figure;
-% surf(X, Y, t11);
-% shading interp;
-% view(2);
-% colorbar;
-% colormap(cmap);
-% clim([-500 500]);
-% axis([0 1 0 1]);
-% axis square;
-% title('t11(x, y)');
-% 
-% figure;
-% surf(X, Y, t12);
-% shading interp;
-% view(2);
-% colorbar;
-% colormap(cmap);
-% clim([-500 500]);
-% axis([0 1 0 1]);
-% axis square;
-% title('t12(x, y)');
-% 
-% figure;
-% surf(X, Y, t21);
-% shading interp;
-% view(2);
-% colorbar;
-% colormap(cmap);
-% clim([-500 500]);
-% axis([0 1 0 1]);
-% axis square;
-% title('t21(x, y)');
-% 
-% figure;
-% surf(X, Y, t22);
-% shading interp;
-% view(2);
-% colorbar;
-% colormap(cmap);
-% clim([-500 500]);
-% axis([0 1 0 1]);
-% axis square;
-% title('t22(x, y)');
+figure;
+surf(X, Y, t11);
+shading interp;
+view(2);
+colorbar;
+colormap(cmap);
+clim([-500 500]);
+axis([0 1 0 1]);
+axis square;
+title('t11(x, y)');
+
+figure;
+surf(X, Y, t12);
+shading interp;
+view(2);
+colorbar;
+colormap(cmap);
+clim([-500 500]);
+axis([0 1 0 1]);
+axis square;
+title('t12(x, y)');
+
+figure;
+surf(X, Y, t21);
+shading interp;
+view(2);
+colorbar;
+colormap(cmap);
+clim([-500 500]);
+axis([0 1 0 1]);
+axis square;
+title('t21(x, y)');
+
+figure;
+surf(X, Y, t22);
+shading interp;
+view(2);
+colorbar;
+colormap(cmap);
+clim([-500 500]);
+axis([0 1 0 1]);
+axis square;
+title('t22(x, y)');
 % 
 % figure;
 % surf(X, Y, R);
@@ -242,39 +243,7 @@ y = linspace(0, 1, ny);
 % axis square;
 % title('R(x, y)');
 
-% figure;
-% surf(X, Y, L);
-% shading interp;
-% view(2);
-% colorbar;
-% colormap(cmap);
-% clim([-512 512]);
-% %clim([-1 1]);
-% axis([0 1 0 1]);
-% axis square;
-% title('L(x, y)');
-
 figure;
-tiledlayout(2,2);
-nexttile;
-contour(X, Y, QC, 'k', 'LineWidth', 1, 'FaceColor', 'flat');
-colorbar;
-colormap(cmap);
-axis([0 1 0 1]);
-axis square;
-title('Decile Contours');
-nexttile;
-surf(X, Y, R);
-shading interp;
-view(2);
-colorbar;
-colormap(cmap);
-clim([-256 256]);
-%clim([-1 1]);
-axis([0 1 0 1]);
-axis square;
-title('Gaussian Curvature');
-nexttile;
 surf(X, Y, L);
 shading interp;
 view(2);
@@ -284,8 +253,9 @@ clim([-512 512]);
 %clim([-1 1]);
 axis([0 1 0 1]);
 axis square;
-title('Laplacian');
-nexttile;
+title('L(x, y)');
+
+figure;
 surf(X, Y, klass);
 shading interp;
 view(2);
@@ -296,6 +266,49 @@ colormap(cmap);
 axis([0 1 0 1]);
 axis square;
 title('Class');
+
+% figure;
+% tiledlayout(2,2);
+% nexttile;
+% contour(X, Y, QC, 'k', 'LineWidth', 1, 'FaceColor', 'flat');
+% colorbar;
+% colormap(cmap);
+% axis([0 1 0 1]);
+% axis square;
+% title('Decile Contours');
+% nexttile;
+% surf(X, Y, R);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-256 256]);
+% %clim([-1 1]);
+% axis([0 1 0 1]);
+% axis square;
+% title('Gaussian Curvature');
+% nexttile;
+% surf(X, Y, L);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% clim([-512 512]);
+% %clim([-1 1]);
+% axis([0 1 0 1]);
+% axis square;
+% title('Laplacian');
+% nexttile;
+% surf(X, Y, klass);
+% shading interp;
+% view(2);
+% colorbar;
+% colormap(cmap);
+% %clim([-512 512]);
+% %clim([-1 1]);
+% axis([0 1 0 1]);
+% axis square;
+% title('Class');
 
 
 % figure;
