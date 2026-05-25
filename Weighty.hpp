@@ -45,7 +45,6 @@ public:
         return Weighty<Dimension>::_events;
     }
 
-    
     class Events : public std::vector<Weighty<Dimension>::Event>
     {
     public:
@@ -218,7 +217,7 @@ public:
     {
         Coordinate<Dimension> coord(*this);
         if (!locate(event, coord))
-            return false;
+            return 0;
         size_t x = coord;
         return (unsigned short)(klass[x]);
     }

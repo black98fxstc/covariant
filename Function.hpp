@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <fftw3.h>
 
+// Functions on grids that play nice with FFTW and represent various tensors
 template <unsigned Dimension, typename Type>
 class Function
 {

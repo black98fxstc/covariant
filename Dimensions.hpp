@@ -4,6 +4,7 @@
 #include <limits>
 #include <cstddef>
 
+// Structure constants that must be fixed before any other constructors
 struct Line
 {
     size_t id;

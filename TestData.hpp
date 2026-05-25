@@ -52,16 +52,14 @@ public:
         void sample(typename Weighty<Dimension>::Event &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
-            {
-                event[i] = RandomEvent::normal_distribution(RandomEvent::RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
-            }
+                event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
         };
 
         Normal()
         {
-            stddev = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::stddev_param);
+            stddev = this->uniform_distribution(this->rng(), this->stddev_param);
             for (unsigned i = 0; i < Dimension; i++)
-                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
+                mean[i] = this->uniform_distribution(this->rng(), typename std::uniform_real_distribution<float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
         }
     };
 
@@ -77,40 +75,40 @@ public:
 
         void sample(typename Weighty<Dimension>::Event &event)
         {
+            // two quarter arcs of the circle, one flipped
             double delta_x, delta_y;
-            double theta = RandomEvent::uniform_distribution(RandomEvent::rng(), typename std::uniform_real_distribution<float>::param_type{-half_pi, half_pi});
+            double theta = this->uniform_distribution(this->rng(), typename std::uniform_real_distribution<float>::param_type{-half_pi, half_pi});
             if (theta > 0)
                 delta_x = .5 - .5 * std::cos(theta);
             else
                 delta_x = -.5 + .5 * std::cos(theta);
             delta_y = .5 * std::sin(theta);
             for (unsigned i = 0; i < Dimension; i++)
-            {
                 if (i == X)
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_x + s * delta_y), stddev});
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_x + s * delta_y), stddev});
                 else if (i == Y)
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_y - s * delta_x), stddev});
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_y - s * delta_x), stddev});
                 else
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
-            }
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
         };
 
         Snake()
         {
-            X = RandomEvent::dimension_distribution(RandomEvent::rng());
-            do
-            {
-                Y = RandomEvent::dimension_distribution(RandomEvent::rng());
+            // random and different dimensions
+            X = this->dimension_distribution(this->rng());
+            do {
+                Y = this->dimension_distribution(this->rng());
             } while (X == Y);
+ 
             for (unsigned i = 0; i < Dimension; i++)
-            {
-                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::mean_param);
-            }
-            double theta = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::angle_param);
-            double scale = RandomEvent::normal_distribution(RandomEvent::rng(), RandomEvent::halfish_param);
+                mean[i] = this->uniform_distribution(this->rng(), this->mean_param);
+            // random orientation and size
+            double theta = this->uniform_distribution(this->rng(), this->angle_param);
+            double scale = this->normal_distribution(this->rng(), this->halfish_param);
             s = std::sin(theta) * scale;
-            c = std::cos(theta) * scale;   
-            stddev = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::stddev_param);
+            c = std::cos(theta) * scale;
+
+            stddev = this->uniform_distribution(this->rng(), this->stddev_param);
         }
     };
 
@@ -126,18 +124,18 @@ public:
         {
             for (unsigned i = 0; i < Dimension; i++)
                 if (i == X)
-                    event[i] = RandomEvent::exponential_distribution(RandomEvent::rng(), typename std::exponential_distribution<float>::param_type{lambda});
+                    event[i] = this->exponential_distribution(this->rng(), typename std::exponential_distribution<float>::param_type{lambda});
                 else
-                    event[i] = RandomEvent::normal_distribution(RandomEvent::rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
         };
 
         Exponential()
         {
-            X = RandomEvent::dimension_distribution(RandomEvent::rng());
-            lambda = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::lambda_param);
+            X = this->dimension_distribution(this->rng());
+            lambda = this->uniform_distribution(this->rng(), this->lambda_param);
             for (unsigned i = 0; i < Dimension; i++)
-                mean[i] = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::mean_param);
-            stddev = RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::stddev_param);
+                mean[i] = this->uniform_distribution(this->rng(), this->mean_param);
+            stddev = this->uniform_distribution(this->rng(), this->stddev_param);
         }
     };
 
@@ -158,7 +156,7 @@ public:
 
             if (population.size() == 2)
             {
-                fractions.push_back(RandomEvent::normal_distribution(RandomEvent::rng(), RandomEvent::halfish_param));
+                fractions.push_back(this->normal_distribution(this->rng(), this->halfish_param));
                 return;
             }
 
@@ -173,14 +171,15 @@ public:
                 }
             }
             if (n == 0)
-                fractions.insert(fractions.begin(), max * RandomEvent::normal_distribution(RandomEvent::rng(), RandomEvent::halfish_param));
+                fractions.insert(fractions.begin(), max * this->normal_distribution(this->rng(), this->halfish_param));
             else
-                fractions.insert(fractions.begin() + n, fractions[n - 1] + max * RandomEvent::normal_distribution(RandomEvent::rng(), RandomEvent::halfish_param));
+                fractions.insert(fractions.begin() + n, fractions[n - 1] + max * this->normal_distribution(this->rng(), this->halfish_param));
         }
 
         void sample(typename Weighty<Dimension>::Event &event)
         {
-            int p = std::upper_bound(fractions.begin(), fractions.end(), RandomEvent::RandomEvent::uniform_distribution(RandomEvent::rng(), RandomEvent::fraction_param)) - fractions.begin();
+            // pick a random population with appropriate frequency and then sample it
+            int p = std::upper_bound(fractions.begin(), fractions.end(), this->uniform_distribution(this->rng(), this->fraction_param)) - fractions.begin();
             population[p]->sample(event);
         }
 

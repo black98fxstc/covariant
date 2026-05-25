@@ -35,11 +35,6 @@ private:
     Function<Dimension, float> R = Function<Dimension, float>(*this);
 
 public:
-    bool inline event(const Weighty<Dimension>::Event &event)
-    {
-        return this->Weighty<Dimension>::event(event);
-    }
-
     void analyse(float smoothing = .01f, float threshold = 0.001f)
     {
         this->prepare(smoothing);
@@ -48,16 +43,7 @@ public:
         this->for_each_line([this](const Line &fiber)
             { this->basis_functions(fiber); });
         // verify that they factor the density
-        for (size_t x = 0; x < this->size(); x++)
-        {
-            if (this->density[x] <= 0.0f)
-                continue;
-            double product = 1.0;
-            for (unsigned i = 0; i < Dimension; i++)
-                product *= f[i][x];
-            double error = std::abs(product - this->density[x]);
-            _factor_error += error * this->density[x];
-        }
+        this->verify_factorization();
 
         // Find the natural parameters
         this->for_each_line([this](const Line &fiber)
@@ -67,14 +53,14 @@ public:
             { this->differential_error(fiber); });
 
         // Supress ringing
-        if (smoothing > 0.0f)
-            for (unsigned j = 0; j < Dimension; j++)
-                for (unsigned i = 0; i < Dimension; i++)
-                {
-                    this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
-                    this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
-                }
+        for (unsigned j = 0; j < Dimension; j++)
+            for (unsigned i = 0; i < Dimension; i++)
+            {
+                this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+                this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+            }
 
+        // Lots of arcane summations
         Coordinate<Dimension> coord(*this);
         for (size_t x = 0; x < this->size(); x++)
         {
@@ -114,6 +100,7 @@ public:
                 _tot_R += R[x];
         }
 
+        // remove outliers
         this->trim(R, threshold);
         for (unsigned i = 0; i < Dimension; i++)
         {
@@ -127,9 +114,10 @@ public:
             }
         }
         
+        // files for MATLAB
         if (this->visualize)
         {
-            R.write("R.bin");
+            this->R.write("R.bin");
             this->L.write("L.bin");
             if (this->verbose)
             {
@@ -148,28 +136,19 @@ public:
         return _factor_error;
     }
 
-    Covariant(const unsigned *points, bool column_major = false) : Laplacian<Dimension>(points, column_major) 
-    {
-        init();
-    }
+    Covariant(const unsigned *points, bool column_major = false) : Laplacian<Dimension>(points, column_major) {}
 
-    Covariant(unsigned grid = 256, bool column_major = false) : Laplacian<Dimension>(grid, column_major) 
-    {
-        init();
-    }
+    Covariant(unsigned grid = 256, bool column_major = false) : Laplacian<Dimension>(grid, column_major) {}
 
-    ~Covariant()
-    {
-    }
+    ~Covariant() {}
 
 private:
+    // factoring the density
     void basis_functions(const Line &x)
     {
         double marginal = (this->density(x[0]) + this->density(x[x.points - 1])) / 2.0;
         for (unsigned i = 1; i < x.points - 1; i++)
-        {
             marginal += this->density(x[i]);
-        }
         if (marginal < 1.0 / (double)this->events())
             for (unsigned i = 0; i < x.points; i++)
                 f[x.d][x[i]] = 0.0f;
@@ -178,6 +157,22 @@ private:
                 f[x.d][x[i]] = this->density(x[i]) / marginal;
     }
 
+    // check the math
+    void verify_factorization()
+    {
+        for (size_t x = 0; x < this->size(); x++)
+        {
+            if (this->density[x] <= 0.0f)
+                continue;
+            double product = 1.0;
+            for (unsigned i = 0; i < Dimension; i++)
+                product *= f[i][x];
+            double error = std::abs(product - this->density[x]);
+            _factor_error += error * this->density[x];
+        }
+    }
+
+    // basically solving a giant second order differential equation on the sample distribution
     void natural_parameters(const Line &x)
     {
         for (unsigned i = 0; i < Dimension; i++)
@@ -205,7 +200,7 @@ private:
                 if (f[i][x[j]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = -2.0 * ((std::log(f[i][x[j]]) - std::log(f[i][x[k]])) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / x.delta / (j - k));
+                    tt = -2.0 * ((std::log(f[i][x[j]]) - std::log(f[i][x[k]])) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / (x.delta * (j - k)));
                 while (k < j)
                 {
                     t[i][x.d][x[k]] = (float)tt;
@@ -233,7 +228,7 @@ private:
                 if (f[i][x[j]] <= 0.0 || f[i][x[k]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = 2.0 * ((std::log(f[i][x[k]]) - std::log(f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / x.delta / (k - j));
+                    tt = 2.0 * ((std::log(f[i][x[k]]) - std::log(f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
                 if (tt > t_max)
                     t_max = tt;
                 if (tt < t_min)
@@ -253,6 +248,7 @@ private:
         }
     }
 
+    // check the math
     void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;

@@ -5,6 +5,8 @@ norminv.cpp
 *.o
 *.asv
 *.dat
+*.svg
+*.cluster
 covariant2
 covariant3
 

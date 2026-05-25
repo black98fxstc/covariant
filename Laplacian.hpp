@@ -2,9 +2,7 @@
 #include <array>
 #include <vector>
 #include <algorithm>
-
 #include "Weighty.hpp"
-
 
 template <unsigned Dimension>
 class Weighty;
@@ -82,17 +80,25 @@ public:
     {
         this->prepare(smoothing);
 
+        // find the second derivatives
         this->for_each_line([this](const Line &fiber)
             { this->second_derivatives(fiber); });
+        // check the math
         this->for_each_line([this](const Line &fiber)
             { this->differential_error(fiber); });
 
         // Supress ringing
         this->filter(L, std::pow(this->size(), -1.0f / (float)Dimension), true);
 
+        // Remove outliers
         this->trim(L, threshold);
-        L.write("laplacian.bin");
-        klass.write("classes.bin"); 
+
+        // Files for MATLAB
+        if (this->visualize)
+        {
+            L.write("laplacian.bin");
+            klass.write("classes.bin"); 
+        }
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
@@ -107,15 +113,18 @@ public:
                                        { return cube.quantile() >= threshold; });
         auto precision = std::partition(cubes.begin(), outliers, [](const Hypercube &cube)
                                         { return cube.lapacian() > 0.0f; });
+        // So that clusters are found in decending order by mode
         std::sort(cubes.begin(), precision, [](const Hypercube &a, const Hypercube &b)
                   { return a.density() > b.density(); });
         for (auto clustered = cubes.begin(); clustered != precision;)
         {
+            // start with the absolute mode
             clusters++;
             clustered->status() = Hypercube::contiguous;
             auto contiguous = clustered + 1;
             while (true)
             {
+                // claim this cube and mark any unknown neighbors
                 for (auto it = clustered; it != contiguous; ++it)
                 {
                     it->status() = Hypercube::assigned;
@@ -131,12 +140,14 @@ public:
                     }
                 }
                 clustered = contiguous;
+                // find the newbs
                 contiguous = std::partition(clustered, precision, [](const Hypercube &cube)
                                             { return cube.status() == Hypercube::contiguous; });
                 if (contiguous == clustered)
                     break;
             }
         }
+        // Clean up the unclaimed cubes
         if (!grow)
         {
             for (auto it = precision; it != outliers; ++it)
@@ -152,6 +163,7 @@ public:
         }
         else
         {
+            // claim any unclaimed neighboring unknown cubes for existing clusters
             auto contiguous = precision;
             for (auto clustered = cubes.begin(); clustered != cubes.end();)
             {
@@ -180,9 +192,17 @@ public:
                     break;
             }
         }
+
+        // Remove outliers
         this->trim(L, threshold);
-        L.write("laplacian.bin");
-        klass.write("classes.bin");
+
+        // Files for MATLAB
+        if (this->visualize)
+        {
+            L.write("laplacian.bin");
+            klass.write("classes.bin");
+        }
+
         return clusters;
     }
 
@@ -194,6 +214,8 @@ public:
     Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) {}
 
 private:
+
+    // Compute second derivatibes of the density
     void second_derivatives(const Line &x)
     {
         std::vector<float> S(x.points, 0.0f);
@@ -212,6 +234,7 @@ private:
             }
         }
 
+        // Arcane summs
         double tt;
         S[m] = 0.0;
         for (unsigned k = m, j; k < x.points - 1;)
@@ -271,6 +294,7 @@ private:
             L[x[k]] += T[k];
     }
 
+    // check the math
     void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;
@@ -295,5 +319,4 @@ private:
     }
 
     inline double squared(double x) { return x * x; };
-
 };
