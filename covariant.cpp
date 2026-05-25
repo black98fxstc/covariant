@@ -2,12 +2,7 @@
 #include <string>
 #include <fstream>
 #include <functional>
-
-// A popular, header-only library for command-line parsing.
-// See setup instructions below.
 #include <cxxopts.hpp>
-
-// The Covariant class header.
 #include "Covariant.hpp"
 
 int main(int argc, char *argv[])
@@ -129,10 +124,155 @@ int main(int argc, char *argv[])
         }
     }
     break;
+
     case 3:
     {
+        TestData<3> events;
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
+        if (!events.read(filename_param + ext, ascii_param))
+        {
+            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
+            return 1;
+        }
+        std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+        Covariant<3> covariant(256, true);
+        covariant.visualize = visual_param;
+        covariant.verbose = verbose_param;
+        size_t valid_events = 0;
+        if (result.count("cluster"))
+        {
+            std::vector<unsigned short> classes(events.size());
+            std::ifstream in(filename_param + ".cluster", std::ios::binary);
+            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
+            in.close();
+
+            std::cout << "Processing cluster " << cluster_param << " of " << events.size() << " events..." << std::endl;
+            for (unsigned i = 0; i < events.size(); i++)
+            {
+                if (classes[i] != cluster_param)
+                    continue;
+                if (covariant.event(events[i]))
+                    valid_events++;
+            }
+        }
+        else
+        {
+            std::cout << "Processing " << events.size() << " events..." << std::endl;
+            for (const auto &e : events)
+                if (covariant.event(e))
+                    valid_events++;
+        }
+        std::cout << "Found " << events.size() << " events..." << std::endl;
+
+        std::cout << "Analyzing the sample..." << std::endl;
+
+        covariant.analyse(smooth_param, threshold_param);
+        if (covariant.factorProbability() > .0001)
+        {
+            std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
+        }
+        else if (covariant.differentialEquation() > .0001)
+        {
+            std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
+        }
+        else
+        {
+            std::cout << "Consistency checkes passed..." << std::endl;
+        }
+
+        if (!result.count("cluster"))
+        {
+            std::cout << "Performing Laplacian clustering..." << std::endl;
+            unsigned found = covariant.cluster(threshold_param);
+            std::vector<unsigned short> classes(events.size());
+            for (const auto& e : events)
+                classes.push_back(covariant.classify(e));
+            std::cout << "Found " << found << " clusters..." << std::endl;
+
+            std::ofstream out(filename_param + ".cluster", std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
+            out.close();
+            std::cout << "Saved to file " << filename_param + ".cluster" << std::endl;
+        }
     }
     break;
+
+    case 4:
+    {
+        TestData<4> events;
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
+        if (!events.read(filename_param + ext, ascii_param))
+        {
+            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
+            return 1;
+        }
+        std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+        Covariant<4> covariant(32, true);
+        covariant.visualize = visual_param;
+        covariant.verbose = verbose_param;
+        size_t valid_events = 0;
+        if (result.count("cluster"))
+        {
+            std::vector<unsigned short> classes(events.size());
+            std::ifstream in(filename_param + ".cluster", std::ios::binary);
+            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
+            in.close();
+
+            std::cout << "Processing cluster " << cluster_param << " of " << events.size() << " events..." << std::endl;
+            for (unsigned i = 0; i < events.size(); i++)
+            {
+                if (classes[i] != cluster_param)
+                    continue;
+                if (covariant.event(events[i]))
+                    valid_events++;
+            }
+        }
+        else
+        {
+            std::cout << "Processing " << events.size() << " events..." << std::endl;
+            for (const auto &e : events)
+                if (covariant.event(e))
+                    valid_events++;
+        }
+        std::cout << "Found " << events.size() << " events..." << std::endl;
+
+        std::cout << "Analyzing the sample..." << std::endl;
+
+        covariant.analyse(smooth_param, threshold_param);
+        if (covariant.factorProbability() > .0001)
+        {
+            std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
+        }
+        else if (covariant.differentialEquation() > .0001)
+        {
+            std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
+        }
+        else
+        {
+            std::cout << "Consistency checkes passed..." << std::endl;
+        }
+
+        if (!result.count("cluster"))
+        {
+            std::cout << "Performing Laplacian clustering..." << std::endl;
+            unsigned found = covariant.cluster(threshold_param);
+            std::vector<unsigned short> classes(events.size());
+            for (const auto& e : events)
+                classes.push_back(covariant.classify(e));
+            std::cout << "Found " << found << " clusters..." << std::endl;
+
+            std::ofstream out(filename_param + ".cluster", std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
+            out.close();
+            std::cout << "Saved to file " << filename_param + ".cluster" << std::endl;
+        }
+    }
+    break;
+
     default:
         std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
         return 1;

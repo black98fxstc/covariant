@@ -70,6 +70,7 @@ int main(int argc, char *argv[])
         test_data.write(file_param + ext, ascii_param);
     }
     break;
+
     case 3:
     {
         TestData<3> test_data;
@@ -86,6 +87,24 @@ int main(int argc, char *argv[])
         test_data.write(file_param + ext, ascii_param);
     }
     break;
+
+    case 4:
+    {
+        TestData<4> test_data;
+        TestData<4>::RandomSample test_sample;
+        for (unsigned i = 0; i < normal_param; i++)
+            test_sample.subpopulation(new TestData<4>::Normal());
+        for (unsigned i = 0; i < snake_param; i++)
+            test_sample.subpopulation(new TestData<4>::Snake());
+        for (unsigned i = 0; i < exponential_param; i++)
+            test_sample.subpopulation(new TestData<4>::Exponential());
+        test_data.generate(test_sample, events_param);
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Saving " << test_data.size() << " events to " << file_param << ext << "..." << std::endl;
+        test_data.write(file_param + ext, ascii_param);
+    }
+    break;
+
     default:
         std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
         return 1;

@@ -97,9 +97,87 @@ int main(int argc, char *argv[])
         std::cout << "Found " << found << " clusters." << std::endl;
     }
     break;
+
     case 3:
     {
+        TestData<3> events;
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Loading events from " << file_param << ext << "..." << std::endl;
+        if (!events.read(file_param + ext, ascii_param))
+        {
+            std::cerr << "Error: Could not open event file for loading: " << file_param + ext << std::endl;
+            return 1;
+        }
+        std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+        std::cout << "Processing " << events.size() << " events..." << std::endl;
+        Laplacian<3> laplace(64, true);
+        laplace.visualize = visual_param;
+        laplace.verbose = verbose_param;
+        for (const auto &e : events)
+            laplace.event(e);
+
+        std::cout << "Analyzing the sample..." << std::endl;
+
+        laplace.analyze(smooth_param, threshold_param);
+        if (laplace.differentialEquation() > .0001)
+        {
+            std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
+        }
+        else
+        {
+            std::cout << "Consistency checkes passed..." << std::endl;
+        }
+
+        std::cout << "Performing Laplacian clustering..." << std::endl;
+        unsigned found = laplace.cluster(threshold_param);
+        std::vector<unsigned short> classes(events.size());
+        // for (const auto& e : events)
+        //     classes.push_back(laplace.classify(e));
+        std::cout << "Found " << found << " clusters." << std::endl;
     }
+    break;
+
+    case 4:
+    {
+        TestData<4> events;
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Loading events from " << file_param << ext << "..." << std::endl;
+        if (!events.read(file_param + ext, ascii_param))
+        {
+            std::cerr << "Error: Could not open event file for loading: " << file_param + ext << std::endl;
+            return 1;
+        }
+        std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+        std::cout << "Processing " << events.size() << " events..." << std::endl;
+        Laplacian<4> laplace(32, true);
+        laplace.visualize = visual_param;
+        laplace.verbose = verbose_param;
+        for (const auto &e : events)
+            laplace.event(e);
+
+        std::cout << "Analyzing the sample..." << std::endl;
+
+        laplace.analyze(smooth_param, threshold_param);
+        if (laplace.differentialEquation() > .0001)
+        {
+            std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
+        }
+        else
+        {
+            std::cout << "Consistency checkes passed..." << std::endl;
+        }
+
+        std::cout << "Performing Laplacian clustering..." << std::endl;
+        unsigned found = laplace.cluster(threshold_param);
+        std::vector<unsigned short> classes(events.size());
+        // for (const auto& e : events)
+        //     classes.push_back(laplace.classify(e));
+        std::cout << "Found " << found << " clusters." << std::endl;
+    }
+    break;
+
     break;
     default:
         std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
