@@ -16,23 +16,21 @@
             "console": "internalConsole"
         },
         {
-            "name": "(gdb) Bash on Windows Launch",
+            "name": "New Sample",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug.testdata.exe",
-            "args": [],
+            "program": "${workspaceFolder}/testdata",
+            "args": [
+                "--normal=0",
+                "--snake=1",
+                "--exponential=0",
+                "--events=1000000"
+            ],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            "pipeTransport": {
-                "debuggerPath": "/usr/bin/gdb",
-                "pipeProgram": "${env:windir}\\system32\\bash.exe",
-                "pipeArgs": [
-                    "-c"
-                ],
-                "pipeCwd": ""
-            },
+            "MIMode": "gdb",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -47,18 +45,40 @@
             ]
         },
         {
-            "name": "New Covariant Sample",
+            "name": "Laplacian",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/covariant2",
+            "program": "${workspaceFolder}/laplacian",
             "args": [
-                "--smooth=1",
-                "--threshold=.0001",
-                "--normal=0",
-                "--snake=1",
-                "--exponential=0",
-                "--events=1000000",
-                "--save"
+                "--smooth=.03",
+                "--threshold=.001"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Covariant",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/covariant",
+            "args": [
+                "--smooth=.03",
+                "--threshold=.001"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

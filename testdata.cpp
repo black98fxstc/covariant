@@ -15,6 +15,7 @@ int main(int argc, char *argv[])
     std::string file_param;
     unsigned dimension_param, normal_param, snake_param, exponential_param;
     size_t events_param;
+    bool ascii_param;
 
     // Set up the command-line options parser.
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
@@ -27,6 +28,7 @@ int main(int argc, char *argv[])
         ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
     options.parse_positional({"file"});
@@ -45,6 +47,7 @@ int main(int argc, char *argv[])
     snake_param = result["snake"].as<unsigned>();
     exponential_param = result["exponential"].as<unsigned>();
     events_param = result["events"].as<size_t>();
+    ascii_param = result["ascii"].as<bool>();
 
     std::cout << "Program running with --normal=" << normal_param << " --snake=" << snake_param << " --exponential=" << exponential_param << std::endl;
     std::cout << "Generating " << events_param << " events in " << dimension_param << " dimensions..." << std::endl;
@@ -62,8 +65,9 @@ int main(int argc, char *argv[])
         for (unsigned i = 0; i < exponential_param; i++)
             test_sample.subpopulation(new TestData<2>::Exponential());
         test_data.generate(test_sample, events_param);
-        std::cout << "Saving " << test_data.size() << " events to " << file_param << "..." << std::endl;
-        test_data.save(file_param + ".dat");
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Saving " << test_data.size() << " events to " << file_param << ext << "..." << std::endl;
+        test_data.write(file_param + ext, ascii_param);
     }
     break;
     case 3:
@@ -77,8 +81,9 @@ int main(int argc, char *argv[])
         for (unsigned i = 0; i < exponential_param; i++)
             test_sample.subpopulation(new TestData<3>::Exponential());
         test_data.generate(test_sample, events_param);
-        std::cout << "Saving " << test_data.size() << " events to " << file_param << "..." << std::endl;
-        test_data.save(file_param + ".dat");
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Saving " << test_data.size() << " events to " << file_param << ext << "..." << std::endl;
+        test_data.write(file_param + ext, ascii_param);
     }
     break;
     default:

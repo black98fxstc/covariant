@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     std::string filename_param;
     unsigned dimension_param, cluster_param;
     float smooth_param, threshold_param;
-    bool visual_param, verbose_param;
+    bool visual_param, verbose_param, ascii_param;
 
     // Set up the command-line options parser.
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
@@ -29,6 +29,7 @@ int main(int argc, char *argv[])
         ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
         ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
         ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
     options.parse_positional({"file"});
@@ -48,6 +49,7 @@ int main(int argc, char *argv[])
     threshold_param = result["threshold"].as<float>();
     visual_param = result["visual"].as<bool>();
     verbose_param = result["verbose"].as<bool>();
+    ascii_param = result["ascii"].as<bool>();
 
     std::cout << "Program running with dimension=" << dimension_param << " filename=" << filename_param << "smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
     std::cout << "Analyzing events in " << dimension_param << " dimensions..." << std::endl;
@@ -57,11 +59,11 @@ int main(int argc, char *argv[])
     case 2:
     {
         TestData<2> events;
-        std::cout << "Loading events from " << filename_param << "..." << std::endl;
-        // std::ifstream infile(filename_param + ".dat", std::ios::binary);
-        if (!events.load(filename_param + ".dat"))
+        std::string ext = ascii_param ? ".txt" : ".dat";
+        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
+        if (!events.read(filename_param + ext, ascii_param))
         {
-            std::cerr << "Error: Could not open event file for loading: " << filename_param + ".dat" << std::endl;
+            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
             return 1;
         }
         std::cout << "Loaded " << events.size() << " events." << std::endl;

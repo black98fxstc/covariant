@@ -12,7 +12,7 @@ template <unsigned Dimension>
 class Weighty;
 
 template <unsigned Dimension>
-class TestData : public std::vector<typename Weighty<Dimension>::Event>
+class TestData : public Weighty<Dimension>::Events
 {
     class RandomEvent
     {
@@ -196,28 +196,5 @@ public:
         this->resize(num_events);
         for (size_t i = 0; i < num_events; i++)
             test_sample.sample((*this)[i]);
-    }
-
-    void save(const std::string &filename)
-    {
-        std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
-        size_t num_events = this->size();
-        outfile.write(reinterpret_cast<const char *>(&num_events), sizeof(num_events));
-        outfile.write(reinterpret_cast<const char *>(this->data()), num_events * sizeof(typename Weighty<Dimension>::Event));
-        outfile.close();
-    }
-
-    bool load(const std::string &filename)
-    {
-        std::ifstream infile(filename, std::ios::binary);
-        if (!infile)
-            return false;
-
-        size_t num_events;
-        infile.read(reinterpret_cast<char *>(&num_events), sizeof(num_events));
-        this->resize(num_events);
-        infile.read(reinterpret_cast<char *>(this->data()), num_events * sizeof(typename Weighty<Dimension>::Event));
-        infile.close();
-        return true;
     }
 };

@@ -21,6 +21,8 @@ private:
     unsigned long fft_normalizer = 1;
 
 public:
+    bool visualize = false, verbose = false;
+
     typedef std::array<float, Dimension> Event;
 
     size_t size()
@@ -42,6 +44,80 @@ public:
     {
         return Weighty<Dimension>::_events;
     }
+
+    
+    class Events : public std::vector<Weighty<Dimension>::Event>
+    {
+    public:
+        bool write(const std::string &filename, bool ascii = false) const
+        {
+            if (ascii)
+            {
+                std::ofstream out(filename);
+                if (!out) return false;
+
+                for (const auto &event : *this)
+                {
+                    for (unsigned i = 0; i < Dimension; ++i)
+                    {
+                        out << (i == 0 ? "" : " ") << event[i];
+                    }
+                    out << "\n";
+                }
+                return out.good();
+            }
+            else
+            {
+                std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+                if (!out) return false;
+
+                size_t count = this->size();
+                out.write(reinterpret_cast<const char *>(&count), sizeof(count));
+                if (count > 0)
+                {
+                    out.write(reinterpret_cast<const char *>(this->data()), count * sizeof(Event));
+                }
+                return out.good();
+            }
+        }
+
+        bool read(const std::string &filename, bool ascii = false)
+        {
+            if (ascii)
+            {
+                std::ifstream in(filename);
+                if (!in) return false;
+
+                this->clear();
+                Event event;
+                while (in >> event[0])
+                {
+                    for (unsigned i = 1; i < Dimension; ++i)
+                    {
+                        if (!(in >> event[i])) return false; // Incomplete event record
+                    }
+                    this->push_back(event);
+                }
+                return true;
+            }
+            else
+            {
+                std::ifstream in(filename, std::ios::binary);
+                if (!in) return false;
+
+                size_t count = 0;
+                in.read(reinterpret_cast<char *>(&count), sizeof(count));
+                if (!in) return false;
+
+                this->resize(count);
+                if (count > 0)
+                {
+                    in.read(reinterpret_cast<char *>(this->data()), count * sizeof(Event));
+                }
+                return in.good();
+            }
+        }
+    };
 
     Function<Dimension, float> weight = Function<Dimension, float>(*this);
     Function<Dimension, float> density = Function<Dimension, float>(*this);
@@ -180,8 +256,11 @@ public:
             for (unsigned i = 0; i < Dimension; i++)
                 P[i][coord[i]] += density[x];
         }
-        density.write("density.bin");
-        quantile.write("quantile.bin");
+        if (this->visualize)
+        {
+            density.write("density.bin");
+            quantile.write("quantile.bin");
+        }
     }
 
     void trim(std::vector<float> &data, float threshold)
