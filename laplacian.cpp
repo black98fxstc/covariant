@@ -1,26 +1,73 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-
-// A popular, header-only library for command-line parsing.
-// See setup instructions below.
 #include <cxxopts.hpp>
 #include <functional>
 
-// The Covariant class header.
-// #include "Weighty.hpp"
-// #include "Weighty.hpp"
-// #include "Laplacian.hpp"
 #include "Covariant.hpp"
 
-const unsigned Dimension = 2;
+struct Params {
+    std::string filename;
+    unsigned dimension;
+    unsigned grid;
+    float smooth;
+    float threshold;
+    bool visual;
+    bool verbose;
+    bool antialias;
+    bool ascii;
+};
+
+template <unsigned Dimension>
+int do_it(const Params &params, unsigned grid_size) {
+    TestData<Dimension> events;
+    std::string ext = params.ascii ? ".txt" : ".dat";
+    std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
+    if (!events.read(params.filename + ext, params.ascii))
+    {
+        std::cerr << "Error: Could not open event file for loading: " << params.filename + ext << std::endl;
+        return 1;
+    }
+    std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+    std::cout << "Processing " << events.size() << " events..." << std::endl;
+    Laplacian<Dimension> laplace(grid_size, true);
+    laplace.visualize = params.visual;
+    laplace.antialias = params.antialias;
+    laplace.verbose = params.verbose;
+    for (const auto &e : events)
+        laplace.event(e);
+
+    std::cout << "Analyzing the sample..." << std::endl;
+
+    laplace.analyze(params.smooth, params.threshold);
+    if (laplace.differentialEquation() > .0001)
+    {
+        std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
+    }
+    else
+    {
+        std::cout << "Consistency checkes passed..." << std::endl;
+    }
+
+    std::cout << "Performing Laplacian clustering..." << std::endl;
+    unsigned found = laplace.cluster(params.threshold);
+    std::vector<unsigned short> classes(events.size());
+    for (const auto& e : events)
+        classes.push_back(laplace.classify(e));
+    std::cout << "Found " << found << " clusters." << std::endl;
+
+    std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
+    out.write(reinterpret_cast<const char *>(classes.data()), laplace.size() * sizeof(unsigned short));
+    out.close();
+    std::cout << "Saved to file " << params.filename + ".cluster" << std::endl;
+
+    return 0;
+}
 
 int main(int argc, char *argv[])
 {
-    std::string file_param;
-    unsigned dimension_param;
-    float smooth_param, threshold_param;
-    bool visual_param, verbose_param, ascii_param;
+    Params params;
 
     // Set up the command-line options parser.
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
@@ -29,10 +76,12 @@ int main(int argc, char *argv[])
     options.add_options()
     ("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
     ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
     ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
     ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
     ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
     ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+    ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
     ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage");
 
@@ -46,141 +95,41 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    file_param = result["file"].as<std::string>();
-    dimension_param = result["dimension"].as<unsigned>();
-    smooth_param = result["smooth"].as<float>();
-    threshold_param = result["threshold"].as<float>();
-    visual_param = result["visual"].as<bool>();
-    verbose_param = result["verbose"].as<bool>();
-    ascii_param = result["ascii"].as<bool>();
+    params.filename = result["file"].as<std::string>();
+    params.dimension = result["dimension"].as<unsigned>();
 
-    std::cout << "Program running with dimension=" << dimension_param << " filename=" << file_param << " smooth=" << smooth_param << " threshold=" << threshold_param << std::endl;
+    if (result.count("grid")) {
+        params.grid = result["grid"].as<unsigned>();
+    } else {
+        switch (params.dimension) {
+            case 2:  params.grid = 256; break;
+            case 3:  params.grid = 64;  break;
+            case 4:  params.grid = 32;  break;
+            default: params.grid = 32;  break;
+        }
+    }
 
-    switch (dimension_param)
+    params.smooth = result["smooth"].as<float>();
+    params.threshold = result["threshold"].as<float>();
+    params.visual = result["visual"].as<bool>();
+    params.antialias = result["antialias"].as<bool>();
+    params.verbose = result["verbose"].as<bool>();
+    params.ascii = result["ascii"].as<bool>();
+
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid 
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold 
+              << " antialias=" << (params.antialias ? "on" : "off") << std::endl;
+
+    switch (params.dimension)
     {
     case 2:
-    {
-        TestData<2> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << file_param << ext << "..." << std::endl;
-        if (!events.read(file_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << file_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        std::cout << "Processing " << events.size() << " events..." << std::endl;
-        Laplacian<2> laplace(256, true);
-        laplace.visualize = visual_param;
-        laplace.verbose = verbose_param;
-        for (const auto &e : events)
-            laplace.event(e);
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        laplace.analyze(smooth_param, threshold_param);
-        if (laplace.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        std::cout << "Performing Laplacian clustering..." << std::endl;
-        unsigned found = laplace.cluster(threshold_param);
-        std::vector<unsigned short> classes(events.size());
-        // for (const auto& e : events)
-        //     classes.push_back(laplace.classify(e));
-        std::cout << "Found " << found << " clusters." << std::endl;
-    }
-    break;
-
+        return do_it<2>(params, params.grid);
     case 3:
-    {
-        TestData<3> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << file_param << ext << "..." << std::endl;
-        if (!events.read(file_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << file_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        std::cout << "Processing " << events.size() << " events..." << std::endl;
-        Laplacian<3> laplace(64, true);
-        laplace.visualize = visual_param;
-        laplace.verbose = verbose_param;
-        for (const auto &e : events)
-            laplace.event(e);
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        laplace.analyze(smooth_param, threshold_param);
-        if (laplace.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        std::cout << "Performing Laplacian clustering..." << std::endl;
-        unsigned found = laplace.cluster(threshold_param);
-        std::vector<unsigned short> classes(events.size());
-        // for (const auto& e : events)
-        //     classes.push_back(laplace.classify(e));
-        std::cout << "Found " << found << " clusters." << std::endl;
-    }
-    break;
-
+        return do_it<3>(params, params.grid);
     case 4:
-    {
-        TestData<4> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << file_param << ext << "..." << std::endl;
-        if (!events.read(file_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << file_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        std::cout << "Processing " << events.size() << " events..." << std::endl;
-        Laplacian<4> laplace(32, true);
-        laplace.visualize = visual_param;
-        laplace.verbose = verbose_param;
-        for (const auto &e : events)
-            laplace.event(e);
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        laplace.analyze(smooth_param, threshold_param);
-        if (laplace.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        std::cout << "Performing Laplacian clustering..." << std::endl;
-        unsigned found = laplace.cluster(threshold_param);
-        std::vector<unsigned short> classes(events.size());
-        // for (const auto& e : events)
-        //     classes.push_back(laplace.classify(e));
-        std::cout << "Found " << found << " clusters." << std::endl;
-    }
-    break;
-
-    break;
+        return do_it<4>(params, params.grid);
     default:
-        std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
+        std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;
         return 1;
     }
 };

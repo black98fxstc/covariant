@@ -5,25 +5,113 @@
 #include <cxxopts.hpp>
 #include "Covariant.hpp"
 
+struct Params {
+    std::string filename;
+    unsigned dimension;
+    unsigned cluster;
+    unsigned grid;
+    float smooth;
+    float threshold;
+    bool visual;
+    bool verbose;
+    bool antialias;
+    bool ascii;
+};
+
+template <unsigned Dimension>
+int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned grid_size)
+{
+    TestData<Dimension> events;
+    std::string ext = params.ascii ? ".txt" : ".dat";
+    std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
+    if (!events.read(params.filename + ext, params.ascii))
+    {
+        std::cerr << "Error: Could not open event file for loading: " << params.filename + ext << std::endl;
+        return 1; // Return 1 on error
+    }
+    std::cout << "Loaded " << events.size() << " events." << std::endl;
+
+    Covariant<Dimension> covariant(grid_size, true); // Use passed grid_size
+    covariant.visualize = params.visual;
+    covariant.antialias = params.antialias;
+    covariant.verbose = params.verbose;
+    size_t valid_events = 0;
+    if (result.count("cluster"))
+    {
+        std::vector<unsigned short> classes(events.size());
+        std::ifstream in(params.filename + ".cluster", std::ios::binary);
+        in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
+        in.close();
+
+        std::cout << "Processing cluster " << params.cluster << " of " << events.size() << " events..." << std::endl;
+        for (unsigned i = 0; i < events.size(); i++)
+        {
+            if (classes[i] != params.cluster)
+                continue;
+            if (covariant.event(events[i]))
+                valid_events++;
+        }
+    }
+    else
+    {
+        std::cout << "Processing " << events.size() << " events..." << std::endl;
+        for (const auto &e : events)
+            if (covariant.event(e))
+                valid_events++;
+    }
+    std::cout << "Found " << events.size() << " events..." << std::endl;
+
+    std::cout << "Analyzing the sample..." << std::endl;
+
+    covariant.analyse(params.smooth, params.threshold);
+    if (covariant.factorProbability() > .0001)
+    {
+        std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl; // No change here, it's a method call
+    }
+    else if (covariant.differentialEquation() > .0001)
+    {
+        std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
+    }
+    else
+    {
+        std::cout << "Consistency checkes passed..." << std::endl;
+    }
+
+    if (!result.count("cluster"))
+    {
+        std::cout << "Performing Laplacian clustering..." << std::endl;
+        unsigned found = covariant.cluster(params.threshold);
+        std::vector<unsigned short> classes(events.size());
+        for (const auto& e : events)
+            classes.push_back(covariant.classify(e));
+        std::cout << "Found " << found << " clusters..." << std::endl;
+
+        std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
+        out.close();
+        std::cout << "Saved to file " << params.filename + ".cluster" << std::endl;
+    }
+    return 0; // Return 0 on success
+ }
+
 int main(int argc, char *argv[])
 {
-    std::string filename_param;
-    unsigned dimension_param, cluster_param;
-    float smooth_param, threshold_param;
-    bool visual_param, verbose_param, ascii_param;
+    Params params;
 
     // Set up the command-line options parser.
-    cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
+    cxxopts::Options options("CovariantCLI", "Generate test data for the Covariant class");
 
     // Add the command-line options.
     options.add_options()
         ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
         ("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))
         ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
         ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
         ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
         ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
         ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
         ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
@@ -37,244 +125,45 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    filename_param = result["file"].as<std::string>();
-    dimension_param = result["dimension"].as<unsigned>();
-    cluster_param = result["dimension"].as<unsigned>();
-    smooth_param = result["smooth"].as<float>();
-    threshold_param = result["threshold"].as<float>();
-    visual_param = result["visual"].as<bool>();
-    verbose_param = result["verbose"].as<bool>();
-    ascii_param = result["ascii"].as<bool>();
+    params.filename = result["file"].as<std::string>();
+    params.dimension = result["dimension"].as<unsigned>();
+    params.cluster = result["cluster"].as<unsigned>();
 
-    std::cout << "Program running with dimension=" << dimension_param << " filename=" << filename_param << "smooth=" << smooth_param << " --threshold=" << threshold_param << std::endl;
-    std::cout << "Analyzing events in " << dimension_param << " dimensions..." << std::endl;
+    if (result.count("grid")) {
+        params.grid = result["grid"].as<unsigned>();
+    } else {
+        switch (params.dimension) {
+            case 2:  params.grid = 256; break;
+            case 3:  params.grid = 64; break;
+            case 4:  params.grid = 32;  break;
+            default: params.grid = 32;  break;
+        }
+    }
 
-    switch (dimension_param)
+    params.smooth = result["smooth"].as<float>();
+    params.threshold = result["threshold"].as<float>();
+    params.visual = result["visual"].as<bool>();
+    params.antialias = result["antialias"].as<bool>();
+    params.verbose = result["verbose"].as<bool>();
+    params.ascii = result["ascii"].as<bool>();
+
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename 
+              << " smooth=" << params.smooth << " threshold=" << params.threshold 
+              << " antialias=" << (params.antialias ? "on" : "off") << std::endl;
+    std::cout << "Analyzing events in " << params.dimension << " dimensions..." << std::endl;
+
+    switch (params.dimension)
     {
     case 2:
-    {
-        TestData<2> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
-        if (!events.read(filename_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        Covariant<2> covariant(256, true);
-        covariant.visualize = visual_param;
-        covariant.verbose = verbose_param;
-        size_t valid_events = 0;
-        if (result.count("cluster"))
-        {
-            std::vector<unsigned short> classes(events.size());
-            std::ifstream in(filename_param + ".cluster", std::ios::binary);
-            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
-            in.close();
-
-            std::cout << "Processing cluster " << cluster_param << " of " << events.size() << " events..." << std::endl;
-            for (unsigned i = 0; i < events.size(); i++)
-            {
-                if (classes[i] != cluster_param)
-                    continue;
-                if (covariant.event(events[i]))
-                    valid_events++;
-            }
-        }
-        else
-        {
-            std::cout << "Processing " << events.size() << " events..." << std::endl;
-            for (const auto &e : events)
-                if (covariant.event(e))
-                    valid_events++;
-        }
-        std::cout << "Found " << events.size() << " events..." << std::endl;
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        covariant.analyse(smooth_param, threshold_param);
-        if (covariant.factorProbability() > .0001)
-        {
-            std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
-        }
-        else if (covariant.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        if (!result.count("cluster"))
-        {
-            std::cout << "Performing Laplacian clustering..." << std::endl;
-            unsigned found = covariant.cluster(threshold_param);
-            std::vector<unsigned short> classes(events.size());
-            for (const auto& e : events)
-                classes.push_back(covariant.classify(e));
-            std::cout << "Found " << found << " clusters..." << std::endl;
-
-            std::ofstream out(filename_param + ".cluster", std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
-            out.close();
-            std::cout << "Saved to file " << filename_param + ".cluster" << std::endl;
-        }
-    }
-    break;
-
+        return do_it<2>(params, result, params.grid);
     case 3:
-    {
-        TestData<3> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
-        if (!events.read(filename_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        Covariant<3> covariant(256, true);
-        covariant.visualize = visual_param;
-        covariant.verbose = verbose_param;
-        size_t valid_events = 0;
-        if (result.count("cluster"))
-        {
-            std::vector<unsigned short> classes(events.size());
-            std::ifstream in(filename_param + ".cluster", std::ios::binary);
-            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
-            in.close();
-
-            std::cout << "Processing cluster " << cluster_param << " of " << events.size() << " events..." << std::endl;
-            for (unsigned i = 0; i < events.size(); i++)
-            {
-                if (classes[i] != cluster_param)
-                    continue;
-                if (covariant.event(events[i]))
-                    valid_events++;
-            }
-        }
-        else
-        {
-            std::cout << "Processing " << events.size() << " events..." << std::endl;
-            for (const auto &e : events)
-                if (covariant.event(e))
-                    valid_events++;
-        }
-        std::cout << "Found " << events.size() << " events..." << std::endl;
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        covariant.analyse(smooth_param, threshold_param);
-        if (covariant.factorProbability() > .0001)
-        {
-            std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
-        }
-        else if (covariant.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        if (!result.count("cluster"))
-        {
-            std::cout << "Performing Laplacian clustering..." << std::endl;
-            unsigned found = covariant.cluster(threshold_param);
-            std::vector<unsigned short> classes(events.size());
-            for (const auto& e : events)
-                classes.push_back(covariant.classify(e));
-            std::cout << "Found " << found << " clusters..." << std::endl;
-
-            std::ofstream out(filename_param + ".cluster", std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
-            out.close();
-            std::cout << "Saved to file " << filename_param + ".cluster" << std::endl;
-        }
-    }
-    break;
-
+        return do_it<3>(params, result, params.grid);
     case 4:
-    {
-        TestData<4> events;
-        std::string ext = ascii_param ? ".txt" : ".dat";
-        std::cout << "Loading events from " << filename_param << ext << "..." << std::endl;
-        if (!events.read(filename_param + ext, ascii_param))
-        {
-            std::cerr << "Error: Could not open event file for loading: " << filename_param + ext << std::endl;
-            return 1;
-        }
-        std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-        Covariant<4> covariant(32, true);
-        covariant.visualize = visual_param;
-        covariant.verbose = verbose_param;
-        size_t valid_events = 0;
-        if (result.count("cluster"))
-        {
-            std::vector<unsigned short> classes(events.size());
-            std::ifstream in(filename_param + ".cluster", std::ios::binary);
-            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
-            in.close();
-
-            std::cout << "Processing cluster " << cluster_param << " of " << events.size() << " events..." << std::endl;
-            for (unsigned i = 0; i < events.size(); i++)
-            {
-                if (classes[i] != cluster_param)
-                    continue;
-                if (covariant.event(events[i]))
-                    valid_events++;
-            }
-        }
-        else
-        {
-            std::cout << "Processing " << events.size() << " events..." << std::endl;
-            for (const auto &e : events)
-                if (covariant.event(e))
-                    valid_events++;
-        }
-        std::cout << "Found " << events.size() << " events..." << std::endl;
-
-        std::cout << "Analyzing the sample..." << std::endl;
-
-        covariant.analyse(smooth_param, threshold_param);
-        if (covariant.factorProbability() > .0001)
-        {
-            std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl;
-        }
-        else if (covariant.differentialEquation() > .0001)
-        {
-            std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
-        }
-        else
-        {
-            std::cout << "Consistency checkes passed..." << std::endl;
-        }
-
-        if (!result.count("cluster"))
-        {
-            std::cout << "Performing Laplacian clustering..." << std::endl;
-            unsigned found = covariant.cluster(threshold_param);
-            std::vector<unsigned short> classes(events.size());
-            for (const auto& e : events)
-                classes.push_back(covariant.classify(e));
-            std::cout << "Found " << found << " clusters..." << std::endl;
-
-            std::ofstream out(filename_param + ".cluster", std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
-            out.close();
-            std::cout << "Saved to file " << filename_param + ".cluster" << std::endl;
-        }
-    }
-    break;
+        return do_it<4>(params, result, params.grid);
 
     default:
-        std::cerr << "Error: Unsupported dimension: " << dimension_param << std::endl;
+        std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;
         return 1;
     }
-};
+    return 0; // Should not be reached if all cases return
+}

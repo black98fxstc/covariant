@@ -32,7 +32,9 @@ private:
     FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
     FunctionVector<Dimension, float> T = FunctionVector<Dimension, float>(*this);
 
+protected:
     Function<Dimension, float> R = Function<Dimension, float>(*this);
+    MarginalFunction<Dimension, float> Q = MarginalFunction<Dimension, float>(*this);
 
 public:
     void analyse(float smoothing = .01f, float threshold = 0.001f)
@@ -53,13 +55,15 @@ public:
             { this->differential_error(fiber); });
 
         // Supress ringing
-        for (unsigned j = 0; j < Dimension; j++)
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
-                this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+        if (this->antialias)
+        {
+            for (unsigned j = 0; j < Dimension; j++)
+                for (unsigned i = 0; i < Dimension; i++)
+                {
+                    this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+                    this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+                }
             }
-
         // Lots of arcane summations
         Coordinate<Dimension> coord(*this);
         for (size_t x = 0; x < this->size(); x++)
@@ -91,11 +95,11 @@ public:
 
                 if (this->quantile[x] < threshold)
                     continue;
-                this->Q[i][coord[i]] += q[i][x] * dual;
+                Q[i][coord[i]] += q[i][x] * dual;
             }
             for (unsigned i = 0; i < Dimension; i++)
                 this->L[x] += T[i][x];
-            R[x] *= 0.25f; // _density[x] / (float)_size;
+            R[x] *= 0.5f; // _density[x] / (float)_size;
             if (this->quantile[x] >= threshold)
                 _tot_R += R[x];
         }
@@ -117,7 +121,7 @@ public:
         // files for MATLAB
         if (this->visualize)
         {
-            this->R.write("R.bin");
+            R.write("R.bin");
             this->L.write("L.bin");
             if (this->verbose)
             {
@@ -149,6 +153,7 @@ private:
         double marginal = (this->density(x[0]) + this->density(x[x.points - 1])) / 2.0;
         for (unsigned i = 1; i < x.points - 1; i++)
             marginal += this->density(x[i]);
+        // keep it real in the denominator
         if (marginal < 1.0 / (double)this->events())
             for (unsigned i = 0; i < x.points; i++)
                 f[x.d][x[i]] = 0.0f;
@@ -157,7 +162,7 @@ private:
                 f[x.d][x[i]] = this->density(x[i]) / marginal;
     }
 
-    // check the math
+    // check that it actually factors the density
     void verify_factorization()
     {
         for (size_t x = 0; x < this->size(); x++)
@@ -271,8 +276,4 @@ private:
     }
 
     inline double squared(double x) { return x * x; };
-
-    void init()
-    {
-    }
 };

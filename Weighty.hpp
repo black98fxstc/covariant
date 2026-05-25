@@ -21,7 +21,7 @@ private:
     unsigned long fft_normalizer = 1;
 
 public:
-    bool visualize = false, verbose = false;
+    bool visualize = false, verbose = false, antialias = true;
 
     typedef std::array<float, Dimension> Event;
 
@@ -124,7 +124,6 @@ public:
     Function<Dimension, unsigned short> klass = Function<Dimension, unsigned short>(*this);
 
     MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
-    MarginalFunction<Dimension, float> Q = MarginalFunction<Dimension, float>(*this);
 
     void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
     {
