@@ -28,7 +28,6 @@ private:
     FunctionMatrix<Dimension, float> t = FunctionMatrix<Dimension, float>(*this);
     FunctionVector<Dimension, float> q = FunctionVector<Dimension, float>(*this);
     FunctionVector<Dimension, float> r = FunctionVector<Dimension, float>(*this);
-
     FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
     FunctionVector<Dimension, float> T = FunctionVector<Dimension, float>(*this);
 
@@ -45,14 +44,19 @@ public:
         this->for_each_line([this](const Line &fiber)
             { this->basis_functions(fiber); });
         // verify that they factor the density
-        this->verify_factorization();
+        if (this->verify)
+            this->verify_factorization();
 
         // Find the natural parameters
         this->for_each_line([this](const Line &fiber)
             { this->natural_parameters(fiber); });
         // Evaluate the solutions to the differential equations
-        this->for_each_line([this](const Line &fiber)
-            { this->differential_error(fiber); });
+        if (this->verify)
+        {
+            this->bounding_box();
+            this->for_each_line([this](const Line &fiber)
+                { this->differential_error(fiber); });
+        }
 
         // Supress ringing
         if (this->antialias)
@@ -64,6 +68,7 @@ public:
                     this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
                 }
             }
+
         // Lots of arcane summations
         Coordinate<Dimension> coord(*this);
         for (size_t x = 0; x < this->size(); x++)
@@ -177,7 +182,7 @@ private:
         }
     }
 
-    // basically solving a giant second order differential equation on the sample distribution
+    // basically solving a giant second order partial differential equation on the sample distribution
     void natural_parameters(const Line &x)
     {
         for (unsigned i = 0; i < Dimension; i++)
@@ -209,17 +214,9 @@ private:
                 while (k < j)
                 {
                     t[i][x.d][x[k]] = (float)tt;
-                    if (tt > t_max)
-                        t_max = tt;
-                    if (tt < t_min)
-                        t_min = tt;
                     if (k != x.points - 1)
                     {
                         double ss = -tt * x.delta + s[i][x.d][x[k]];
-                        if (ss > s_max)
-                            s_max = ss;
-                        if (ss < s_min)
-                            s_min = ss;
                         s[i][x.d][x[k + 1]] = (float)ss;
                     }
                     k++;
@@ -234,18 +231,10 @@ private:
                     tt = 1.0 / x.delta;
                 else
                     tt = 2.0 * ((std::log(f[i][x[k]]) - std::log(f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
-                if (tt > t_max)
-                    t_max = tt;
-                if (tt < t_min)
-                    t_min = tt;
                 while (k > j)
                 {
                     t[i][x.d][x[k - 1]] = (float)tt;
                     double ss = tt * x.delta + s[i][x.d][x[k]];
-                    if (ss > s_max)
-                        s_max = ss;
-                    if (ss < s_min)
-                        s_min = ss;
                     s[i][x.d][x[k - 1]] = (float)ss;
                     k--;
                 }
@@ -254,6 +243,23 @@ private:
     }
 
     // check the math
+    void bounding_box()
+    {
+        for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned j = 0; j < Dimension; j++)
+                for (unsigned x = 0; x < this->size(); x++)
+                {
+                    if (t[i][j][x] > t_max)
+                        t_max = t[i][j][x];
+                    if (t[i][j][x] < t_min)
+                        t_min = t[i][j][x];
+                    if (s[i][j][x] > s_max)
+                        s_max = s[i][j][x];
+                    if (s[i][j][x] < s_min)
+                        s_min = s[i][j][x];
+                }
+    }
+
     void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;

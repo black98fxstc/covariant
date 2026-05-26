@@ -2,12 +2,8 @@
 #include <string>
 #include <fstream>
 #include <functional>
-
-// A popular, header-only library for command-line parsing.
-// See setup instructions below.
 #include <cxxopts.hpp>
 
-// The Covariant class header.
 #include "Covariant.hpp"
 
 struct Params {
@@ -17,23 +13,38 @@ struct Params {
     unsigned snake;
     unsigned exponential;
     size_t events;
+    bool convert;
     bool ascii;
 };
 
 template <unsigned Dimension>
 int do_it(const Params &params) {
     TestData<Dimension> test_data;
-    typename TestData<Dimension>::RandomSample test_sample;
-    for (unsigned i = 0; i < params.normal; i++)
-        test_sample.subpopulation(new typename TestData<Dimension>::Normal());
-    for (unsigned i = 0; i < params.snake; i++)
-        test_sample.subpopulation(new typename TestData<Dimension>::Snake());
-    for (unsigned i = 0; i < params.exponential; i++)
-        test_sample.subpopulation(new typename TestData<Dimension>::Exponential());
-    test_data.generate(test_sample, params.events);
-    std::string ext = params.ascii ? ".txt" : ".dat";
-    std::cout << "Saving " << test_data.size() << " events to " << params.filename << ext << "..." << std::endl;
-    test_data.write(params.filename + ext, params.ascii);
+    bool is_ascii = !params.ascii;
+    if (params.convert) {
+        std::string source_ext = is_ascii ? ".txt" : ".dat";
+        std::cout << "Converting " << params.filename << source_ext << " to " 
+                  << (params.ascii ? "ASCII" : "binary") << "..." << std::endl;
+        if (!test_data.read(params.filename + source_ext, is_ascii)) {
+            std::cerr << "Error: Could not read source file for conversion: " << params.filename + source_ext << std::endl;
+            return 1;
+        }
+    } else {
+        std::cout << "Program running with normal=" << params.normal << " snake=" << params.snake << " exponential=" << params.exponential << std::endl;
+        std::cout << "Generating " << params.events << " events in " << params.dimension << " dimensions..." << std::endl;
+        typename TestData<Dimension>::RandomSample test_sample;
+        for (unsigned i = 0; i < params.normal; i++)
+            test_sample.subpopulation(new typename TestData<Dimension>::Normal());
+        for (unsigned i = 0; i < params.snake; i++)
+            test_sample.subpopulation(new typename TestData<Dimension>::Snake());
+        for (unsigned i = 0; i < params.exponential; i++)
+            test_sample.subpopulation(new typename TestData<Dimension>::Exponential());
+        test_data.generate(test_sample, params.events);
+
+        std::string ext = is_ascii ? ".txt" : ".dat";
+        std::cout << "Saving " << test_data.size() << " events to " << params.filename << ext << "..." << std::endl;
+        test_data.write(params.filename + ext, params.ascii);
+    }
     return 0;
 }
 
@@ -52,17 +63,7 @@ int main(int argc, char *argv[])
         ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
         ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
-        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
-        ("h,help", "Print usage");
-
-    // Add the command-line options.
-    options.add_options()
-        ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
-        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-        ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
-        ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
-        ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
-        ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
+        ("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))
         ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
@@ -82,10 +83,8 @@ int main(int argc, char *argv[])
     params.snake = result["snake"].as<unsigned>();
     params.exponential = result["exponential"].as<unsigned>();
     params.events = result["events"].as<size_t>();
+    params.convert = result["convert"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
-
-    std::cout << "Program running with --normal=" << params.normal << " --snake=" << params.snake << " --exponential=" << params.exponential << std::endl;
-    std::cout << "Generating " << params.events << " events in " << params.dimension << " dimensions..." << std::endl;
 
     switch (params.dimension)
     {

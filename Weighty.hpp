@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <functional>
 #include <fftw3.h>
+#include <cctype>
 #include <assert.h>
 
 template <unsigned Dimension>
@@ -21,7 +22,7 @@ private:
     unsigned long fft_normalizer = 1;
 
 public:
-    bool visualize = false, verbose = false, antialias = true;
+    bool visualize = false, verbose = false, antialias = true, verify = true;
 
     typedef std::array<float, Dimension> Event;
 
@@ -88,6 +89,17 @@ public:
                 if (!in) return false;
 
                 this->clear();
+
+                // Skip leading whitespace and check if the first line looks like a header
+                while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek()))) in.ignore();
+                int first = in.peek();
+                if (first != EOF && !std::isdigit(static_cast<unsigned char>(first)) && first != '-' && first != '+' && first != '.')
+                {
+                    // Does not start with a digit or sign; likely a header line.
+                    std::string dummy;
+                    std::getline(in, dummy);
+                }
+
                 Event event;
                 while (in >> event[0])
                 {

@@ -69,8 +69,8 @@ private:
         }
     };
 
-    Function<Dimension, float> S = Function<Dimension, float>(*this);
-    Function<Dimension, float> T = Function<Dimension, float>(*this);
+    FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
+    FunctionVector<Dimension, float> T = FunctionVector<Dimension, float>(*this);
 
 protected:
     Function<Dimension, float> L = Function<Dimension, float>(*this);
@@ -78,6 +78,8 @@ protected:
     Function<Dimension, typename Hypercube::State> status = Function<Dimension, typename Hypercube::State>(*this);
 
 public:
+    bool verify = true;
+
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
         this->prepare(smoothing);
@@ -86,8 +88,12 @@ public:
         this->for_each_line([this](const Line &fiber)
             { this->second_derivatives(fiber); });
         // check the math
-        this->for_each_line([this](const Line &fiber)
-            { this->differential_error(fiber); });
+        if (this->verify)
+        {
+            this->bounding_box();
+            this->for_each_line([this](const Line &fiber)
+                { this->differential_error(fiber); });
+        }
 
         // Supress ringing
         if (this->antialias)
@@ -224,7 +230,7 @@ private:
         float max;
         max = 0.0f;
         int m = x.points - 1;
-        T[x[m]] = 1.0 / x.delta;
+        T[x.d][x[m]] = 1.0 / x.delta;
         for (unsigned k = 0; k < x.points; k++)
         {
             if (this->density[x[k]] > max)
@@ -236,7 +242,7 @@ private:
 
         // Arcane summs
         double tt;
-        S[x[m]] = 0.0;
+        S[x.d][x[m]] = 0.0;
         for (unsigned k = m, j; k < x.points - 1;)
         {
             j = k + 1;
@@ -245,22 +251,14 @@ private:
             if (this->density[x[j]] <= 0.0)
                 tt = 1.0 / x.delta;
             else
-                tt = -2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (j - k)) - S[x[k]] / (x.delta * (j - k)));
+                tt = -2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (j - k)) - S[x.d][x[k]] / (x.delta * (j - k)));
             while (k < j)
             {
-                T[x[k]] = (float)tt;
-                if (tt > t_max)
-                    t_max = tt;
-                if (tt < t_min)
-                    t_min = tt;
+                T[x.d][x[k]] = (float)tt;
                 if (k != x.points - 1)
                 {
-                    double ss = -tt * x.delta + S[x[k]];
-                    if (ss > s_max)
-                        s_max = ss;
-                    if (ss < s_min)
-                        s_min = ss;
-                    S[x[k+1]] = (float)ss;
+                    double ss = -tt * x.delta + S[x.d][x[k]];
+                    S[x.d][x[k+1]] = (float)ss;
                 }
                 k++;
             }
@@ -273,28 +271,36 @@ private:
             if (this->density[x[j]] <= 0.0 || this->density[x[k]] <= 0.0)
                 tt = 1.0 / squared(x.delta);
             else
-                tt = 2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (k - j)) - S[x[k]] / (x.delta * (k - j)));
-            if (tt > t_max)
-                t_max = tt;
-            if (tt < t_min)
-                t_min = tt;
+                tt = 2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (k - j)) - S[x.d][x[k]] / (x.delta * (k - j)));
             while (k > j)
             {
-                T[x[k-1]] = (float)tt;
-                double ss = tt * x.delta + S[k];
-                if (ss > s_max)
-                    s_max = ss;
-                if (ss < s_min)
-                    s_min = ss;
-                S[x[k-1]] = (float)ss;
+                T[x.d][x[k-1]] = (float)tt;
+                double ss = tt * x.delta + S[x.d][x[k]];
+                S[x.d][x[k-1]] = (float)ss;
                 k--;
             }
         }
         for (unsigned k = 0; k < x.points; k++)
-            L[x[k]] += T[x[k]];
+            L[x[k]] += T[x.d][x[k]];
     }
 
     // check the math
+    void bounding_box()
+    {
+        for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned x = 0; x < this->size(); x++)
+            {
+                if (T[i][x] > t_max)
+                    t_max = T[i][x];
+                if (T[i][x] < t_min)
+                    t_min = T[i][x];
+                if (S[i][x] > s_max)
+                    s_max = S[i][x];
+                if (S[i][x] < s_min)
+                    s_min = S[i][x];
+            }
+    }
+
     void differential_error(const Line &x)
     {
         double tt, s_diff, t_diff;
@@ -303,14 +309,12 @@ private:
         {
             if (this->density[x[k+1]] > 0 && this->density[x[k]] > 0)
             {
-                tt = -2.0 * ((std::log(this->density[x[k+1]]) - std::log(this->density[x[k]])) / squared(x.delta) - S[x[k]] / x.delta);
-                t_diff = std::abs(T[x[k]] - tt);
-                if (t_diff > t_max - t_min)
-                    t_diff = 1.0f;
-                else
-                    t_diff /= t_max - t_min;
+                tt = -2.0 * ((std::log(this->density[x[k+1]]) - std::log(this->density[x[k]])) / squared(x.delta) - S[x.d][x[k]] / x.delta);
+                t_diff = std::abs(T[x.d][x[k]] - tt) / (t_max - t_min);
+                if (t_diff > _differential_error)
+                    _differential_error = t_diff;
             }
-            s_diff = std::abs((S[k + 1] - (-T[x[k]] * x.delta + S[x[k]])) / (s_max - s_min));
+            s_diff = std::abs((S[x.d][x[k + 1]] - (-T[x.d][x[k]] * x.delta + S[x.d][x[k]])) / (s_max - s_min));
             if (s_diff > _differential_error)
                 _differential_error = s_diff;
         }

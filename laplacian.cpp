@@ -15,6 +15,7 @@ struct Params {
     bool visual;
     bool verbose;
     bool antialias;
+    bool verify;
     bool ascii;
 };
 
@@ -34,32 +35,43 @@ int do_it(const Params &params, unsigned grid_size) {
     Laplacian<Dimension> laplace(grid_size, true);
     laplace.visualize = params.visual;
     laplace.antialias = params.antialias;
+    laplace.verify = params.verify;
     laplace.verbose = params.verbose;
     for (const auto &e : events)
         laplace.event(e);
 
     std::cout << "Analyzing the sample..." << std::endl;
-
     laplace.analyze(params.smooth, params.threshold);
     if (laplace.differentialEquation() > .0001)
-    {
         std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
-    }
     else
-    {
         std::cout << "Consistency checkes passed..." << std::endl;
-    }
 
     std::cout << "Performing Laplacian clustering..." << std::endl;
     unsigned found = laplace.cluster(params.threshold);
-    std::vector<unsigned short> classes(events.size());
+    std::vector<unsigned short> classes;
+    classes.reserve(events.size());
     for (const auto& e : events)
         classes.push_back(laplace.classify(e));
     std::cout << "Found " << found << " clusters." << std::endl;
 
-    std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
-    out.write(reinterpret_cast<const char *>(classes.data()), laplace.size() * sizeof(unsigned short));
-    out.close();
+    if (params.ascii) {
+        std::ofstream out(params.filename + ".cluster");
+        if (!out) {
+            std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
+            return 1;
+        }
+        for (auto c : classes) out << c << "\n";
+        out.close();
+    } else {
+        std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
+        if (!out) {
+            std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
+            return 1;
+        }
+        out.write(reinterpret_cast<const char *>(classes.data()), classes.size() * sizeof(unsigned short));
+        out.close();
+    }
     std::cout << "Saved to file " << params.filename + ".cluster" << std::endl;
 
     return 0;
@@ -82,6 +94,7 @@ int main(int argc, char *argv[])
     ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
     ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
     ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+    ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
     ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
     ("h,help", "Print usage");
 
@@ -97,6 +110,13 @@ int main(int argc, char *argv[])
 
     params.filename = result["file"].as<std::string>();
     params.dimension = result["dimension"].as<unsigned>();
+    params.smooth = result["smooth"].as<float>();
+    params.threshold = result["threshold"].as<float>();
+    params.visual = result["visual"].as<bool>();
+    params.antialias = result["antialias"].as<bool>();
+    params.verify = result["verify"].as<bool>();
+    params.verbose = result["verbose"].as<bool>();
+    params.ascii = result["ascii"].as<bool>();
 
     if (result.count("grid")) {
         params.grid = result["grid"].as<unsigned>();
@@ -109,17 +129,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    params.smooth = result["smooth"].as<float>();
-    params.threshold = result["threshold"].as<float>();
-    params.visual = result["visual"].as<bool>();
-    params.antialias = result["antialias"].as<bool>();
-    params.verbose = result["verbose"].as<bool>();
-    params.ascii = result["ascii"].as<bool>();
-
     std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid 
               << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold 
-              << " antialias=" << (params.antialias ? "on" : "off") << std::endl;
-
+              << " antialias=" << (params.antialias ? "on" : "off") 
+              << " verify=" << (params.verify ? "on" : "off") << std::endl;
     switch (params.dimension)
     {
     case 2:

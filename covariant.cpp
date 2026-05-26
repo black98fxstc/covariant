@@ -15,6 +15,7 @@ struct Params {
     bool visual;
     bool verbose;
     bool antialias;
+    bool verify;
     bool ascii;
 };
 
@@ -34,14 +35,21 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
     Covariant<Dimension> covariant(grid_size, true); // Use passed grid_size
     covariant.visualize = params.visual;
     covariant.antialias = params.antialias;
+    covariant.verify = params.verify;
     covariant.verbose = params.verbose;
     size_t valid_events = 0;
     if (result.count("cluster"))
     {
         std::vector<unsigned short> classes(events.size());
-        std::ifstream in(params.filename + ".cluster", std::ios::binary);
-        in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
-        in.close();
+        if (params.ascii) {
+            std::ifstream in(params.filename + ".cluster");
+            for (unsigned i = 0; i < events.size(); i++) in >> classes[i];
+            in.close();
+        } else {
+            std::ifstream in(params.filename + ".cluster", std::ios::binary);
+            in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
+            in.close();
+        }
 
         std::cout << "Processing cluster " << params.cluster << " of " << events.size() << " events..." << std::endl;
         for (unsigned i = 0; i < events.size(); i++)
@@ -81,14 +89,21 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
     {
         std::cout << "Performing Laplacian clustering..." << std::endl;
         unsigned found = covariant.cluster(params.threshold);
-        std::vector<unsigned short> classes(events.size());
+        std::vector<unsigned short> classes;
+        classes.reserve(events.size());
         for (const auto& e : events)
             classes.push_back(covariant.classify(e));
         std::cout << "Found " << found << " clusters..." << std::endl;
 
-        std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
-        out.write(reinterpret_cast<const char *>(classes.data()), covariant.size() * sizeof(unsigned short));
-        out.close();
+        if (params.ascii) {
+            std::ofstream out(params.filename + ".cluster");
+            for (auto c : classes) out << c << "\n";
+            out.close();
+        } else {
+            std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char *>(classes.data()), classes.size() * sizeof(unsigned short));
+            out.close();
+        }
         std::cout << "Saved to file " << params.filename + ".cluster" << std::endl;
     }
     return 0; // Return 0 on success
@@ -112,6 +127,7 @@ int main(int argc, char *argv[])
         ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
         ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
         ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
         ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
         ("h,help", "Print usage");
 
@@ -144,12 +160,14 @@ int main(int argc, char *argv[])
     params.threshold = result["threshold"].as<float>();
     params.visual = result["visual"].as<bool>();
     params.antialias = result["antialias"].as<bool>();
+    params.verify = result["verify"].as<bool>();
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
 
     std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename 
               << " smooth=" << params.smooth << " threshold=" << params.threshold 
-              << " antialias=" << (params.antialias ? "on" : "off") << std::endl;
+              << " antialias=" << (params.antialias ? "on" : "off")
+              << " verify=" << (params.verify ? "on" : "off") << std::endl;
     std::cout << "Analyzing events in " << params.dimension << " dimensions..." << std::endl;
 
     switch (params.dimension)
