@@ -13,7 +13,7 @@ class Laplacian : public Weighty<Dimension>
 private:
     float s_max = std::numeric_limits<float>::lowest(), s_min = std::numeric_limits<float>::max();
     float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
-    double _differential_error = 0.0;
+    double differential_error = 0.0;
 
     class Hypercube
     {
@@ -82,17 +82,22 @@ public:
 
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
+        // Reset error metrics and bounding box parameters for a fresh analysis
+        differential_error = 0.0;
+        s_max = std::numeric_limits<float>::lowest(); s_min = std::numeric_limits<float>::max();
+        t_max = std::numeric_limits<float>::lowest(); t_min = std::numeric_limits<float>::max();
+
         this->prepare(smoothing);
 
         // find the second derivatives
         this->for_each_line([this](const Line &fiber)
-            { this->second_derivatives(fiber); });
+                            { this->second_derivatives(fiber); });
         // check the math
         if (this->verify)
         {
             this->bounding_box();
             this->for_each_line([this](const Line &fiber)
-                { this->differential_error(fiber); });
+                                { this->verify_differential(fiber); });
         }
 
         // Supress ringing
@@ -106,7 +111,7 @@ public:
         if (this->visualize)
         {
             L.write("laplacian.bin");
-            klass.write("classes.bin"); 
+            klass.write("classes.bin");
         }
     }
 
@@ -217,13 +222,12 @@ public:
 
     double differentialEquation()
     {
-        return _differential_error;
+        return differential_error;
     }
 
     Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) {}
 
 private:
-
     // Compute second derivatibes of the density
     void second_derivatives(const Line &x)
     {
@@ -240,7 +244,7 @@ private:
             }
         }
 
-        // Arcane summs
+        // Solve a simpler set of second order partial differential equations
         double tt;
         S[x.d][x[m]] = 0.0;
         for (unsigned k = m, j; k < x.points - 1;)
@@ -251,14 +255,14 @@ private:
             if (this->density[x[j]] <= 0.0)
                 tt = 1.0 / x.delta;
             else
-                tt = -2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (j - k)) - S[x.d][x[k]] / (x.delta * (j - k)));
+                tt = -2.0 * ((std::log((double)this->density[x[j]]) - std::log((double)this->density[x[k]])) / squared(x.delta * (j - k)) - S[x.d][x[k]] / (x.delta * (j - k)));
             while (k < j)
             {
                 T[x.d][x[k]] = (float)tt;
                 if (k != x.points - 1)
                 {
                     double ss = -tt * x.delta + S[x.d][x[k]];
-                    S[x.d][x[k+1]] = (float)ss;
+                    S[x.d][x[k + 1]] = (float)ss;
                 }
                 k++;
             }
@@ -269,22 +273,23 @@ private:
             while (j > 0 && this->density[x[j]] <= 0.0)
                 j--;
             if (this->density[x[j]] <= 0.0 || this->density[x[k]] <= 0.0)
-                tt = 1.0 / squared(x.delta);
+                tt = 1.0 / x.delta;
             else
-                tt = 2.0 * ((std::log(this->density[x[j]]) - std::log(this->density[x[k]])) / squared(x.delta * (k - j)) - S[x.d][x[k]] / (x.delta * (k - j)));
+                tt = 2.0 * ((std::log((double)this->density[x[k]]) - std::log((double)this->density[x[j]])) / squared(x.delta * (k - j)) - S[x.d][x[k]] / (x.delta * (k - j)));
             while (k > j)
             {
-                T[x.d][x[k-1]] = (float)tt;
+                T[x.d][x[k - 1]] = (float)tt;
                 double ss = tt * x.delta + S[x.d][x[k]];
-                S[x.d][x[k-1]] = (float)ss;
+                S[x.d][x[k - 1]] = (float)ss;
                 k--;
             }
         }
+        // One arcane summatioon
         for (unsigned k = 0; k < x.points; k++)
             L[x[k]] += T[x.d][x[k]];
     }
 
-    // check the math
+    // Parameters ranges to scale errors
     void bounding_box()
     {
         for (unsigned i = 0; i < Dimension; i++)
@@ -301,22 +306,23 @@ private:
             }
     }
 
-    void differential_error(const Line &x)
+    // check the math
+    void verify_differential(const Line &x)
     {
         double tt, s_diff, t_diff;
 
         for (unsigned k = 0; k < x.points - 1; k++)
         {
-            if (this->density[x[k+1]] > 0 && this->density[x[k]] > 0)
+            if (this->density[x[k + 1]] > 0 && this->density[x[k]] > 0)
             {
-                tt = -2.0 * ((std::log(this->density[x[k+1]]) - std::log(this->density[x[k]])) / squared(x.delta) - S[x.d][x[k]] / x.delta);
+                tt = -2.0 * ((std::log(this->density[x[k + 1]]) - std::log(this->density[x[k]])) / squared(x.delta) - S[x.d][x[k]] / x.delta);
                 t_diff = std::abs(T[x.d][x[k]] - tt) / (t_max - t_min);
-                if (t_diff > _differential_error)
-                    _differential_error = t_diff;
+                if (t_diff > differential_error)
+                    differential_error = t_diff;
             }
             s_diff = std::abs((S[x.d][x[k + 1]] - (-T[x.d][x[k]] * x.delta + S[x.d][x[k]])) / (s_max - s_min));
-            if (s_diff > _differential_error)
-                _differential_error = s_diff;
+            if (s_diff > differential_error)
+                differential_error = s_diff;
         }
     }
 

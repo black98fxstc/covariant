@@ -6,7 +6,8 @@
 
 #include "Covariant.hpp"
 
-struct Params {
+struct Params
+{
     std::string filename;
     unsigned dimension;
     unsigned grid;
@@ -20,7 +21,8 @@ struct Params {
 };
 
 template <unsigned Dimension>
-int do_it(const Params &params, unsigned grid_size) {
+int do_it(const Params &params, unsigned grid_size)
+{
     TestData<Dimension> events;
     std::string ext = params.ascii ? ".txt" : ".dat";
     std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
@@ -39,6 +41,7 @@ int do_it(const Params &params, unsigned grid_size) {
     laplace.verbose = params.verbose;
     for (const auto &e : events)
         laplace.event(e);
+    std::cout << "Found " << events.size() << " valid events..." << std::endl;
 
     std::cout << "Analyzing the sample..." << std::endl;
     laplace.analyze(params.smooth, params.threshold);
@@ -51,21 +54,27 @@ int do_it(const Params &params, unsigned grid_size) {
     unsigned found = laplace.cluster(params.threshold);
     std::vector<unsigned short> classes;
     classes.reserve(events.size());
-    for (const auto& e : events)
+    for (const auto &e : events)
         classes.push_back(laplace.classify(e));
     std::cout << "Found " << found << " clusters." << std::endl;
 
-    if (params.ascii) {
+    if (params.ascii)
+    {
         std::ofstream out(params.filename + ".cluster");
-        if (!out) {
+        if (!out)
+        {
             std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
             return 1;
         }
-        for (auto c : classes) out << c << "\n";
+        for (auto c : classes)
+            out << c << "\n";
         out.close();
-    } else {
+    }
+    else
+    {
         std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
-        if (!out) {
+        if (!out)
+        {
             std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
             return 1;
         }
@@ -85,18 +94,7 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
 
     // Add the command-line options.
-    options.add_options()
-    ("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
-    ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
-    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-    ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
-    ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
-    ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
-    ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
-    ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
-    ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
-    ("h,help", "Print usage");
+    options.add_options()("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -118,20 +116,32 @@ int main(int argc, char *argv[])
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
 
-    if (result.count("grid")) {
+    if (result.count("grid"))
+    {
         params.grid = result["grid"].as<unsigned>();
-    } else {
-        switch (params.dimension) {
-            case 2:  params.grid = 256; break;
-            case 3:  params.grid = 64;  break;
-            case 4:  params.grid = 32;  break;
-            default: params.grid = 32;  break;
+    }
+    else
+    {
+        switch (params.dimension)
+        {
+        case 2:
+            params.grid = 256;
+            break;
+        case 3:
+            params.grid = 64;
+            break;
+        case 4:
+            params.grid = 32;
+            break;
+        default:
+            params.grid = 32;
+            break;
         }
     }
 
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid 
-              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold 
-              << " antialias=" << (params.antialias ? "on" : "off") 
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
+              << " antialias=" << (params.antialias ? "on" : "off")
               << " verify=" << (params.verify ? "on" : "off") << std::endl;
     switch (params.dimension)
     {

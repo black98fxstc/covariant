@@ -8,6 +8,7 @@
 #include <iostream>
 #include <algorithm>
 #include <functional>
+#include <thread>
 #include <fftw3.h>
 #include <cctype>
 #include <assert.h>
@@ -17,26 +18,29 @@ class Weighty : public Dimensions<Dimension>
 {
 private:
     size_t _events = 0;
-    fftw_r2r_kind kind[Dimension];
-    void *DCT;
+    fftw_r2r_kind kind[Dimension]; // Array of FFTW transform kinds for each dimension
+    fftwf_plan DCT;                // FFTW plan for float data
     unsigned long fft_normalizer = 1;
+    std::array<std::vector<double>, Dimension> kernel;
 
 public:
+    const double pi = 3.14159265358979323846;
+
     bool visualize = false, verbose = false, antialias = true, verify = true;
 
     typedef std::array<float, Dimension> Event;
 
-    size_t size()
+    size_t inline size()
     {
         return Dimensions<Dimension>::size();
     }
 
-    size_t stride(unsigned i)
+    size_t inline stride(unsigned i)
     {
         return Dimensions<Dimension>::stride(i);
     }
 
-    unsigned points(unsigned i)
+    unsigned inline points(unsigned i)
     {
         return Dimensions<Dimension>::points(i);
     }
@@ -54,14 +58,13 @@ public:
             if (ascii)
             {
                 std::ofstream out(filename);
-                if (!out) return false;
+                if (!out)
+                    return false;
 
                 for (const auto &event : *this)
                 {
                     for (unsigned i = 0; i < Dimension; ++i)
-                    {
                         out << (i == 0 ? "" : " ") << event[i];
-                    }
                     out << "\n";
                 }
                 return out.good();
@@ -69,14 +72,13 @@ public:
             else
             {
                 std::ofstream out(filename, std::ios::binary | std::ios::trunc);
-                if (!out) return false;
+                if (!out)
+                    return false;
 
                 size_t count = this->size();
                 out.write(reinterpret_cast<const char *>(&count), sizeof(count));
                 if (count > 0)
-                {
                     out.write(reinterpret_cast<const char *>(this->data()), count * sizeof(Event));
-                }
                 return out.good();
             }
         }
@@ -86,12 +88,14 @@ public:
             if (ascii)
             {
                 std::ifstream in(filename);
-                if (!in) return false;
+                if (!in)
+                    return false;
 
                 this->clear();
 
                 // Skip leading whitespace and check if the first line looks like a header
-                while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek()))) in.ignore();
+                while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek())))
+                    in.ignore();
                 int first = in.peek();
                 if (first != EOF && !std::isdigit(static_cast<unsigned char>(first)) && first != '-' && first != '+' && first != '.')
                 {
@@ -105,7 +109,8 @@ public:
                 {
                     for (unsigned i = 1; i < Dimension; ++i)
                     {
-                        if (!(in >> event[i])) return false; // Incomplete event record
+                        if (!(in >> event[i]))
+                            return false; // Incomplete event record
                     }
                     this->push_back(event);
                 }
@@ -114,17 +119,17 @@ public:
             else
             {
                 std::ifstream in(filename, std::ios::binary);
-                if (!in) return false;
+                if (!in)
+                    return false;
 
                 size_t count = 0;
                 in.read(reinterpret_cast<char *>(&count), sizeof(count));
-                if (!in) return false;
+                if (!in)
+                    return false;
 
                 this->resize(count);
                 if (count > 0)
-                {
                     in.read(reinterpret_cast<char *>(this->data()), count * sizeof(Event));
-                }
                 return in.good();
             }
         }
@@ -134,23 +139,18 @@ public:
     Function<Dimension, float> density = Function<Dimension, float>(*this);
     Function<Dimension, float> quantile = Function<Dimension, float>(*this);
     Function<Dimension, unsigned short> klass = Function<Dimension, unsigned short>(*this);
-
     MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
 
     void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
     {
         // Apply a Gaussian filter to the input function using the DCT.
-        // The radius is specified as a fraction of the total size of the grid.
+        // The radius is specified as a fraction of full scale.
+        // DCT because smoothing the even half-wave means no probability spill across the end points
         Function<Dimension, float> cosine = Function<Dimension, float>(*this);
-        fftwf_execute_r2r((fftwf_plan)DCT, input.data, cosine.data);
-        double **kernel = new double *[Dimension];
+        fftwf_execute_r2r(DCT, input.data, cosine.data);
         for (unsigned i = 0; i < Dimension; i++)
-        {
-            const double pi = 3.14159265358979323846;
-            double *k = kernel[i] = new double[points(i)];
             for (unsigned j = 0; j < points(i); j++)
-                k[j] = exp(-2.0 * squared(j * radius * pi));
-        }
+                kernel[i][j] = exp(-2.0 * squared(j * radius * pi));
         for (size_t x = 0; x < size(); x++)
         {
             double k = 1.0;
@@ -161,10 +161,7 @@ public:
             }
             cosine[x] *= k;
         }
-        fftwf_execute_r2r((fftwf_plan)DCT, cosine.data, output.data);
-        for (unsigned i = 0; i < Dimension; i++)
-            free(kernel[i]);
-        delete[] kernel;
+        fftwf_execute_r2r(DCT, cosine.data, output.data);
         if (normalize)
             for (unsigned x = 0; x < size(); x++)
                 output[x] /= (float)fft_normalizer;
@@ -212,8 +209,6 @@ public:
         return true;
     }
 
-    static constexpr Coordinate<Dimension> OOB = Coordinate<Dimension>(nullptr);
-
     bool locate(const Event &event, Coordinate<Dimension> &coord)
     {
         for (unsigned i = 0; i < Dimension; i++)
@@ -238,8 +233,6 @@ public:
         if (smoothing > 0.0f)
         {
             filter(weight, density, smoothing);
-            float x = density[0];
-            density[0] = x;
             for (size_t x = 0; x < size(); x++)
                 if (density[x] < 0.0f)
                     density[x] = 0.0f;
@@ -266,6 +259,7 @@ public:
             for (unsigned i = 0; i < Dimension; i++)
                 P[i][coord[i]] += density[x];
         }
+
         if (this->visualize)
         {
             density.write("density.bin");
@@ -273,21 +267,16 @@ public:
         }
     }
 
-    void trim(std::vector<float> &data, float threshold)
-    {
-        trim(data.data(), threshold);
-    }
-
-    void trim(Function<Dimension, float> &func, float threshold)
-    {
-        trim(func.data, threshold);
-    }
-
     void trim(float *data, float threshold)
     {
         for (size_t x = 0; x < size(); x++)
             if (quantile[x] < threshold)
                 data[x] = std::numeric_limits<float>::quiet_NaN();
+    }
+
+    void trim(Function<Dimension, float> &func, float threshold)
+    {
+        trim(func.data, threshold);
     }
 
     Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
@@ -300,11 +289,25 @@ public:
         init();
     }
 
+    virtual ~Weighty()
+    {
+        if (DCT)
+        {
+            fftwf_destroy_plan((fftwf_plan)DCT);
+        }
+    }
+
 private:
     inline double squared(double x) { return x * x; };
 
     void init()
     {
+        if (fftwf_init_threads())
+            fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));
+
+        for (unsigned i = 0; i < Dimension; i++)
+            kernel[i].resize(points(i));
+
         int fftw_n[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
         {
@@ -312,9 +315,10 @@ private:
             fft_normalizer *= 2 * (points(i) - 1);
             fftw_n[i] = points(i);
         }
-        if (Dimensions<Dimension>::column_major)
+        if (this->column_major) // Use 'this->' for clarity when accessing base class members
             std::reverse(fftw_n, fftw_n + Dimension);
-        DCT = (void *)fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, 0);
+
+        DCT = fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, 0);
         assert(DCT);
     }
 };

@@ -15,14 +15,13 @@ template <unsigned Dimension>
 class TestData : public Weighty<Dimension>::Events
 {
     class RandomEvent
-    {
+    { 
     protected:
-        inline std::mt19937 &rng()
+        static inline std::mt19937 &rng()
         {
-            thread_local std::random_device rd;
-            thread_local std::seed_seq seq{rd(), rd(), rd(), rd()};
-            thread_local std::mt19937 gen(seq);
-            thread_local std::shuffle_order_engine<std::mt19937, 256> shuffle_gen(gen);
+            static thread_local std::random_device rd;
+            static thread_local std::seed_seq seq{rd(), rd(), rd(), rd()};
+            static thread_local std::mt19937 gen(seq);
             return gen;
         }
         typename std::uniform_real_distribution<float>::param_type stddev_param{0.0125f, 0.1f};
@@ -96,10 +95,11 @@ public:
         {
             // random and different dimensions
             X = this->dimension_distribution(this->rng());
-            do {
+            do
+            {
                 Y = this->dimension_distribution(this->rng());
             } while (X == Y);
- 
+
             for (unsigned i = 0; i < Dimension; i++)
                 mean[i] = this->uniform_distribution(this->rng(), this->mean_param);
             // random orientation and size

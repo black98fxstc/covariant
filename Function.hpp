@@ -53,7 +53,7 @@ public:
     Function(Dimensions<Dimension> &dimensions) : dimensions(dimensions), data(nullptr)
     {
         // The () at the end value-initializes the array (zeroes it for primitives)
-        data = new Type[dimensions.size()](); 
+        data = new Type[dimensions.size()]();
         assert(data != nullptr);
     }
 
@@ -63,11 +63,11 @@ public:
     }
 
     // Rule of Five: Handle move and disable copy to prevent double-free
-    Function(const Function&) = delete;
-    Function& operator=(const Function&) = delete;
+    Function(const Function &) = delete;
+    Function &operator=(const Function &) = delete;
 
-    Function(Function&& other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
-    Function& operator=(Function&&) = delete; // Cannot rebind reference member
+    Function(Function &&other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
+    Function &operator=(Function &&) = delete; // Cannot rebind reference member
 };
 
 /**
@@ -116,23 +116,24 @@ public:
 
     Function(Dimensions<Dimension> &dimensions) : dimensions(dimensions), data(nullptr)
     {
-        data = static_cast<float*>(fftwf_malloc(dimensions.size() * sizeof(float)));
+        data = static_cast<float *>(fftwf_malloc(dimensions.size() * sizeof(float)));
         assert(data != nullptr);
         std::fill(data, data + dimensions.size(), 0.0f);
     }
 
     ~Function()
     {
-        if (data) {
+        if (data)
+        {
             fftwf_free(data);
         }
     }
 
-    Function(const Function&) = delete;
-    Function& operator=(const Function&) = delete;
+    Function(const Function &) = delete;
+    Function &operator=(const Function &) = delete;
 
-    Function(Function&& other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
-    Function& operator=(Function&&) = delete;
+    Function(Function &&other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
+    Function &operator=(Function &&) = delete;
 };
 
 template <unsigned Dimension, typename Type>

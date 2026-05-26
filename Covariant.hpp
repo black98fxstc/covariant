@@ -17,11 +17,11 @@ template <unsigned Dimension>
 class Covariant : public Laplacian<Dimension>
 {
 private:
-    float _tot_R = 0.0f;
+    float total_R = 0.0f;
     float s_max = std::numeric_limits<float>::lowest(), s_min = std::numeric_limits<float>::max();
     float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
-    double _differential_error = 0.0;
-    double _factor_error = 0.0;
+    double differential_error = 0.0;
+    double factor_error = 0.0;
 
     FunctionVector<Dimension, float> f = FunctionVector<Dimension, float>(*this);
     FunctionMatrix<Dimension, float> s = FunctionMatrix<Dimension, float>(*this);
@@ -36,26 +36,34 @@ protected:
     MarginalFunction<Dimension, float> Q = MarginalFunction<Dimension, float>(*this);
 
 public:
-    void analyse(float smoothing = .01f, float threshold = 0.001f)
+    void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
+        total_R = 0.0f;
+        differential_error = 0.0;
+        factor_error = 0.0;
+        s_max = std::numeric_limits<float>::lowest();
+        s_min = std::numeric_limits<float>::max();
+        t_max = std::numeric_limits<float>::lowest();
+        t_min = std::numeric_limits<float>::max();
+
         this->prepare(smoothing);
 
         // Find the basis functions
         this->for_each_line([this](const Line &fiber)
-            { this->basis_functions(fiber); });
+                            { this->basis_functions(fiber); });
         // verify that they factor the density
         if (this->verify)
             this->verify_factorization();
 
         // Find the natural parameters
         this->for_each_line([this](const Line &fiber)
-            { this->natural_parameters(fiber); });
+                            { this->natural_parameters(fiber); });
         // Evaluate the solutions to the differential equations
         if (this->verify)
         {
             this->bounding_box();
             this->for_each_line([this](const Line &fiber)
-                { this->differential_error(fiber); });
+                                { this->verify_differential(fiber); });
         }
 
         // Supress ringing
@@ -67,7 +75,7 @@ public:
                     this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
                     this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
                 }
-            }
+        }
 
         // Lots of arcane summations
         Coordinate<Dimension> coord(*this);
@@ -106,7 +114,7 @@ public:
                 this->L[x] += T[i][x];
             R[x] *= 0.5f; // _density[x] / (float)_size;
             if (this->quantile[x] >= threshold)
-                _tot_R += R[x];
+                total_R += R[x];
         }
 
         // remove outliers
@@ -122,7 +130,7 @@ public:
                 this->trim(t[i][j], threshold);
             }
         }
-        
+
         // files for MATLAB
         if (this->visualize)
         {
@@ -142,7 +150,7 @@ public:
 
     double factorProbability()
     {
-        return _factor_error;
+        return factor_error;
     }
 
     Covariant(const unsigned *points, bool column_major = false) : Laplacian<Dimension>(points, column_major) {}
@@ -178,7 +186,7 @@ private:
             for (unsigned i = 0; i < Dimension; i++)
                 product *= f[i][x];
             double error = std::abs(product - this->density[x]);
-            _factor_error += error * this->density[x];
+            factor_error += error * this->density[x];
         }
     }
 
@@ -210,7 +218,7 @@ private:
                 if (f[i][x[j]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = -2.0 * ((std::log(f[i][x[j]]) - std::log(f[i][x[k]])) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / (x.delta * (j - k)));
+                    tt = -2.0 * ((std::log((double)f[i][x[j]]) - std::log((double)f[i][x[k]])) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / (x.delta * (j - k)));
                 while (k < j)
                 {
                     t[i][x.d][x[k]] = (float)tt;
@@ -230,7 +238,7 @@ private:
                 if (f[i][x[j]] <= 0.0 || f[i][x[k]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = 2.0 * ((std::log(f[i][x[k]]) - std::log(f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
+                    tt = 2.0 * ((std::log((double)f[i][x[k]]) - std::log((double)f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
                 while (k > j)
                 {
                     t[i][x.d][x[k - 1]] = (float)tt;
@@ -242,7 +250,7 @@ private:
         }
     }
 
-    // check the math
+    // Parameters ranges to scale errors
     void bounding_box()
     {
         for (unsigned i = 0; i < Dimension; i++)
@@ -260,7 +268,8 @@ private:
                 }
     }
 
-    void differential_error(const Line &x)
+    // check the math
+    void verify_differential(const Line &x)
     {
         double tt, s_diff, t_diff;
         for (unsigned int i = 0; i < Dimension; i++)
@@ -271,12 +280,12 @@ private:
                 {
                     tt = -2.0 * ((std::log(f[i][x[k + 1]]) - std::log(f[i][x[k]])) / squared(x.delta) - s[i][x.d][x[k]] / x.delta);
                     t_diff = std::abs((tt - t[i][x.d][x[k]]) / (t_max - t_min));
-                    if (t_diff > _differential_error)
-                        _differential_error = t_diff;
+                    if (t_diff > differential_error)
+                        differential_error = t_diff;
                 }
                 s_diff = std::abs((s[i][x.d][x[k + 1]] - (-t[i][x.d][x[k]] * x.delta + s[i][x.d][x[k]])) / (s_max - s_min));
-                if (s_diff > _differential_error)
-                    _differential_error = s_diff;
+                if (s_diff > differential_error)
+                    differential_error = s_diff;
             }
         }
     }

@@ -3,9 +3,11 @@
 #include <fstream>
 #include <functional>
 #include <cxxopts.hpp>
+
 #include "Covariant.hpp"
 
-struct Params {
+struct Params
+{
     std::string filename;
     unsigned dimension;
     unsigned cluster;
@@ -41,11 +43,15 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
     if (result.count("cluster"))
     {
         std::vector<unsigned short> classes(events.size());
-        if (params.ascii) {
+        if (params.ascii)
+        {
             std::ifstream in(params.filename + ".cluster");
-            for (unsigned i = 0; i < events.size(); i++) in >> classes[i];
+            for (unsigned i = 0; i < events.size(); i++)
+                in >> classes[i];
             in.close();
-        } else {
+        }
+        else
+        {
             std::ifstream in(params.filename + ".cluster", std::ios::binary);
             in.read(reinterpret_cast<char *>(classes.data()), events.size() * sizeof(unsigned short));
             in.close();
@@ -67,11 +73,11 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
             if (covariant.event(e))
                 valid_events++;
     }
-    std::cout << "Found " << events.size() << " events..." << std::endl;
+    std::cout << "Found " << events.size() << " valid events..." << std::endl;
 
     std::cout << "Analyzing the sample..." << std::endl;
 
-    covariant.analyse(params.smooth, params.threshold);
+    covariant.analyze(params.smooth, params.threshold);
     if (covariant.factorProbability() > .0001)
     {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl; // No change here, it's a method call
@@ -91,15 +97,19 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
         unsigned found = covariant.cluster(params.threshold);
         std::vector<unsigned short> classes;
         classes.reserve(events.size());
-        for (const auto& e : events)
+        for (const auto &e : events)
             classes.push_back(covariant.classify(e));
         std::cout << "Found " << found << " clusters..." << std::endl;
 
-        if (params.ascii) {
+        if (params.ascii)
+        {
             std::ofstream out(params.filename + ".cluster");
-            for (auto c : classes) out << c << "\n";
+            for (auto c : classes)
+                out << c << "\n";
             out.close();
-        } else {
+        }
+        else
+        {
             std::ofstream out(params.filename + ".cluster", std::ios::binary | std::ios::trunc);
             out.write(reinterpret_cast<const char *>(classes.data()), classes.size() * sizeof(unsigned short));
             out.close();
@@ -107,7 +117,7 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
         std::cout << "Saved to file " << params.filename + ".cluster" << std::endl;
     }
     return 0; // Return 0 on success
- }
+}
 
 int main(int argc, char *argv[])
 {
@@ -117,19 +127,7 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "Generate test data for the Covariant class");
 
     // Add the command-line options.
-    options.add_options()
-        ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
-        ("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))
-        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
-        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
-        ("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))
-        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
-        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
-        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
-        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
-        ("h,help", "Print usage");
+    options.add_options()("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -145,14 +143,26 @@ int main(int argc, char *argv[])
     params.dimension = result["dimension"].as<unsigned>();
     params.cluster = result["cluster"].as<unsigned>();
 
-    if (result.count("grid")) {
+    if (result.count("grid"))
+    {
         params.grid = result["grid"].as<unsigned>();
-    } else {
-        switch (params.dimension) {
-            case 2:  params.grid = 256; break;
-            case 3:  params.grid = 64; break;
-            case 4:  params.grid = 32;  break;
-            default: params.grid = 32;  break;
+    }
+    else
+    {
+        switch (params.dimension)
+        {
+        case 2:
+            params.grid = 256;
+            break;
+        case 3:
+            params.grid = 64;
+            break;
+        case 4:
+            params.grid = 32;
+            break;
+        default:
+            params.grid = 32;
+            break;
         }
     }
 
@@ -164,8 +174,8 @@ int main(int argc, char *argv[])
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
 
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename 
-              << " smooth=" << params.smooth << " threshold=" << params.threshold 
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename
+              << " smooth=" << params.smooth << " threshold=" << params.threshold
               << " antialias=" << (params.antialias ? "on" : "off")
               << " verify=" << (params.verify ? "on" : "off") << std::endl;
     std::cout << "Analyzing events in " << params.dimension << " dimensions..." << std::endl;

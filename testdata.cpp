@@ -6,7 +6,8 @@
 
 #include "Covariant.hpp"
 
-struct Params {
+struct Params
+{
     std::string filename;
     unsigned dimension;
     unsigned normal;
@@ -18,18 +19,23 @@ struct Params {
 };
 
 template <unsigned Dimension>
-int do_it(const Params &params) {
+int do_it(const Params &params)
+{
     TestData<Dimension> test_data;
     bool is_ascii = !params.ascii;
-    if (params.convert) {
+    if (params.convert)
+    {
         std::string source_ext = is_ascii ? ".txt" : ".dat";
-        std::cout << "Converting " << params.filename << source_ext << " to " 
+        std::cout << "Converting " << params.filename << source_ext << " to "
                   << (params.ascii ? "ASCII" : "binary") << "..." << std::endl;
-        if (!test_data.read(params.filename + source_ext, is_ascii)) {
+        if (!test_data.read(params.filename + source_ext, is_ascii))
+        {
             std::cerr << "Error: Could not read source file for conversion: " << params.filename + source_ext << std::endl;
             return 1;
         }
-    } else {
+    }
+    else
+    {
         std::cout << "Program running with normal=" << params.normal << " snake=" << params.snake << " exponential=" << params.exponential << std::endl;
         std::cout << "Generating " << params.events << " events in " << params.dimension << " dimensions..." << std::endl;
         typename TestData<Dimension>::RandomSample test_sample;
@@ -56,16 +62,7 @@ int main(int argc, char *argv[])
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
 
     // Add the command-line options.
-    options.add_options()
-        ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
-        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-        ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
-        ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
-        ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
-        ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
-        ("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))
-        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
-        ("h,help", "Print usage");
+    options.add_options()("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -88,9 +85,12 @@ int main(int argc, char *argv[])
 
     switch (params.dimension)
     {
-    case 2: return do_it<2>(params);
-    case 3: return do_it<3>(params);
-    case 4: return do_it<4>(params);
+    case 2:
+        return do_it<2>(params);
+    case 3:
+        return do_it<3>(params);
+    case 4:
+        return do_it<4>(params);
     default:
         std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;
         return 1;

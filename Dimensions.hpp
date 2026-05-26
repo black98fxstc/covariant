@@ -78,7 +78,7 @@ public:
     {
         if (column_major)
         {
-            for (unsigned i = Dimension; i-- > 0; )
+            for (unsigned i = Dimension; i-- > 0;)
             {
                 _stride[i] = _size;
                 _points[i] = p[i];
@@ -100,7 +100,7 @@ public:
     {
         if (column_major)
         {
-            for (unsigned i = Dimension; i-- > 0; )
+            for (unsigned i = Dimension; i-- > 0;)
             {
                 _stride[i] = _size;
                 _points[i] = grid + 1;
@@ -135,27 +135,15 @@ public:
 
     operator size_t() const
     {
-        unsigned long x = 0;
+        size_t x = 0;
         for (unsigned i = 0; i < Dimension; i++)
             x += (*this)[i] * dimensions->stride(i);
         return x;
     }
 
-    Coordinate<Dimension> &operator=(const Coordinate<Dimension> &other)
-    {
-        if (this != &other)
-        {
-            std::copy(other.begin(), other.end(), this->begin());
-        }
-        return *this;
-    }
-
     Coordinate(Dimensions<Dimension> &dimensions) : dimensions(&dimensions) {}
 
-    // Allows creation of the OOB sentinel
-    constexpr Coordinate(std::nullptr_t) : std::array<unsigned, Dimension>{}, dimensions(nullptr) 
-    {
-        for (auto &val : *this) val = std::numeric_limits<unsigned>::max();
-    }
+    // Coordinates are fixed to their specific dimension instance
+    Coordinate(const Coordinate<Dimension> &) = delete;
+    Coordinate &operator=(const Coordinate<Dimension> &) = delete;
 };
-
