@@ -265,7 +265,9 @@ colormap(cmap);
 %clim([-1 1]);
 axis([0 1 0 1]);
 axis square;
-title('Class');
+title('Classification Map');
+
+% The C++ caller will handle the 'exportgraphics' command via the -batch string.
 
 % figure;
 % tiledlayout(2,2);

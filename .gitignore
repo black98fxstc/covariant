@@ -7,8 +7,7 @@ norminv.cpp
 *.dat
 *.svg
 *.cluster
-covariant2
-covariant3
-
-laplacian
 testdata
+laplace
+riemann
+darwin

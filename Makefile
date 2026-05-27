@@ -3,7 +3,7 @@ CXXFLAGS = -std=c++20 -Wall -Wextra -I. -g
 LIBS = -lfftw3f_threads -lfftw3f -lfftw3 -lm
 HEADERS = Dimensions.hpp Function.hpp Weighty.hpp Laplace.hpp Covariant.hpp TestData.hpp
 
-all: riemann laplace testdata
+all: riemann laplace testdata darwin
 
 testdata: testdata.o $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o testdata testdata.o $(LIBS)
@@ -14,15 +14,19 @@ laplace: laplace.o $(HEADERS)
 riemann: riemann.o $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o riemann riemann.o $(LIBS)
 
+darwin: darwin.o $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o darwin darwin.o $(LIBS)
+
 testdata.o: $(HEADERS)
 laplace.o: $(HEADERS)
 riemann.o: $(HEADERS)
+darwin.o: $(HEADERS)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.o laplace riemann testdata
+	rm -f *.o laplace riemann testdata darwin
 	rm -f *.exe
 	
 .PHONY: all clean
