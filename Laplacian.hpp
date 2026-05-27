@@ -333,5 +333,5 @@ private:
         }
     }
 
-    double squared(double x) { return x * x; };
+    double squared(double x) const { return x * x; };
 };
