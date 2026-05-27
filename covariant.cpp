@@ -18,6 +18,7 @@ struct Params
     bool verbose;
     bool antialias;
     bool verify;
+    bool grow;
     bool ascii;
 };
 
@@ -46,8 +47,7 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
         if (params.ascii)
         {
             std::ifstream in(params.filename + ".cluster");
-            for (unsigned i = 0; i < events.size(); i++)
-                in >> classes[i];
+            for (unsigned i = 0; i < events.size(); i++) in >> classes[i];
             in.close();
         }
         else
@@ -82,19 +82,19 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
     {
         std::cout << "Probability factoring is unusually bad " << covariant.factorProbability() << std::endl; // No change here, it's a method call
     }
-    else if (covariant.differentialEquation() > .0001)
+    else if (covariant.differentialError() > .0001)
     {
-        std::cout << "Differential equation solution is unusually bad " << covariant.differentialEquation() << std::endl;
+        std::cout << "Differential equation solution is unusually bad " << covariant.differentialError() << std::endl;
     }
     else
     {
-        std::cout << "Consistency checkes passed..." << std::endl;
+        std::cout << "Consistency checks passed..." << std::endl;
     }
 
     if (!result.count("cluster"))
     {
         std::cout << "Performing Laplacian clustering..." << std::endl;
-        unsigned found = covariant.cluster(params.threshold);
+        unsigned found = covariant.cluster(params.threshold, params.grow);
         std::vector<unsigned short> classes;
         classes.reserve(events.size());
         for (const auto &e : events)
@@ -104,8 +104,7 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
         if (params.ascii)
         {
             std::ofstream out(params.filename + ".cluster");
-            for (auto c : classes)
-                out << c << "\n";
+            for (auto c : classes) out << c << "\n";
             out.close();
         }
         else
@@ -127,7 +126,20 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "Generate test data for the Covariant class");
 
     // Add the command-line options.
-    options.add_options()("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
+    options.add_options()
+        ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false"))
+        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
+        ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
+        ("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -171,13 +183,15 @@ int main(int argc, char *argv[])
     params.visual = result["visual"].as<bool>();
     params.antialias = result["antialias"].as<bool>();
     params.verify = result["verify"].as<bool>();
+    params.grow = result["grow"].as<bool>();
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
 
     std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename
               << " smooth=" << params.smooth << " threshold=" << params.threshold
               << " antialias=" << (params.antialias ? "on" : "off")
-              << " verify=" << (params.verify ? "on" : "off") << std::endl;
+              << " verify=" << (params.verify ? "on" : "off")
+              << " grow=" << (params.grow ? "on" : "off") << std::endl;
     std::cout << "Analyzing events in " << params.dimension << " dimensions..." << std::endl;
 
     switch (params.dimension)

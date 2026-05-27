@@ -45,6 +45,19 @@ public:
         s_min = std::numeric_limits<float>::max();
         t_max = std::numeric_limits<float>::lowest();
         t_min = std::numeric_limits<float>::max();
+        f.zero();
+        s.zero();
+        t.zero();
+        q.zero();
+        r.zero();
+        S.zero();
+        T.zero();
+        R.zero();
+        Q.zero();
+        this->P.zero();
+        this->L.zero();
+        this->klass.zero();
+        this->status.zero();
 
         this->prepare(smoothing);
 
@@ -163,16 +176,16 @@ private:
     // factoring the density
     void basis_functions(const Line &x)
     {
-        double marginal = (this->density(x[0]) + this->density(x[x.points - 1])) / 2.0;
+        double marginal = (this->density[x[0]] + this->density[x[x.points - 1]]) / 2.0;
         for (unsigned i = 1; i < x.points - 1; i++)
-            marginal += this->density(x[i]);
+            marginal += this->density[x[i]];
         // keep it real in the denominator
         if (marginal < 1.0 / (double)this->events())
             for (unsigned i = 0; i < x.points; i++)
                 f[x.d][x[i]] = 0.0f;
         else
             for (unsigned i = 0; i < x.points; i++)
-                f[x.d][x[i]] = this->density(x[i]) / marginal;
+                f[x.d][x[i]] = this->density[x[i]] / marginal;
     }
 
     // check that it actually factors the density
@@ -290,5 +303,5 @@ private:
         }
     }
 
-    inline double squared(double x) { return x * x; };
+    double squared(double x) { return x * x; };
 };

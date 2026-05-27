@@ -14,7 +14,7 @@ struct Line
     unsigned d;
     unsigned points;
 
-    size_t inline operator[](unsigned i) const
+    size_t operator[](unsigned i) const
     {
         return base + i * stride;
     }
@@ -33,22 +33,22 @@ public:
     const unsigned dimension = Dimension;
     const bool column_major;
 
-    size_t inline size() const
+    size_t size() const
     {
         return _size;
     }
 
-    unsigned inline points(unsigned i) const
+    unsigned points(unsigned i) const
     {
         return _points[i];
     }
 
-    const unsigned inline *points() const
+    const unsigned *points() const
     {
         return _points;
     }
 
-    size_t inline stride(unsigned i) const
+    size_t stride(unsigned i) const
     {
         return _stride[i];
     }
@@ -120,16 +120,24 @@ public:
 };
 
 template <unsigned Dimension>
-class Coordinate : public std::array<unsigned, Dimension>
+class Coordinate
 {
 private:
     Dimensions<Dimension> *dimensions;
+    std::array<unsigned, Dimension> indices;
 
 public:
-    Coordinate inline &operator=(const size_t x)
+    unsigned &operator[](size_t i) { return indices[i]; }
+    unsigned operator[](size_t i) const { return indices[i]; }
+    auto begin() { return indices.begin(); }
+    auto end() { return indices.end(); }
+    auto begin() const { return indices.begin(); }
+    auto end() const { return indices.end(); }
+
+    Coordinate &operator=(const size_t x)
     {
         for (unsigned i = 0; i < Dimension; i++)
-            (*this)[i] = (x / dimensions->stride(i)) % dimensions->points(i);
+            indices[i] = (x / dimensions->stride(i)) % dimensions->points(i);
         return *this;
     }
 
@@ -137,11 +145,11 @@ public:
     {
         size_t x = 0;
         for (unsigned i = 0; i < Dimension; i++)
-            x += (*this)[i] * dimensions->stride(i);
+            x += indices[i] * dimensions->stride(i);
         return x;
     }
 
-    Coordinate(Dimensions<Dimension> &dimensions) : dimensions(&dimensions) {}
+    Coordinate(Dimensions<Dimension> &dimensions) : dimensions(&dimensions), indices{} {}
 
     // Coordinates are fixed to their specific dimension instance
     Coordinate(const Coordinate<Dimension> &) = delete;

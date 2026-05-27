@@ -32,10 +32,7 @@ private:
             assigned
         };
 
-        Hypercube(Laplacian<Dimension> &laplace, size_t x) : laplace(laplace), x(x)
-        {
-            laplace.status[x] = unknown;
-        };
+        Hypercube(Laplacian<Dimension> &laplace, size_t x) : laplace(laplace), x(x) {}
 
         float density() const
         {
@@ -47,7 +44,7 @@ private:
             return laplace.quantile[x];
         }
 
-        float lapacian() const
+        float laplacian() const
         {
             return laplace.L[x];
         }
@@ -69,12 +66,13 @@ private:
         }
     };
 
+    std::vector<Hypercube> cubes;
+
     FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
     FunctionVector<Dimension, float> T = FunctionVector<Dimension, float>(*this);
 
 protected:
     Function<Dimension, float> L = Function<Dimension, float>(*this);
-    Function<Dimension, float> klass = Function<Dimension, float>(*this);
     Function<Dimension, typename Hypercube::State> status = Function<Dimension, typename Hypercube::State>(*this);
 
 public:
@@ -82,10 +80,15 @@ public:
 
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
-        // Reset error metrics and bounding box parameters for a fresh analysis
         differential_error = 0.0;
         s_max = std::numeric_limits<float>::lowest(); s_min = std::numeric_limits<float>::max();
         t_max = std::numeric_limits<float>::lowest(); t_min = std::numeric_limits<float>::max();
+        L.zero();
+        S.zero();
+        T.zero();
+        status.zero();
+        this->klass.zero();
+        this->P.zero();
 
         this->prepare(smoothing);
 
@@ -111,22 +114,21 @@ public:
         if (this->visualize)
         {
             L.write("laplacian.bin");
-            klass.write("classes.bin");
+            this->klass.write("classes.bin");
         }
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
     {
+        status.zero();
+        this->klass.zero();
+
         Coordinate coord(*this);
         unsigned clusters = 0;
-        std::vector<Hypercube> cubes;
-        cubes.reserve(this->size());
-        for (size_t x = 0; x < this->size(); x++)
-            cubes.emplace_back(*this, x);
         auto outliers = std::partition(cubes.begin(), cubes.end(), [threshold](const Hypercube &cube)
                                        { return cube.quantile() >= threshold; });
         auto precision = std::partition(cubes.begin(), outliers, [](const Hypercube &cube)
-                                        { return cube.lapacian() > 0.0f; });
+                                        { return cube.laplacian() > 0.0f; });
         // So that clusters are found in decending order by mode
         std::sort(cubes.begin(), precision, [](const Hypercube &a, const Hypercube &b)
                   { return a.density() > b.density(); });
@@ -190,12 +192,12 @@ public:
                         if (coord[i] < this->points(i) - 1 && status[x + this->stride(i)] == Hypercube::unknown)
                         {
                             status[x + this->stride(i)] = Hypercube::contiguous;
-                            klass[x + this->stride(i)] = it->cluster();
+                            this->klass[x + this->stride(i)] = it->cluster();
                         }
                         if (coord[i] > 0 && status[x - this->stride(i)] == Hypercube::unknown)
                         {
                             status[x - this->stride(i)] = Hypercube::contiguous;
-                            klass[x - this->stride(i)] = it->cluster();
+                            this->klass[x - this->stride(i)] = it->cluster();
                         }
                     }
                 }
@@ -214,18 +216,23 @@ public:
         if (this->visualize)
         {
             L.write("laplacian.bin");
-            klass.write("classes.bin");
+            this->klass.write("classes.bin");
         }
 
         return clusters;
     }
 
-    double differentialEquation()
+    double differentialError()
     {
         return differential_error;
     }
 
-    Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) {}
+    Laplacian(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) 
+    {
+        cubes.reserve(this->size());
+        for (size_t x = 0; x < this->size(); x++)
+            cubes.emplace_back(*this, x);
+    }
 
 private:
     // Compute second derivatibes of the density
@@ -326,5 +333,5 @@ private:
         }
     }
 
-    inline double squared(double x) { return x * x; };
+    double squared(double x) { return x * x; };
 };

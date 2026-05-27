@@ -17,6 +17,7 @@ struct Params
     bool verbose;
     bool antialias;
     bool verify;
+    bool grow;
     bool ascii;
 };
 
@@ -45,13 +46,13 @@ int do_it(const Params &params, unsigned grid_size)
 
     std::cout << "Analyzing the sample..." << std::endl;
     laplace.analyze(params.smooth, params.threshold);
-    if (laplace.differentialEquation() > .0001)
-        std::cout << "Differential equation solution is unusually bad " << laplace.differentialEquation() << std::endl;
+    if (laplace.differentialError() > .0001)
+        std::cout << "Differential equation solution is unusually bad " << laplace.differentialError() << std::endl;
     else
-        std::cout << "Consistency checkes passed..." << std::endl;
+        std::cout << "Consistency checks passed..." << std::endl;
 
     std::cout << "Performing Laplacian clustering..." << std::endl;
-    unsigned found = laplace.cluster(params.threshold);
+    unsigned found = laplace.cluster(params.threshold, params.grow);
     std::vector<unsigned short> classes;
     classes.reserve(events.size());
     for (const auto &e : events)
@@ -66,8 +67,7 @@ int do_it(const Params &params, unsigned grid_size)
             std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
             return 1;
         }
-        for (auto c : classes)
-            out << c << "\n";
+        for (auto c : classes) out << c << "\n";
         out.close();
     }
     else
@@ -94,7 +94,19 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
 
     // Add the command-line options.
-    options.add_options()("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Enable visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
+    options.add_options()
+        ("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false"))
+        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
+        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
+        ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
+        ("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -113,36 +125,29 @@ int main(int argc, char *argv[])
     params.visual = result["visual"].as<bool>();
     params.antialias = result["antialias"].as<bool>();
     params.verify = result["verify"].as<bool>();
+    params.grow = result["grow"].as<bool>();
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
 
     if (result.count("grid"))
     {
         params.grid = result["grid"].as<unsigned>();
-    }
-    else
+    } 
+    else 
     {
-        switch (params.dimension)
-        {
-        case 2:
-            params.grid = 256;
-            break;
-        case 3:
-            params.grid = 64;
-            break;
-        case 4:
-            params.grid = 32;
-            break;
-        default:
-            params.grid = 32;
-            break;
+        switch (params.dimension) {
+            case 2:  params.grid = 256; break;
+            case 3:  params.grid = 64;  break;
+            case 4:  params.grid = 32;  break;
+            default: params.grid = 32;  break;
         }
     }
 
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid
-              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
-              << " antialias=" << (params.antialias ? "on" : "off")
-              << " verify=" << (params.verify ? "on" : "off") << std::endl;
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid 
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold 
+              << " antialias=" << (params.antialias ? "on" : "off") 
+              << " verify=" << (params.verify ? "on" : "off")
+              << " grow=" << (params.grow ? "on" : "off") << std::endl;
     switch (params.dimension)
     {
     case 2:

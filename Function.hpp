@@ -12,21 +12,16 @@
 template <unsigned Dimension, typename Type>
 class Function
 {
+    // needed for FFTW
     template <unsigned Dimension2>
     friend class Weighty;
-
-    template <unsigned Dimension2>
-    friend class Laplacian;
-
-    template <unsigned Dimension2>
-    friend class Covariant;
 
 private:
     Dimensions<Dimension> &dimensions;
     Type *data;
 
 protected:
-    Type inline operator()(size_t x)
+    Type operator()(size_t x)
     {
         return data[x];
     }
@@ -35,6 +30,17 @@ public:
     Type &operator[](size_t x)
     {
         return data[x];
+    }
+
+    Function& operator=(const Function& other)
+    {
+        if (this != &other) std::copy(other.data, other.data + dimensions.size(), data);
+        return *this;
+    }
+
+    void zero()
+    {
+        std::fill(data, data + dimensions.size(), Type{});
     }
 
     void write(std::ostream &out) const
@@ -52,8 +58,7 @@ public:
 
     Function(Dimensions<Dimension> &dimensions) : dimensions(dimensions), data(nullptr)
     {
-        // The () at the end value-initializes the array (zeroes it for primitives)
-        data = new Type[dimensions.size()]();
+        data = new Type[dimensions.size()];
         assert(data != nullptr);
     }
 
@@ -64,7 +69,7 @@ public:
 
     // Rule of Five: Handle move and disable copy to prevent double-free
     Function(const Function &) = delete;
-    Function &operator=(const Function &) = delete;
+    // Function &operator=(const Function &) = delete;
 
     Function(Function &&other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
     Function &operator=(Function &&) = delete; // Cannot rebind reference member
@@ -79,18 +84,12 @@ class Function<Dimension, float>
     template <unsigned Dimension2>
     friend class Weighty;
 
-    template <unsigned Dimension2>
-    friend class Laplacian;
-
-    template <unsigned Dimension2>
-    friend class Covariant;
-
 private:
     Dimensions<Dimension> &dimensions;
     float *data;
 
 protected:
-    float inline operator()(size_t x)
+    float operator()(size_t x)
     {
         return data[x];
     }
@@ -99,6 +98,17 @@ public:
     float &operator[](size_t x)
     {
         return data[x];
+    }
+
+    Function& operator=(const Function<Dimension, float>& other)
+    {
+        if (this != &other) std::copy(other.data, other.data + dimensions.size(), data);
+        return *this;
+    }
+
+    void zero()
+    {
+        std::fill(data, data + dimensions.size(), 0.0f);
     }
 
     void write(std::ostream &out) const
@@ -118,19 +128,16 @@ public:
     {
         data = static_cast<float *>(fftwf_malloc(dimensions.size() * sizeof(float)));
         assert(data != nullptr);
-        std::fill(data, data + dimensions.size(), 0.0f);
     }
 
     ~Function()
     {
         if (data)
-        {
             fftwf_free(data);
-        }
     }
 
     Function(const Function &) = delete;
-    Function &operator=(const Function &) = delete;
+    // Function &operator=(const Function &) = delete;
 
     Function(Function &&other) noexcept : dimensions(other.dimensions), data(other.data) { other.data = nullptr; }
     Function &operator=(Function &&) = delete;
@@ -139,16 +146,13 @@ public:
 template <unsigned Dimension, typename Type>
 class FunctionVector : public std::vector<Function<Dimension, Type>>
 {
-    template <unsigned Dimension2>
-    friend class Weighty;
-
-    template <unsigned Dimension2>
-    friend class Laplacian;
-
-    template <unsigned Dimension2>
-    friend class Covariant;
-
 public:
+    void zero()
+    {
+        for (Function<Dimension, Type>&f : *this)
+            f.zero();
+    }
+
     FunctionVector(Dimensions<Dimension> &dimensions)
     {
         this->reserve(Dimension);
@@ -160,16 +164,14 @@ public:
 template <unsigned Dimension, typename Type>
 class FunctionMatrix : public std::vector<std::vector<Function<Dimension, Type>>>
 {
-    template <unsigned Dimension2>
-    friend class Weighty;
-
-    template <unsigned Dimension2>
-    friend class Laplacian;
-
-    template <unsigned Dimension2>
-    friend class Covariant;
-
 public:
+    void zero()
+    {
+        for (auto & fv : *this)
+            for (auto &f : fv)
+                f.zero();
+    }
+
     FunctionMatrix(Dimensions<Dimension> &dimensions)
     {
         this->reserve(Dimension);
@@ -183,25 +185,20 @@ public:
     }
 };
 
-template <unsigned Dimension>
-class Weighty;
-
 template <unsigned Dimension, typename Type>
-class MarginalFunction : std::array<std::vector<Type>, Dimension>
+class MarginalFunction : public std::vector<Function<Dimension, Type>>
 {
-    template <unsigned Dimension2>
-    friend class Weighty;
-
-    template <unsigned Dimension2>
-    friend class Laplacian;
-
-    template <unsigned Dimension2>
-    friend class Covariant;
-
 public:
+    void zero()
+    {
+        for (auto &f : *this)
+            f.zero();
+    }
+
     MarginalFunction(Dimensions<Dimension> &dimensions)
     {
+        this->reserve(Dimension);
         for (unsigned i = 0; i < Dimension; i++)
-            (*this)[i].resize(dimensions.points(i));
+            this->emplace_back(dimensions);
     }
 };

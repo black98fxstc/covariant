@@ -13,6 +13,7 @@
 #include <cctype>
 #include <assert.h>
 
+// Utilities for sampleing multi-dimensional data
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>
 {
@@ -23,29 +24,50 @@ private:
     unsigned long fft_normalizer = 1;
     std::array<std::vector<double>, Dimension> kernel;
 
+protected:
+    Function<Dimension, float> weight = Function<Dimension, float>(*this);
+    Function<Dimension, float> density = Function<Dimension, float>(*this);
+    Function<Dimension, float> quantile = Function<Dimension, float>(*this);
+    Function<Dimension, float> klass = Function<Dimension, float>(*this);
+    MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
+
 public:
     const double pi = 3.14159265358979323846;
 
     bool visualize = false, verbose = false, antialias = true, verify = true;
 
-    typedef std::array<float, Dimension> Event;
+    class Event
+    {
+    private:
+        std::array<float, Dimension> values;
 
-    size_t inline size()
+    public:
+        float &operator[](size_t i) { return values[i]; }
+        const float &operator[](size_t i) const { return values[i]; }
+        auto begin() { return values.begin(); }
+        auto end() { return values.end(); }
+        auto begin() const { return values.begin(); }
+        auto end() const { return values.end(); }
+        float *data() { return values.data(); }
+        const float *data() const { return values.data(); }
+    };
+
+    size_t size()
     {
         return Dimensions<Dimension>::size();
     }
 
-    size_t inline stride(unsigned i)
+    size_t stride(unsigned i)
     {
         return Dimensions<Dimension>::stride(i);
     }
 
-    unsigned inline points(unsigned i)
+    unsigned points(unsigned i)
     {
         return Dimensions<Dimension>::points(i);
     }
 
-    size_t inline events() const
+    size_t events() const
     {
         return Weighty<Dimension>::_events;
     }
@@ -135,11 +157,15 @@ public:
         }
     };
 
-    Function<Dimension, float> weight = Function<Dimension, float>(*this);
-    Function<Dimension, float> density = Function<Dimension, float>(*this);
-    Function<Dimension, float> quantile = Function<Dimension, float>(*this);
-    Function<Dimension, unsigned short> klass = Function<Dimension, unsigned short>(*this);
-    MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
+    void reset()
+    {
+        _events = 0;
+        weight.zero();
+        density.zero();
+        quantile.zero();
+        klass.zero();
+        P.zero();
+    }
 
     void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
     {
@@ -200,7 +226,7 @@ public:
                 }
                 else
                 {
-                    weight *= 1.0f - rem[i];
+                    weight *= 1.0 - rem[i];
                 }
             }
             this->weight[x + offset] += weight;
@@ -212,11 +238,11 @@ public:
     bool locate(const Event &event, Coordinate<Dimension> &coord)
     {
         for (unsigned i = 0; i < Dimension; i++)
-            if (event[i] < 0.0f || event[i] > 1.0f)
+            if (event[i] < 0.0f || event[i] >= 1.0f)
                 return false;
             else
                 coord[i] = static_cast<unsigned>(event[i] * (points(i) - 1));
-        return coord;
+        return true;
     }
 
     unsigned short classify(const Event &event)
@@ -239,14 +265,14 @@ public:
         }
         else
         {
-            std::copy(weight.data, weight.data + size(), density.data);
+            density = weight;
         }
 
-        std::vector<float> sorted;
-        std::copy(density.data, density.data + size(), std::back_inserter(sorted));
+        std::vector<float> sorted(this->size());
+        for (unsigned i = 0; i < this->size(); i++)
+            sorted[i] = this->density[i];
         std::sort(sorted.begin(), sorted.end());
-        std::vector<float> summed;
-        summed.resize(sorted.size());
+        std::vector<float> summed(this->size());
         double sum = 0.0;
         for (size_t x = 0; x < size(); x++)
             summed[x] = sum += sorted[x];
@@ -276,31 +302,30 @@ public:
 
     void trim(Function<Dimension, float> &func, float threshold)
     {
-        trim(func.data, threshold);
+        for (size_t x = 0; x < size(); x++)
+            if (quantile[x] < threshold)
+                func[x] = std::numeric_limits<float>::quiet_NaN();
     }
 
     Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
     {
-        init();
+        init_fftw();
     }
 
     Weighty(unsigned grid, bool column_major = false) : Dimensions<Dimension>(grid, column_major)
     {
-        init();
+        init_fftw();
     }
 
     virtual ~Weighty()
     {
-        if (DCT)
-        {
-            fftwf_destroy_plan((fftwf_plan)DCT);
-        }
+        if (DCT) fftwf_destroy_plan((fftwf_plan)DCT);
     }
 
 private:
-    inline double squared(double x) { return x * x; };
+    double squared(double x) { return x * x; };
 
-    void init()
+    void init_fftw()
     {
         if (fftwf_init_threads())
             fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));

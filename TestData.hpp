@@ -17,7 +17,7 @@ class TestData : public Weighty<Dimension>::Events
     class RandomEvent
     { 
     protected:
-        static inline std::mt19937 &rng()
+        static std::mt19937 &rng()
         {
             static thread_local std::random_device rd;
             static thread_local std::seed_seq seq{rd(), rd(), rd(), rd()};
