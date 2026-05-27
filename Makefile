@@ -1,30 +1,28 @@
 CXX = g++
 CXXFLAGS = -std=c++20 -Wall -Wextra -I. -g
-LIBS = -lfftw3 -lfftw3f -lfftw3f_threads -lm
-HEADERS = Dimensions.hpp Function.hpp Weighty.hpp Laplacian.hpp Covariant.hpp TestData.hpp
+LIBS = -lfftw3f_threads -lfftw3f -lfftw3 -lm
+HEADERS = Dimensions.hpp Function.hpp Weighty.hpp Laplace.hpp Covariant.hpp TestData.hpp
 
-all: covariant laplacian testdata
+all: riemann laplace testdata
 
 testdata: testdata.o $(HEADERS)
 	$(CXX) $(CXXFLAGS) -o testdata testdata.o $(LIBS)
 
-laplacian: laplacian.o $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o laplacian laplacian.o $(LIBS)
+laplace: laplace.o $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o laplace laplace.o $(LIBS)
 
-covariant: covariant.o $(HEADERS)
-	$(CXX) $(CXXFLAGS) -o covariant covariant.o $(LIBS)
+riemann: riemann.o $(HEADERS)
+	$(CXX) $(CXXFLAGS) -o riemann riemann.o $(LIBS)
 
 testdata.o: $(HEADERS)
-laplacian.o: $(HEADERS)
-covariant.o: $(HEADERS)
-main2.o: $(HEADERS)
-main3.o: $(HEADERS)
+laplace.o: $(HEADERS)
+riemann.o: $(HEADERS)
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.o laplacian covariant testdata
+	rm -f *.o laplace riemann testdata
 	rm -f *.exe
 	
 .PHONY: all clean

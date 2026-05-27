@@ -7,14 +7,14 @@
 #include "Dimensions.hpp"
 #include "Function.hpp"
 #include "Weighty.hpp"
-#include "Laplacian.hpp"
+#include "Laplace.hpp"
 #include "TestData.hpp"
 
 template <unsigned Dimension>
-class Laplacian;
+class Laplace;
 
 template <unsigned Dimension>
-class Covariant : public Laplacian<Dimension>
+class Riemann : public Laplace<Dimension>
 {
 private:
     float total_R = 0.0f;
@@ -166,11 +166,11 @@ public:
         return factor_error;
     }
 
-    Covariant(const unsigned *points, bool column_major = false) : Laplacian<Dimension>(points, column_major) {}
+    Riemann(const unsigned *points, bool column_major = false) : Laplace<Dimension>(points, column_major) {}
 
-    Covariant(unsigned grid = 256, bool column_major = false) : Laplacian<Dimension>(grid, column_major) {}
+    Riemann(unsigned grid = 256, bool column_major = false) : Laplace<Dimension>(grid, column_major) {}
 
-    ~Covariant() {}
+    ~Riemann() {}
 
 private:
     // factoring the density
