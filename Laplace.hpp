@@ -15,8 +15,15 @@ private:
     float t_max = std::numeric_limits<float>::lowest(), t_min = std::numeric_limits<float>::max();
     double differential_error = 0.0;
 
+public:
+    typedef unsigned short Cluster;
+    const Cluster CENSORED = std::numeric_limits<Cluster>::max();
+
     class Hypercube
     {
+        template <unsigned Dimension2>
+        friend class Laplace;
+
     private:
         Laplace<Dimension> &laplace;
 
@@ -31,8 +38,6 @@ private:
             contiguous,
             assigned
         };
-
-        Hypercube(Laplace<Dimension> &laplace, size_t x) : laplace(laplace), x(x) {}
 
         float density() const
         {
@@ -49,12 +54,12 @@ private:
             return laplace.L[x];
         }
 
-        float &cluster()
+        const Cluster &cluster() const
         {
-            return laplace.klass[x];
+            return laplace.cluster_id[x];
         }
 
-        State &status() const
+        const State &status() const
         {
             return laplace.status[x];
         }
@@ -64,8 +69,21 @@ private:
             x = other.x;
             return *this;
         }
-    };
 
+        Hypercube(Laplace<Dimension> &laplace, size_t x) : laplace(laplace), x(x) {}
+
+    protected:
+        Cluster &cluster()
+        {
+            return laplace.cluster_id[x];
+        }
+
+        State &status()
+        {
+            return laplace.status[x];
+        }
+    };
+    friend class Hypercube;
     std::vector<Hypercube> cubes;
 
     FunctionVector<Dimension, float> S = FunctionVector<Dimension, float>(*this);
@@ -73,21 +91,24 @@ private:
 
 protected:
     Function<Dimension, float> L = Function<Dimension, float>(*this);
-    Function<Dimension, typename Hypercube::State> status = Function<Dimension, typename Hypercube::State>(*this);
 
 public:
     bool verify = true;
 
+    Function<Dimension, typename Hypercube::State> status = Function<Dimension, typename Hypercube::State>(*this);
+
     void analyze(float smoothing = .01f, float threshold = 0.001f)
     {
         differential_error = 0.0;
-        s_max = std::numeric_limits<float>::lowest(); s_min = std::numeric_limits<float>::max();
-        t_max = std::numeric_limits<float>::lowest(); t_min = std::numeric_limits<float>::max();
+        s_max = std::numeric_limits<float>::lowest();
+        s_min = std::numeric_limits<float>::max();
+        t_max = std::numeric_limits<float>::lowest();
+        t_min = std::numeric_limits<float>::max();
         L.zero();
         S.zero();
         T.zero();
         status.zero();
-        this->klass.zero();
+        this->cluster_id.zero();
         this->P.zero();
 
         this->prepare(smoothing);
@@ -114,14 +135,14 @@ public:
         if (this->visualize)
         {
             L.write("laplacian.bin");
-            this->klass.write("classes.bin");
+            this->cluster_id.write("classes.bin");
         }
     }
 
     unsigned cluster(float threshold = 0.001f, bool grow = false)
     {
         status.zero();
-        this->klass.zero();
+        this->cluster_id.zero();
 
         Coordinate coord(*this);
         unsigned clusters = 0;
@@ -169,12 +190,12 @@ public:
             for (auto it = precision; it != outliers; ++it)
             {
                 it->status() = Hypercube::ambiguous;
-                it->cluster() = std::numeric_limits<float>::quiet_NaN();
+                it->cluster() = 0;
             }
             for (auto it = outliers; it != cubes.end(); ++it)
             {
                 it->status() = Hypercube::outlier;
-                it->cluster() = std::numeric_limits<float>::quiet_NaN();
+                it->cluster() = 0;
             }
         }
         else
@@ -192,12 +213,12 @@ public:
                         if (coord[i] < this->points(i) - 1 && status[x + this->stride(i)] == Hypercube::unknown)
                         {
                             status[x + this->stride(i)] = Hypercube::contiguous;
-                            this->klass[x + this->stride(i)] = it->cluster();
+                            this->cluster_id[x + this->stride(i)] = it->cluster();
                         }
                         if (coord[i] > 0 && status[x - this->stride(i)] == Hypercube::unknown)
                         {
                             status[x - this->stride(i)] = Hypercube::contiguous;
-                            this->klass[x - this->stride(i)] = it->cluster();
+                            this->cluster_id[x - this->stride(i)] = it->cluster();
                         }
                     }
                 }
@@ -216,7 +237,9 @@ public:
         if (this->visualize)
         {
             L.write("laplacian.bin");
-            this->klass.write("classes.bin");
+            this->cluster_id.write("classes.bin");
+            L.write("_laplacian.bin");
+            this->cluster_id.write("_classes.bin");
         }
 
         return clusters;
@@ -227,7 +250,7 @@ public:
         return differential_error;
     }
 
-    Laplace(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major) 
+    Laplace(unsigned grid, bool column_major = false) : Weighty<Dimension>(grid, column_major)
     {
         cubes.reserve(this->size());
         for (size_t x = 0; x < this->size(); x++)

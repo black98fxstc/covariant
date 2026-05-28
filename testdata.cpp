@@ -3,8 +3,7 @@
 #include <fstream>
 #include <functional>
 #include <cxxopts.hpp>
-
-#include "Covariant.hpp"
+#include "TestData.hpp"
 
 struct Params
 {
@@ -22,17 +21,18 @@ template <unsigned Dimension>
 int do_it(const Params &params)
 {
     TestData<Dimension> test_data;
-    bool is_ascii = !params.ascii;
     if (params.convert)
     {
-        std::string source_ext = is_ascii ? ".txt" : ".dat";
+        bool source_is_ascii = !params.ascii;
+        std::string source_ext = source_is_ascii ? ".txt" : ".dat";
         std::cout << "Converting " << params.filename << source_ext << " to "
                   << (params.ascii ? "ASCII" : "binary") << "..." << std::endl;
-        if (!test_data.read(params.filename + source_ext, is_ascii))
+        if (!test_data.read(params.filename + source_ext, source_is_ascii))
         {
             std::cerr << "Error: Could not read source file for conversion: " << params.filename + source_ext << std::endl;
             return 1;
         }
+        test_data.readTruth(params.filename + ".truth", source_is_ascii);
     }
     else
     {
@@ -46,11 +46,13 @@ int do_it(const Params &params)
         for (unsigned i = 0; i < params.exponential; i++)
             test_sample.subpopulation(new typename TestData<Dimension>::Exponential());
         test_data.generate(test_sample, params.events);
-
-        std::string ext = is_ascii ? ".txt" : ".dat";
-        std::cout << "Saving " << test_data.size() << " events to " << params.filename << ext << "..." << std::endl;
-        test_data.write(params.filename + ext, params.ascii);
     }
+
+    std::string target_ext = params.ascii ? ".txt" : ".dat";
+    std::cout << "Saving " << test_data.size() << " events to " << params.filename << target_ext << "..." << std::endl;
+    test_data.write(params.filename + target_ext, params.ascii);
+    test_data.writeTruth(params.filename + ".truth", params.ascii);
+
     return 0;
 }
 

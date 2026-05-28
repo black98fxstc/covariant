@@ -12,12 +12,19 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find FFTW3 using vcpkg configuration files. 
-# Your code uses fftwf_ functions, so we specifically need the float variant.
+# vcpkg's fftw3 port provides separate config files for float (FFTW3f) and double (FFTW3) precisions.
+# The code primarily uses fftwf_ functions, but loading both the base (double) and float 
+# configurations ensures that all threaded targets in the FFTW3:: namespace are found.
+find_package(FFTW3 CONFIG REQUIRED)
 find_package(FFTW3f CONFIG REQUIRED)
 
-# FFTW3::fftw3f is the target provided by the vcpkg config
-set(FFTW_LIBS FFTW3::fftw3f)
+find_package(Matplot++ CONFIG REQUIRED)
+find_package(cxxopts CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
+# Note: vcpkg provides FFTW3::fftw3f and FFTW3::fftw3f_threads when the threads feature is enabled.
+# We will use these directly in target_link_libraries
+ 
 # The math library is needed on Unix-like systems
 if(UNIX)
     find_library(MATH_LIB NAMES m REQUIRED)
@@ -28,13 +35,18 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # Define targets for the various tools and main programs
 add_executable(testdata testdata.cpp)
-target_link_libraries(testdata PRIVATE ${FFTW_LIBS} ${MATH_LIB})
+# testdata is a generator and does not use the Weighty class's FFTW-based filtering.
+target_link_libraries(testdata PRIVATE cxxopts::cxxopts ${MATH_LIB})
 
-add_executable(laplacian laplacian.cpp)
-target_link_libraries(laplacian PRIVATE ${FFTW_LIBS} ${MATH_LIB})
+add_executable(laplace laplace.cpp)
+target_link_libraries(laplace PRIVATE FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
-add_executable(covariant_tool covariant.cpp)
-target_link_libraries(covariant_tool PRIVATE ${FFTW_LIBS} ${MATH_LIB})
+add_executable(riemann riemann.cpp)
+target_link_libraries(riemann PRIVATE FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
-# Optional: Set an output name for covariant_tool to match your Makefile target
-set_target_properties(covariant_tool PROPERTIES OUTPUT_NAME "covariant")
+add_executable(darwin darwin.cpp)
+target_link_libraries(darwin PRIVATE FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts ${MATH_LIB})
+
+# Set output names to match your Makefile targets
+set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")
+set_target_properties(darwin PROPERTIES OUTPUT_NAME "darwin")

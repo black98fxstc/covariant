@@ -56,7 +56,7 @@ public:
         Q.zero();
         this->P.zero();
         this->L.zero();
-        this->klass.zero();
+        this->cluster_id.zero();
         this->status.zero();
 
         this->prepare(smoothing);

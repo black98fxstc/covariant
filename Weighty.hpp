@@ -13,6 +13,8 @@
 #include <cctype>
 #include <assert.h>
 
+#include "Dimensions.hpp"
+
 // Utilities for sampleing multi-dimensional data
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>
@@ -25,14 +27,14 @@ private:
     std::array<std::vector<double>, Dimension> kernel;
 
 protected:
+public:
+    const double pi = 3.14159265358979323846;
+
     Function<Dimension, float> weight = Function<Dimension, float>(*this);
     Function<Dimension, float> density = Function<Dimension, float>(*this);
     Function<Dimension, float> quantile = Function<Dimension, float>(*this);
-    Function<Dimension, float> klass = Function<Dimension, float>(*this);
+    Function<Dimension, unsigned short> cluster_id = Function<Dimension, unsigned short>(*this);
     MarginalFunction<Dimension, float> P = MarginalFunction<Dimension, float>(*this);
-
-public:
-    const double pi = 3.14159265358979323846;
 
     bool visualize = false, verbose = false, antialias = true, verify = true;
 
@@ -155,6 +157,8 @@ public:
                 return in.good();
             }
         }
+
+        Events() {};
     };
 
     void reset()
@@ -163,7 +167,7 @@ public:
         weight.zero();
         density.zero();
         quantile.zero();
-        klass.zero();
+        cluster_id.zero();
         P.zero();
     }
 
@@ -251,7 +255,7 @@ public:
         if (!locate(event, coord))
             return 0;
         size_t x = coord;
-        return (unsigned short)(klass[x]);
+        return (unsigned short)(cluster_id[x]);
     }
 
     void prepare(float smoothing = .01f)
@@ -288,6 +292,8 @@ public:
 
         if (this->visualize)
         {
+            density.write("density.bin");
+            quantile.write("quantile.bin");
             density.write("density.bin");
             quantile.write("quantile.bin");
         }

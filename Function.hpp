@@ -16,18 +16,24 @@ class Function
     template <unsigned Dimension2>
     friend class Weighty;
 
+   template <unsigned Dimension2>
+    friend class Laplace;
+
+   template<unsigned Dimension2>
+    friend class Riemann;
+
 private:
     Dimensions<Dimension> &dimensions;
     Type *data;
 
 protected:
-    Type operator()(size_t x)
+    Type &operator[](size_t x)
     {
         return data[x];
     }
 
 public:
-    Type &operator[](size_t x)
+    const Type &operator[](size_t x) const
     {
         return data[x];
     }
@@ -81,21 +87,28 @@ public:
 template <unsigned Dimension>
 class Function<Dimension, float>
 {
+    // needed for FFTW
     template <unsigned Dimension2>
     friend class Weighty;
+
+   template <unsigned Dimension2>
+    friend class Laplace;
+
+   template<unsigned Dimension2>
+    friend class Riemann;
 
 private:
     Dimensions<Dimension> &dimensions;
     float *data;
 
 protected:
-    float operator()(size_t x)
+    float &operator[](size_t x)
     {
         return data[x];
     }
 
 public:
-    float &operator[](size_t x)
+    const float &operator[](size_t x) const
     {
         return data[x];
     }

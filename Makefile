@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -std=c++20 -Wall -Wextra -I. -g
-LIBS = -lfftw3f_threads -lfftw3f -lfftw3 -lm
+LIBS = -lfftw3f_threads -lfftw3f -lfftw3 -lmatplot -lnodesoup -lm
 HEADERS = Dimensions.hpp Function.hpp Weighty.hpp Laplace.hpp Covariant.hpp TestData.hpp
 
 all: riemann laplace testdata darwin

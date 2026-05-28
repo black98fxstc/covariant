@@ -24,7 +24,7 @@ struct Params
 template <unsigned Dimension>
 int do_it(const Params &params, unsigned grid_size)
 {
-    TestData<Dimension> events;
+    typename Weighty<Dimension>::Events events;
     std::string ext = params.ascii ? ".txt" : ".dat";
     std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
     if (!events.read(params.filename + ext, params.ascii))
@@ -35,7 +35,7 @@ int do_it(const Params &params, unsigned grid_size)
     std::cout << "Loaded " << events.size() << " events." << std::endl;
 
     std::cout << "Processing " << events.size() << " events..." << std::endl;
-    Laplace<Dimension> laplace(grid_size, true);
+    Laplace<Dimension> laplace(grid_size);
     laplace.visualize = params.visual;
     laplace.antialias = params.antialias;
     laplace.verify = params.verify;
@@ -67,7 +67,8 @@ int do_it(const Params &params, unsigned grid_size)
             std::cerr << "Error: Could not open cluster file for writing: " << params.filename + ".cluster" << std::endl;
             return 1;
         }
-        for (auto c : classes) out << c << "\n";
+        for (auto c : classes)
+            out << c << "\n";
         out.close();
     }
     else
@@ -94,19 +95,7 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
 
     // Add the command-line options.
-    options.add_options()
-        ("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
-        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
-        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
-        ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false"))
-        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))
-        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
-        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))
-        ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false"))
-        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))
-        ("h,help", "Print usage");
+    options.add_options()("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
@@ -132,20 +121,29 @@ int main(int argc, char *argv[])
     if (result.count("grid"))
     {
         params.grid = result["grid"].as<unsigned>();
-    } 
-    else 
+    }
+    else
     {
-        switch (params.dimension) {
-            case 2:  params.grid = 256; break;
-            case 3:  params.grid = 64;  break;
-            case 4:  params.grid = 32;  break;
-            default: params.grid = 32;  break;
+        switch (params.dimension)
+        {
+        case 2:
+            params.grid = 256;
+            break;
+        case 3:
+            params.grid = 64;
+            break;
+        case 4:
+            params.grid = 32;
+            break;
+        default:
+            params.grid = 32;
+            break;
         }
     }
 
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid 
-              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold 
-              << " antialias=" << (params.antialias ? "on" : "off") 
+    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
+              << " antialias=" << (params.antialias ? "on" : "off")
               << " verify=" << (params.verify ? "on" : "off")
               << " grow=" << (params.grow ? "on" : "off") << std::endl;
     switch (params.dimension)

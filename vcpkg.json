@@ -4,8 +4,10 @@
   "dependencies": [
     {
       "name": "fftw3",
-      "features": ["avx2"]
+      "features": ["avx2", "threads"]
     },
-    "cxxopts"
+    "cxxopts",
+    "matplotplusplus",
+    "nlohmann-json"
   ]
 }

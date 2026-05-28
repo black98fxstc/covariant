@@ -8,14 +8,16 @@
 #include <cmath>
 #include <iostream>
 
+#include "Dimensions.hpp"
+
 template <unsigned Dimension>
 class Weighty;
 
 template <unsigned Dimension>
-class TestData : public Weighty<Dimension>::Events
+class TestData : public Dimensions<Dimension>::Events
 {
     class RandomEvent
-    { 
+    {
     protected:
         static std::mt19937 &rng()
         {
@@ -37,21 +39,24 @@ class TestData : public Weighty<Dimension>::Events
         typename std::exponential_distribution<float> exponential_distribution{1.0f};
 
     public:
-        virtual void sample(typename Weighty<Dimension>::Event &event) = 0;
+        virtual unsigned short sample(typename Dimensions<Dimension>::Event &event) = 0;
         virtual ~RandomEvent() = default;
     };
+
+    std::vector<unsigned short> _truth;
 
 public:
     class Normal : public RandomEvent
     {
     public:
-        typename Weighty<Dimension>::Event mean;
+        typename Dimensions<Dimension>::Event mean;
         float stddev;
 
-        void sample(typename Weighty<Dimension>::Event &event)
+        unsigned short sample(typename Dimensions<Dimension>::Event &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
                 event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
+            return 0;
         };
 
         Normal()
@@ -67,12 +72,12 @@ public:
     public:
         const double pi = 3.14159265358979323846;
         const float half_pi = (float)(pi / 2);
-        typename Weighty<Dimension>::Event mean;
+        typename Dimensions<Dimension>::Event mean;
         unsigned X, Y;
         float stddev;
         double s, c;
 
-        void sample(typename Weighty<Dimension>::Event &event)
+        unsigned short sample(typename Dimensions<Dimension>::Event &event)
         {
             // two quarter arcs of the circle, one flipped
             double delta_x, delta_y;
@@ -89,6 +94,7 @@ public:
                     event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_y - s * delta_x), stddev});
                 else
                     event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
+            return 0;
         };
 
         Snake()
@@ -116,17 +122,18 @@ public:
     {
         unsigned X;
         float lambda;
-        typename Weighty<Dimension>::Event mean;
+        typename Dimensions<Dimension>::Event mean;
         float stddev;
 
     public:
-        void sample(typename Weighty<Dimension>::Event &event)
+        unsigned short sample(typename Dimensions<Dimension>::Event &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
                 if (i == X)
                     event[i] = this->exponential_distribution(this->rng(), typename std::exponential_distribution<float>::param_type{lambda});
                 else
                     event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
+            return 0;
         };
 
         Exponential()
@@ -176,11 +183,12 @@ public:
                 fractions.insert(fractions.begin() + n, fractions[n - 1] + max * this->normal_distribution(this->rng(), this->halfish_param));
         }
 
-        void sample(typename Weighty<Dimension>::Event &event)
+        unsigned short sample(typename Dimensions<Dimension>::Event &event)
         {
             // pick a random population with appropriate frequency and then sample it
             int p = std::upper_bound(fractions.begin(), fractions.end(), this->uniform_distribution(this->rng(), this->fraction_param)) - fractions.begin();
             population[p]->sample(event);
+            return p;
         }
 
         virtual ~RandomSample()
@@ -193,7 +201,57 @@ public:
     void generate(RandomEvent &test_sample, size_t num_events)
     {
         this->resize(num_events);
+        _truth.resize(num_events);
         for (size_t i = 0; i < num_events; i++)
-            test_sample.sample((*this)[i]);
+            _truth[i] = test_sample.sample((*this)[i]);
+    }
+
+    bool writeTruth(const std::string &filename, bool ascii = false) const
+    {
+        if (ascii)
+        {
+            std::ofstream out(filename);
+            if (!out)
+                return false;
+            for (auto c : _truth)
+                out << c << "\n";
+            return out.good();
+        }
+        else
+        {
+            std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+            if (!out)
+                return false;
+            out.write(reinterpret_cast<const char *>(_truth.data()), _truth.size() * sizeof(unsigned short));
+            return out.good();
+        }
+    }
+
+    bool readTruth(const std::string &filename, bool ascii = false)
+    {
+        size_t count = this->size();
+        _truth.resize(count);
+        if (ascii)
+        {
+            std::ifstream in(filename);
+            if (!in)
+                return false;
+            for (size_t i = 0; i < count; i++)
+            {
+                if (!(in >> _truth[i]))
+                    return false;
+            }
+            return true;
+        }
+        std::ifstream in(filename, std::ios::binary);
+        if (!in)
+            return false;
+        in.read(reinterpret_cast<char *>(_truth.data()), count * sizeof(unsigned short));
+        return in.good();
+    }
+
+    const std::vector<unsigned short> &truth() const
+    {
+        return _truth;
     }
 };
