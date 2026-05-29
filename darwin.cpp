@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <matplot/matplot.h>
+#include <sys/wait.h>
+#include <thread>
+#include <algorithm>
 
 #include "Covariant.hpp"
 
@@ -21,6 +24,7 @@ struct Params
 {
     std::string filename;
     std::string out_dir;
+    std::string log_path;
     unsigned dimension;
     unsigned grid;
     unsigned points;
@@ -208,11 +212,14 @@ struct GnuplotSilencer
     }
 };
 
-void make_plot(const std::string &path, const Params &params, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data, const std::string &log_path)
+void make_plot(const std::string &path, const Params &params, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data)
 {
     using namespace matplot;
 
-    auto fig = figure(true);
+    // Instantiate the silencer to capture Gnuplot stderr in the log file
+    // GnuplotSilencer silencer(params.log_path);
+
+    auto fig = figure(true);   // Quiet mode    // fig->visible(false);       // Explicitly disable windowing for headless/CLI environments
     fig->size(400, 400);
     auto ax = fig->current_axes();
     auto qmap = get_cluster_qmap(params);
@@ -240,15 +247,15 @@ void make_plot(const std::string &path, const Params &params, const std::vector<
     c->color("black");
     c->line_width(1.2);
 
-    auto c2 = contour(ax, X, Y, quant_data);
-    c2->levels({0.001});
-    c2->color("red");
-    c2->line_width(1.2);
+    // auto c2 = contour(ax, X, Y, quant_data);
+    // c2->levels({0.001});
+    // c2->color("red");
+    // c2->line_width(1.2);
 
-    auto c3 = contour(ax, X, Y, quant_data);
-    c3->levels({0.01});
-    c3->color("red");
-    c3->line_width(1.2);
+    // auto c3 = contour(ax, X, Y, quant_data);
+    // c3->levels({0.01});
+    // c3->color("red");
+    // c3->line_width(1.2);
 
     // Set explicit limits for the axes
     ax->xlim({0, 1});
@@ -276,8 +283,8 @@ int do_it(Params &params)
     // Create logs folder and truncate the session log file
     std::string log_dir = params.out_dir + "/logs";
     fs::create_directories(log_dir);
-    std::string log_path = log_dir + "/gnuplot.log";
-    std::ofstream(log_path, std::ios::trunc);
+    params.log_path = log_dir + "/gnuplot.log";
+    std::ofstream(params.log_path, std::ios::trunc);
 
     // Riemann object for the whole n-dimensional sample
     Riemann<Dimension> global(params.grid);
@@ -327,6 +334,31 @@ int do_it(Params &params)
     std::string img_dir = params.out_dir + "/images";
     fs::create_directories(img_dir);
 
+    std::vector<pid_t> active_pids;
+    unsigned max_concurrent = std::max(1u, std::thread::hardware_concurrency());
+
+    auto dispatch_plot = [&](const std::string &path, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data) {
+        std::cout.flush();
+        html_out.flush();
+        xml_out.flush();
+
+        while (active_pids.size() >= max_concurrent) {
+            int status;
+            pid_t done = waitpid(-1, &status, 0);
+            if (done > 0) {
+                active_pids.erase(std::remove(active_pids.begin(), active_pids.end(), done), active_pids.end());
+            }
+        }
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            make_plot(path, params, class_data, quant_data);
+            std::exit(0);
+        } else if (pid > 0) {
+            active_pids.push_back(pid);
+        }
+    };
+
     std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(params.max_clusters + 1);
     for (const auto &e : events)
     {
@@ -342,15 +374,15 @@ int do_it(Params &params)
         else
             cluster_events[0].push_back(e);
     }
-    for_each_plane<Dimension>([&params, &cluster_events, &marginal, &img_dir, &log_path](unsigned i, unsigned j)
+    for_each_plane<Dimension>([&params, &cluster_events, &marginal, &img_dir, &dispatch_plot](unsigned i, unsigned j)
     {
         marginal.reset();
         Coordinate<2> marginal_coord(marginal);
+        Weighty<2>::Event marginal_event;
         std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
         for (unsigned short c = 0; c <= params.num_clusters; ++c)
         {
-            Weighty<2>::Event marginal_event;
             for (auto &e : cluster_events[c])
             {
                 marginal_event[0] = e[i];
@@ -381,7 +413,7 @@ int do_it(Params &params)
             }
 
             std::string path = img_dir + "/sample_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
-            make_plot(path, params, class_data, quant_data, log_path);
+            dispatch_plot(path, class_data, quant_data);
     } });
     
     for (unsigned c = 1; c <= std::min(params.num_clusters, params.max_clusters); ++c)
@@ -416,7 +448,7 @@ int do_it(Params &params)
 
         global.Riemann<Dimension>::analyze(params.smooth, params.threshold);
 
-        for_each_plane<Dimension>([&params, c, &cluster_events, &marginal, &img_dir, &log_path](unsigned i, unsigned j)
+        for_each_plane<Dimension>([&params, c, &cluster_events, &marginal, &img_dir, &dispatch_plot](unsigned i, unsigned j)
         {
             Weighty<2>::Event marginal_event;
             Coordinate<2> marginal_coord(marginal);
@@ -450,7 +482,7 @@ int do_it(Params &params)
                 }
 
                 std::string path = img_dir + "/cluster_" + std::to_string(c) + "_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
-                make_plot(path, params, class_data, quant_data, log_path);
+                dispatch_plot(path, class_data, quant_data);
         } });
 
         std::string img_rel_name = "images/cluster_" + std::to_string(c) + "_1X2.png";
@@ -489,6 +521,14 @@ int do_it(Params &params)
         html_out << "<td><img src=\"" << img_rel_name << "\"></td></tr>";
     }
 
+    if (!active_pids.empty()) {
+        std::cout << "Waiting for " << active_pids.size() << " background plots to finish rendering..." << std::endl;
+        for (pid_t pid : active_pids) {
+            int status;
+            waitpid(pid, &status, 0);
+        }
+    }
+
     html_out << "</table></body></html>";
     html_out.close();
 
@@ -514,7 +554,21 @@ int main(int argc, char *argv[])
 
     cxxopts::Options options("Darwin", "Hierarchical Laplacian and Riemannian analysis");
 
-    options.add_options()("f,file", "Input filename", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Save visualization files", cxxopts::value<bool>()->default_value("false"))("max-clusters", "Maximum number of clusters to report", cxxopts::value<unsigned>()->default_value("10"))("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("1"))("v,verbose", "Verbose", cxxopts::value<bool>()->default_value("false"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true"))("grow", "Grow clusters", cxxopts::value<bool>()->default_value("false"))("a,ascii", "Use ASCII data", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
+    options.add_options()
+    ("f,file", "Input filename", cxxopts::value<std::string>()->default_value("test_data"))
+    ("d,dimension", "Dimension", cxxopts::value<unsigned>()->default_value("2"))
+    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+    ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
+    ("visual", "Save visualization files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("max-clusters", "Maximum number of clusters to report", cxxopts::value<unsigned>()->default_value("10"))
+    ("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("1"))
+    ("v,verbose", "Verbose", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+    ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+    ("grow", "Grow clusters", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("a,ascii", "Use ASCII data", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("h,help", "Print usage");
 
     options.parse_positional({"file"});
 

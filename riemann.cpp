@@ -128,7 +128,20 @@ int main(int argc, char *argv[])
     cxxopts::Options options("CovariantCLI", "Generate test data for the Covariant class");
 
     // Add the command-line options.
-    options.add_options()("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("g,grid", "Grid resolution", cxxopts::value<unsigned>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false"))("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false"))("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true"))("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
+    options.add_options()
+    ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
+    ("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))
+    ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+    ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+    ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+    ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+    ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("h,help", "Print usage");
 
     options.parse_positional({"file"});
 

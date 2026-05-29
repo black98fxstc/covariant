@@ -64,7 +64,16 @@ int main(int argc, char *argv[])
     cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
 
     // Add the command-line options.
-    options.add_options()("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false"))("h,help", "Print usage");
+    options.add_options()
+    ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
+    ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+    ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
+    ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
+    ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
+    ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
+    ("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))
+    ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("h,help", "Print usage");
 
     options.parse_positional({"file"});
 
