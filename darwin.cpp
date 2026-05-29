@@ -7,6 +7,8 @@
 #include <iomanip>
 #include <nlohmann/json.hpp>
 #include <cstdlib>
+#include <unistd.h>
+#include <fcntl.h>
 #include <matplot/matplot.h>
 
 #include "Covariant.hpp"
@@ -32,6 +34,7 @@ struct Params
     bool verify;
     bool grow;
     bool ascii;
+    unsigned num_clusters = 0;
 };
 
 template <unsigned Dimension>
@@ -106,18 +109,125 @@ std::array<double, 3> rgb2hsl(double r, double g, double b)
     return {h, s, l};
 }
 
-void make_plot(const std::string &path, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data)
+/**
+ * @brief Simple HSV to RGB conversion helper.
+ * 
+ * @param h Hue [0, 1]
+ * @param s Saturation [0, 1]
+ * @param v Value [0, 1]
+ * @return std::vector<double> RGB components
+ */
+std::vector<double> hsv_to_rgb(double h, double s, double v) {
+    double r = 0, g = 0, b = 0;
+    if (s == 0) {
+        r = g = b = v;
+    } else {
+        double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
+        int i = static_cast<int>(std::floor(h_pos));
+        double f = h_pos - i;
+        double p = v * (1.0 - s);
+        double q = v * (1.0 - (s * f));
+        double t = v * (1.0 - (s * (1.0 - f)));
+        switch (i) {
+            case 0: r = v; g = t; b = p; break;
+            case 1: r = q; g = v; b = p; break;
+            case 2: r = p; g = v; b = t; break;
+            case 3: r = p; g = q; b = v; break;
+            case 4: r = t; g = p; b = v; break;
+            default: r = v; g = p; b = q; break;
+        }
+    }
+    return {r, g, b};
+}
+
+/**
+ * @brief Generates a cluster-aware colormap similar to MATLAB's [1 1 1; hueMap(n)].
+ * 
+ * @param num_clusters Number of actual clusters found in the data.
+ * @param max_n The maximum capacity for the hue map (e.g., 10 for qmap).
+ * @return std::vector<std::vector<double>> The colormap matrix.
+ */
+std::vector<std::vector<double>> get_cluster_qmap(const Params &params) {
+    // Determine how many hues we actually need to generate
+    size_t n = std::min((size_t)params.num_clusters, (size_t)params.max_clusters);
+    
+    std::vector<std::vector<double>> cmap;
+    cmap.reserve(n + 1);
+
+    // 1. First element is always white (index 0 / Background / Unassigned)
+    cmap.push_back({1.0, 1.0, 1.0});
+
+    // 2. Generate the shifted hues (equivalent to hueMap(n))
+    // We replicate linspace(0.6666, 0, n)
+    for (size_t i = 0; i < n; ++i) {
+        double h = 0.6666;
+        if (n > 1) {
+            h = 0.6666 * (1.0 - static_cast<double>(i) / (n - 1));
+        }
+        cmap.push_back(hsv_to_rgb(h, 1.0, 0.75));
+    }
+
+    return cmap;
+}
+
+// RAII helper to silence Gnuplot terminal noise while capturing logs/errors in a file.
+struct GnuplotSilencer
+{
+    int old_stdout = -1;
+    int old_stderr = -1;
+    int dev_null = -1;
+    int log_fd = -1;
+
+    GnuplotSilencer(const std::string &log_path)
+    {
+        std::cout.flush();
+        std::cerr.flush();
+        fflush(stdout);
+        fflush(stderr);
+
+        old_stdout = dup(STDOUT_FILENO);
+        old_stderr = dup(STDERR_FILENO);
+        dev_null = open("/dev/null", O_WRONLY);
+        log_fd = open(log_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+        if (dev_null != -1 && old_stdout != -1) dup2(dev_null, STDOUT_FILENO);
+        if (log_fd != -1 && old_stderr != -1) dup2(log_fd, STDERR_FILENO);
+    }
+
+    ~GnuplotSilencer()
+    {
+        std::cout.flush();
+        std::cerr.flush();
+        fflush(stdout);
+        fflush(stderr);
+
+        if (old_stdout != -1) { dup2(old_stdout, STDOUT_FILENO); close(old_stdout); }
+        if (old_stderr != -1) { dup2(old_stderr, STDERR_FILENO); close(old_stderr); }
+        if (dev_null != -1) close(dev_null);
+        if (log_fd != -1) close(log_fd);
+    }
+};
+
+void make_plot(const std::string &path, const Params &params, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data, const std::string &log_path)
 {
     using namespace matplot;
 
-    auto fig = figure(false); // Off-screen rendering
-    fig->size(800, 800);
+    auto fig = figure(true);
+    fig->size(400, 400);
     auto ax = fig->current_axes();
+    auto qmap = get_cluster_qmap(params);
+    ax->colormap(qmap);
+    ax->color_box_range(0.0, static_cast<double>(qmap.size()));
+    ax->max_colors(qmap.size() - 1);
+
+    // Enable hold before plotting to buffer commands and prevent intermediate 
+    // output from leaking into the terminal during figure initialization.
+    hold(ax, on);
 
     // Map the classification matrix to the [0, 1] range for both axes.
     // Using the global function with the axes handle resolves AxesHandle ambiguities.
     imagesc(ax, 0.0, 1.0, 0.0, 1.0, class_data);
-    ax->hold(on);
+    // Ensure cluster IDs map to the correct colormap indices
 
     // Generate coordinate matrices for contour mapping.
     auto x_range = linspace(0, 1, class_data[0].size());
@@ -125,9 +235,20 @@ void make_plot(const std::string &path, const std::vector<std::vector<double>> &
     auto [X, Y] = meshgrid(x_range, y_range);
 
     // Overlay contours.
-    auto c = ax->contour(X, Y, quant_data);
+    auto c = contour(ax, X, Y, quant_data);
+    c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
     c->color("black");
-    c->line_width(1.0);
+    c->line_width(1.2);
+
+    auto c2 = contour(ax, X, Y, quant_data);
+    c2->levels({0.001});
+    c2->color("red");
+    c2->line_width(1.2);
+
+    auto c3 = contour(ax, X, Y, quant_data);
+    c3->levels({0.01});
+    c3->color("red");
+    c3->line_width(1.2);
 
     // Set explicit limits for the axes
     ax->xlim({0, 1});
@@ -137,7 +258,7 @@ void make_plot(const std::string &path, const std::vector<std::vector<double>> &
 }
 
 template <unsigned Dimension>
-int do_it(const Params &params)
+int do_it(Params &params)
 {
     typename Weighty<Dimension>::Events events;
     std::string ext = params.ascii ? ".txt" : ".dat";
@@ -152,21 +273,32 @@ int do_it(const Params &params)
     // Create output directory
     fs::create_directories(params.out_dir);
 
-    // 1. Initial Riemann object to perform global clustering via Laplace
+    // Create logs folder and truncate the session log file
+    std::string log_dir = params.out_dir + "/logs";
+    fs::create_directories(log_dir);
+    std::string log_path = log_dir + "/gnuplot.log";
+    std::ofstream(log_path, std::ios::trunc);
+
+    // Riemann object for the whole n-dimensional sample
     Riemann<Dimension> global(params.grid);
     global.visualize = false; // We will save files manually into the dir
     global.antialias = params.antialias;
     global.verify = params.verify;
 
-    for (const auto &e : events)
-    {
-        global.event(e);
-    }
+    // Weighty object for 2-dimensional marginal distributions
+    Weighty<2> marginal(params.grid);
+    marginal.visualize = false; // We will save files manually into the dir
+    marginal.antialias = params.antialias;
+    marginal.verify = params.verify;
 
-    std::cout << "Initial global analysis for clustering..." << std::endl;
+    size_t valid_events = 0;
+    for (const auto &e : events)
+        if (global.event(e)) ++valid_events;
+
+    std::cout << "Initial global analysis found " << valid_events << " valid events..." << std::endl;
     global.Laplace<Dimension>::analyze(params.smooth, params.threshold);
-    unsigned num_clusters = global.cluster(params.threshold, params.grow);
-    std::cout << "Found " << num_clusters << " clusters. Starting per-cluster analysis..." << std::endl;
+    params.num_clusters = global.cluster(params.threshold, params.grow);
+    std::cout << "Found " << params.num_clusters << " clusters. Starting per-cluster analysis..." << std::endl;
 
     // Save the global classification volume once
     global.cluster_id.write(params.out_dir + "/" + params.filename + "_classes.bin");
@@ -176,13 +308,13 @@ int do_it(const Params &params)
     report["dimension"] = Dimension;
     report["grid_size"] = params.grid;
     report["total_events"] = events.size();
-    report["num_clusters"] = num_clusters;
+    report["num_clusters"] = params.num_clusters;
     report["clusters"] = json::array();
 
     std::ofstream xml_out(params.filename + ".report.xml");
     xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     xml_out << "<DarwinReport file=\"" << params.filename << "\" dimensions=\"" << Dimension << "\">\n";
-    xml_out << "  <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << num_clusters << "\" />\n";
+    xml_out << "  <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << params.num_clusters << "\" />\n";
     xml_out << "  <Clusters>\n";
 
     // Prepare HTML report
@@ -192,18 +324,10 @@ int do_it(const Params &params)
     html_out << "<body><h1>Darwin Report: " << params.filename << "</h1>";
     html_out << "<table><tr><th>ID</th><th>Events</th><th>Diff Error</th><th>Factor Prob</th><th>Mean Vector</th><th>Visualization</th></tr>";
 
-    // Setup for 2D projections
-    Weighty<2> marginal(params.grid);
-    // typename Weighty<2>::Event marginal_event;
-    marginal.visualize = false; // We will save files manually into the dir
-    marginal.antialias = params.antialias;
-    marginal.verify = params.verify;
+    std::string img_dir = params.out_dir + "/images";
+    fs::create_directories(img_dir);
 
-    std::string proj_dir = params.out_dir + "/projections";
-    fs::create_directories(proj_dir);
-    // unsigned grid_pts = grid_size + 1;
-
-    std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(num_clusters + 1);
+    std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(params.max_clusters + 1);
     for (const auto &e : events)
     {
         unsigned short c = 0;
@@ -213,21 +337,18 @@ int do_it(const Params &params)
             size_t idx = (size_t)coord;
             c = static_cast<const Function<Dimension, unsigned short> &>(global.cluster_id)[idx];
         }
-        else
-            c = 0;
-
-        if (c < num_clusters + 1)
+        if (c < params.max_clusters)
             cluster_events[c].push_back(e);
         else
             cluster_events[0].push_back(e);
     }
-    for_each_plane<Dimension>([&params, &num_clusters, &cluster_events, &marginal, &proj_dir](unsigned i, unsigned j)
-                              {
+    for_each_plane<Dimension>([&params, &cluster_events, &marginal, &img_dir, &log_path](unsigned i, unsigned j)
+    {
         marginal.reset();
         Coordinate<2> marginal_coord(marginal);
         std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
-        for (unsigned short c = 0; c <= num_clusters; ++c)
+        for (unsigned short c = 0; c <= params.num_clusters; ++c)
         {
             Weighty<2>::Event marginal_event;
             for (auto &e : cluster_events[c])
@@ -259,10 +380,11 @@ int do_it(const Params &params)
                 }
             }
 
-            std::string path = proj_dir + "/full_d" + std::to_string(i) + "_d" + std::to_string(j) + ".png";
-            make_plot(path, class_data, quant_data);
-        } });
-    for (unsigned c = 1; c <= std::min(num_clusters, params.max_clusters); ++c)
+            std::string path = img_dir + "/sample_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
+            make_plot(path, params, class_data, quant_data, log_path);
+    } });
+    
+    for (unsigned c = 1; c <= std::min(params.num_clusters, params.max_clusters); ++c)
     {
         size_t cluster_event_count = cluster_events[c].size();
         if (cluster_events[c].size() < params.min_events)
@@ -294,16 +416,23 @@ int do_it(const Params &params)
 
         global.Riemann<Dimension>::analyze(params.smooth, params.threshold);
 
-        for_each_plane<Dimension>([&params, c, &cluster_events, &marginal, &proj_dir](unsigned i, unsigned j)
-                                  {
+        for_each_plane<Dimension>([&params, c, &cluster_events, &marginal, &img_dir, &log_path](unsigned i, unsigned j)
+        {
             Weighty<2>::Event marginal_event;
             Coordinate<2> marginal_coord(marginal);
+            std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
+
             marginal.reset();
             for (auto &e : cluster_events[c])
             {
                 marginal_event[0] = e[i];
                 marginal_event[1] = e[j];
                 marginal.event(marginal_event);
+                if (marginal.locate(marginal_event, marginal_coord))
+                {
+                    size_t idx = (size_t)marginal_coord;
+                    marginal_klass[idx] = c;
+                }
             }
             marginal.prepare(params.smooth);
 
@@ -315,17 +444,16 @@ int do_it(const Params &params)
                 for (unsigned y = 0; y < params.points; ++y) {
                     for (unsigned x = 0; x < params.points; ++x) {
                         size_t idx = x + y * params.points;
-                        class_data[y][x] = (double)c;
+                        class_data[y][x] = (double)marginal_klass[idx];
                         quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
                     }
                 }
 
-                std::string path = proj_dir + "/cluster" + std::to_string(c) + "_d" + std::to_string(i) + "_d" + std::to_string(j) + ".png";
-                make_plot(path, class_data, quant_data);
-            } });
+                std::string path = img_dir + "/cluster_" + std::to_string(c) + "_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
+                make_plot(path, params, class_data, quant_data, log_path);
+        } });
 
-        std::string img_rel_name = params.filename + ".cluster" + std::to_string(c) + ".png";
-        std::string img_full_path = params.out_dir + "/" + img_rel_name;
+        std::string img_rel_name = "images/cluster_" + std::to_string(c) + "_1X2.png";
 
         // Populate JSON report
         json c_info;
@@ -359,15 +487,6 @@ int do_it(const Params &params)
         }
         html_out << "</td>";
         html_out << "<td><img src=\"" << img_rel_name << "\"></td></tr>";
-
-        if (params.visual)
-        {
-            std::cout << "      Generating visualization: " << img_rel_name << "..." << std::endl;
-            // Pass parameters to MATLAB script
-            std::string cmd = "matlab -batch \"plot_covariant_projections('" + params.out_dir + "', '" + params.filename + "', " +
-                              std::to_string(c) + ", " + std::to_string(Dimension) + ", '" + img_rel_name + "');\"";
-            std::system(cmd.c_str());
-        }
     }
 
     html_out << "</table></body></html>";
@@ -389,6 +508,9 @@ int do_it(const Params &params)
 int main(int argc, char *argv[])
 {
     Params params;
+
+    // Force Gnuplot to use a non-interactive terminal. 
+    setenv("GNUTERM", "png", 1);
 
     cxxopts::Options options("Darwin", "Hierarchical Laplacian and Riemannian analysis");
 
@@ -452,17 +574,3 @@ int main(int argc, char *argv[])
         return 1;
     }
 }
-// ```
-
-// ### Summary of Changes:
-// 1.  **Makefile**: Added the `darwin` target and included it in the `all` and `clean` rules.
-// 2.  **darwin.cpp**:
-//    *   It starts by loading the event data.
-//    *   It creates a global `Riemann` object to perform the initial `analyze()` and `cluster()` calls.
-//    *   It iterates through each discovered cluster, filters the original events to find those belonging to that cluster, and runs a secondary `Riemann::analyze()` on that subset.
-//    *   Results are collected into a `nlohmann::json` object and written to a `.json` file.
-//    *   A simple XML report is also generated, which can be easily rendered by a browser using a basic CSS or XSLT stylesheet.
-
-// <!--
-// [PROMPT_SUGGESTION]Can you add an XSLT stylesheet to the XML output so it renders as a table in a web browser?[/PROMPT_SUGGESTION]
-// [PROMPT_SUGGESTION]How can I optimize the cluster filtering loop in darwin.cpp to avoid iterating over all events for every cluster?[/PROMPT_SUGGESTION]
