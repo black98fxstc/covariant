@@ -24,6 +24,12 @@ struct Params
 template <unsigned Dimension>
 int do_it(const Params &params, unsigned grid_size)
 {
+    std::cout << "Laplace running with" 
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
+              << " dimension=" << params.dimension << " grid=" << params.grid << std::endl;
+    std::cout << "   grow=" << (params.grow ? "on" : "off") << " verify=" << (params.verify ? "on" : "off") << " antialias=" << (params.antialias ? "on" : "off") 
+              << " verbose=" << (params.verbose ? "on" : "off") << " visual=" << (params.visual ? "on" : "off") << std::endl;
+
     typename Weighty<Dimension>::Events events;
     std::string ext = params.ascii ? ".txt" : ".dat";
     std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
@@ -130,11 +136,8 @@ int main(int argc, char *argv[])
     params.ascii = result["ascii"].as<bool>();
 
     if (result.count("grid"))
-    {
         params.grid = result["grid"].as<unsigned>();
-    }
     else
-    {
         switch (params.dimension)
         {
         case 2:
@@ -150,13 +153,7 @@ int main(int argc, char *argv[])
             params.grid = 32;
             break;
         }
-    }
 
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid
-              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
-              << " antialias=" << (params.antialias ? "on" : "off")
-              << " verify=" << (params.verify ? "on" : "off")
-              << " grow=" << (params.grow ? "on" : "off") << std::endl;
     switch (params.dimension)
     {
     case 2:

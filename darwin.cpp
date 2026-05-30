@@ -13,6 +13,9 @@
 #include <sys/wait.h>
 #include <thread>
 #include <algorithm>
+#include <sstream>
+#include <cctype>
+#include <tuple>
 
 #include "Covariant.hpp"
 
@@ -25,6 +28,7 @@ struct Params
     std::string filename;
     std::string out_dir;
     std::string log_path;
+    std::string img_dir;
     unsigned dimension;
     unsigned grid;
     unsigned points;
@@ -39,6 +43,8 @@ struct Params
     bool grow;
     bool ascii;
     unsigned num_clusters = 0;
+    unsigned max_concurrent = 1;
+    std::string labels_str;
 };
 
 template <unsigned Dimension>
@@ -49,242 +55,222 @@ void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func
             func(i, j);
 };
 
-// HSL (Hue [0,1], Saturation [0,1], Lightness [0,1]) to RGB [0,1]
-std::array<double, 3> hsl2rgb(double h, double s, double l)
+class Darwin
 {
-    double c = (1.0 - std::abs(2.0 * l - 1.0)) * s;
-    double hp = h * 6.0;
-    double x = c * (1.0 - std::abs(std::fmod(hp, 2.0) - 1.0));
-    double r1 = 0, g1 = 0, b1 = 0;
-    if (hp < 1)
-    {
-        r1 = c;
-        g1 = x;
-    }
-    else if (hp < 2)
-    {
-        r1 = x;
-        g1 = c;
-    }
-    else if (hp < 3)
-    {
-        g1 = c;
-        b1 = x;
-    }
-    else if (hp < 4)
-    {
-        g1 = x;
-        b1 = c;
-    }
-    else if (hp < 5)
-    {
-        r1 = x;
-        b1 = c;
-    }
-    else
-    {
-        r1 = c;
-        b1 = x;
-    }
-    double m = l - c / 2.0;
-    return {r1 + m, g1 + m, b1 + m};
-}
+public:
+    Params params;
+    std::vector<pid_t> active_pids;
+    std::ofstream html_out;
+    std::ofstream xml_out;
+    json report;
+    std::vector<std::string> labels;
+    std::vector<std::vector<double>> colors;
 
-// RGB [0,1] to HSL (Hue [0,1], Saturation [0,1], Lightness [0,1])
-std::array<double, 3> rgb2hsl(double r, double g, double b)
-{
-    double max = std::max({r, g, b});
-    double min = std::min({r, g, b});
-    double h, s, l = (max + min) / 2.0;
-    if (max == min)
-        h = s = 0;
-    else
-    {
-        double d = max - min;
-        s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
-        if (max == r)
-            h = (g - b) / d + (g < b ? 6 : 0);
-        else if (max == g)
-            h = (b - r) / d + 2;
-        else
-            h = (r - g) / d + 4;
-        h /= 6.0;
-    }
-    return {h, s, l};
-}
+    Darwin(const Params& p) : params(p) {}
 
-/**
- * @brief Simple HSV to RGB conversion helper.
- * 
- * @param h Hue [0, 1]
- * @param s Saturation [0, 1]
- * @param v Value [0, 1]
- * @return std::vector<double> RGB components
- */
-std::vector<double> hsv_to_rgb(double h, double s, double v) {
-    double r = 0, g = 0, b = 0;
-    if (s == 0) {
-        r = g = b = v;
-    } else {
-        double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
-        int i = static_cast<int>(std::floor(h_pos));
-        double f = h_pos - i;
-        double p = v * (1.0 - s);
-        double q = v * (1.0 - (s * f));
-        double t = v * (1.0 - (s * (1.0 - f)));
-        switch (i) {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            default: r = v; g = p; b = q; break;
+    ~Darwin() {
+        wait_all();
+    }
+    /**
+     * @brief Simple HSV to RGB conversion helper.
+     * 
+     * @param h Hue [0, 1]
+     * @param s Saturation [0, 1]
+     * @param v Value [0, 1]
+     * @return std::vector<double> RGB components
+     */
+    std::vector<double> hsv_to_rgb(double h, double s, double v) {
+        double r = 0, g = 0, b = 0;
+        if (s == 0) {
+            r = g = b = v;
+        } else {
+            double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
+            int i = static_cast<int>(std::floor(h_pos));
+            double f = h_pos - i;
+            double p = v * (1.0 - s);
+            double q = v * (1.0 - (s * f));
+            double t = v * (1.0 - (s * (1.0 - f)));
+            switch (i) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+        }
+        return {r, g, b};
+    }
+
+    void setup() {
+        std::string header_line = params.labels_str;
+        if (header_line.empty() && params.ascii) {
+            std::string ext = params.ascii ? ".txt" : ".dat";
+            std::ifstream in(params.filename + ext);
+            if (in) {
+                while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek()))) {
+                    in.ignore();
+                }
+                int first = in.peek();
+                if (first != EOF && !std::isdigit(static_cast<unsigned char>(first)) && first != '-' && first != '+' && first != '.') {
+                    std::getline(in, header_line);
+                }
+            }
+        }
+        
+        if (!header_line.empty()) {
+            std::replace(header_line.begin(), header_line.end(), ',', ' ');
+            std::istringstream iss(header_line);
+            std::string label;
+            while (iss >> label) {
+                std::string sanitized = label;
+                for (char &c : sanitized) {
+                    if (!std::isalnum(static_cast<unsigned char>(c))) c = '_';
+                }
+                if (!sanitized.empty()) {
+                    labels.push_back(sanitized);
+                }
+            }
+        }
+
+        std::vector<std::string> default_labels = {"X", "Y", "Z", "W"};
+        for (size_t i = labels.size(); i < params.dimension; ++i) {
+            if (i < default_labels.size()) {
+                labels.push_back(default_labels[i]);
+            } else {
+                labels.push_back("Dim" + std::to_string(i));
+            }
+        }
+        labels.resize(params.dimension);
+
+        // create color map
+        colors.reserve(256);
+        for (size_t i = 0; i < 256; ++i) 
+        {
+            double h = 0.6666 * (1.0 - static_cast<double>(i) / 256);
+            colors.push_back(hsv_to_rgb(h, 1.0, 0.75));
+        }
+
+        // Create output directories
+        fs::create_directories(params.out_dir);
+        fs::create_directories(params.img_dir);
+
+        // Create logs folder and truncate the session log file
+        std::string log_dir = params.out_dir + "/logs";
+        fs::create_directories(log_dir);
+        params.log_path = log_dir + "/gnuplot.log";
+        std::ofstream(params.log_path, std::ios::trunc);
+
+        report["filename"] = params.filename;
+        report["dimension"] = params.dimension;
+        report["grid_size"] = params.grid;
+        report["labels"] = labels;
+        report["clusters"] = json::array();
+
+        xml_out.open(params.filename + ".report.xml");
+        xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        xml_out << "<DarwinReport file=\"" << params.filename << "\" dimensions=\"" << params.dimension << "\">\n";
+
+        html_out.open(params.out_dir + "/index.html");
+        html_out << "<html><head><title>Darwin Report: " << params.filename << "</title>";
+        html_out << "<style>body{font-family:sans-serif;margin:40px;} table{border-collapse:collapse;width:100%;} th,td{padding:10px;border:1px solid #ccc;text-align:left;} img{max-width:800px;}</style></head>";
+        html_out << "<body><h1>Darwin Report: " << params.filename << "</h1>";
+        html_out << "<table><tr><th>ID</th><th>Events</th><th>Diff Error</th><th>Factor Prob</th>";
+        for (const auto& label : labels) {
+            html_out << "<th>Mean " << label << "</th>";
+        }
+        html_out << "<th>Visualization</th></tr>";
+    }
+
+    void make_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
+    {
+        using namespace matplot;
+
+        auto fig = figure(true);
+        fig->size(400, 400);
+        auto ax = fig->current_axes();
+        hold(ax, on);
+        // Generate coordinate matrices mapped to the image pixel grid (0 to N-1).
+        auto x_range = matplot::linspace(0, quant_data[0].size() - 1, quant_data[0].size());
+        auto y_range = matplot::linspace(0, quant_data.size() - 1, quant_data.size());
+        auto [X, Y] = matplot::meshgrid(x_range, y_range);
+        image(class_data[0], class_data[1], class_data[2]);
+
+        // Overlay contours using the pixel-mapped X and Y ranges
+        auto c = contour(ax, X, Y, quant_data);
+        c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
+        c->color("black");
+        c->line_width(1.2);
+
+        // Update limits to fit the data grid
+        ax->xlim({0, (double)quant_data[0].size() - 1});
+        ax->ylim({0, (double)quant_data.size() - 1});
+
+        ax->xticks({0, .2 * (double)quant_data[0].size(), .4 * (double)quant_data[0].size(), .6 * (double)quant_data[0].size(), .8 * (double)quant_data[0].size(), (double)quant_data[0].size() - 1});
+        ax->xticklabels({"0", ".2", ".4", ".6", ".8", "1"});
+        
+        ax->yticks({0, .2 * (double)quant_data.size(), .4 * (double)quant_data.size(), .6 * (double)quant_data.size(), .8 * (double)quant_data.size(), (double)quant_data.size() - 1});
+        ax->yticklabels({"1", ".8", ".6", ".4", ".2", "0"});
+        
+        fig->save(path);
+    }
+
+    void dispatch_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data) {
+        std::cout.flush();
+        if (html_out.is_open()) html_out.flush();
+        if (xml_out.is_open()) xml_out.flush();
+
+        while (active_pids.size() >= params.max_concurrent) {
+            int status;
+            pid_t done = waitpid(-1, &status, 0);
+            if (done > 0) {
+                active_pids.erase(std::remove(active_pids.begin(), active_pids.end(), done), active_pids.end());
+            }
+        }
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            make_plot(path, class_data, quant_data);
+            std::exit(0);
+        } else if (pid > 0) {
+            active_pids.push_back(pid);
         }
     }
-    return {r, g, b};
-}
 
-/**
- * @brief Generates a cluster-aware colormap similar to MATLAB's [1 1 1; hueMap(n)].
- * 
- * @param num_clusters Number of actual clusters found in the data.
- * @param max_n The maximum capacity for the hue map (e.g., 10 for qmap).
- * @return std::vector<std::vector<double>> The colormap matrix.
- */
-std::vector<std::vector<double>> get_cluster_qmap(const Params &params) {
-    // Determine how many hues we actually need to generate
-    size_t n = std::min((size_t)params.num_clusters, (size_t)params.max_clusters);
-    
-    std::vector<std::vector<double>> cmap;
-    cmap.reserve(n + 1);
-
-    // 1. First element is always white (index 0 / Background / Unassigned)
-    cmap.push_back({1.0, 1.0, 1.0});
-
-    // 2. Generate the shifted hues (equivalent to hueMap(n))
-    // We replicate linspace(0.6666, 0, n)
-    for (size_t i = 0; i < n; ++i) {
-        double h = 0.6666;
-        if (n > 1) {
-            h = 0.6666 * (1.0 - static_cast<double>(i) / (n - 1));
+    void wait_all() {
+        if (!active_pids.empty()) {
+            std::cout << "Waiting for " << active_pids.size() << " background plots to finish rendering..." << std::endl;
+            for (pid_t pid : active_pids) {
+                int status;
+                waitpid(pid, &status, 0);
+            }
+            active_pids.clear();
         }
-        cmap.push_back(hsv_to_rgb(h, 1.0, 0.75));
-    }
-
-    return cmap;
-}
-
-// RAII helper to silence Gnuplot terminal noise while capturing logs/errors in a file.
-struct GnuplotSilencer
-{
-    int old_stdout = -1;
-    int old_stderr = -1;
-    int dev_null = -1;
-    int log_fd = -1;
-
-    GnuplotSilencer(const std::string &log_path)
-    {
-        std::cout.flush();
-        std::cerr.flush();
-        fflush(stdout);
-        fflush(stderr);
-
-        old_stdout = dup(STDOUT_FILENO);
-        old_stderr = dup(STDERR_FILENO);
-        dev_null = open("/dev/null", O_WRONLY);
-        log_fd = open(log_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
-
-        if (dev_null != -1 && old_stdout != -1) dup2(dev_null, STDOUT_FILENO);
-        if (log_fd != -1 && old_stderr != -1) dup2(log_fd, STDERR_FILENO);
-    }
-
-    ~GnuplotSilencer()
-    {
-        std::cout.flush();
-        std::cerr.flush();
-        fflush(stdout);
-        fflush(stderr);
-
-        if (old_stdout != -1) { dup2(old_stdout, STDOUT_FILENO); close(old_stdout); }
-        if (old_stderr != -1) { dup2(old_stderr, STDERR_FILENO); close(old_stderr); }
-        if (dev_null != -1) close(dev_null);
-        if (log_fd != -1) close(log_fd);
     }
 };
 
-void make_plot(const std::string &path, const Params &params, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data)
-{
-    using namespace matplot;
-
-    // Instantiate the silencer to capture Gnuplot stderr in the log file
-    // GnuplotSilencer silencer(params.log_path);
-
-    auto fig = figure(true);   // Quiet mode    // fig->visible(false);       // Explicitly disable windowing for headless/CLI environments
-    fig->size(400, 400);
-    auto ax = fig->current_axes();
-    auto qmap = get_cluster_qmap(params);
-    ax->colormap(qmap);
-    ax->color_box_range(0.0, static_cast<double>(qmap.size()));
-    ax->max_colors(qmap.size() - 1);
-
-    // Enable hold before plotting to buffer commands and prevent intermediate 
-    // output from leaking into the terminal during figure initialization.
-    hold(ax, on);
-
-    // Map the classification matrix to the [0, 1] range for both axes.
-    // Using the global function with the axes handle resolves AxesHandle ambiguities.
-    imagesc(ax, 0.0, 1.0, 0.0, 1.0, class_data);
-    // Ensure cluster IDs map to the correct colormap indices
-
-    // Generate coordinate matrices for contour mapping.
-    auto x_range = linspace(0, 1, class_data[0].size());
-    auto y_range = linspace(0, 1, class_data.size());
-    auto [X, Y] = meshgrid(x_range, y_range);
-
-    // Overlay contours.
-    auto c = contour(ax, X, Y, quant_data);
-    c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
-    c->color("black");
-    c->line_width(1.2);
-
-    // auto c2 = contour(ax, X, Y, quant_data);
-    // c2->levels({0.001});
-    // c2->color("red");
-    // c2->line_width(1.2);
-
-    // auto c3 = contour(ax, X, Y, quant_data);
-    // c3->levels({0.01});
-    // c3->color("red");
-    // c3->line_width(1.2);
-
-    // Set explicit limits for the axes
-    ax->xlim({0, 1});
-    ax->ylim({0, 1});
-
-    fig->save(path);
-}
-
 template <unsigned Dimension>
-int do_it(Params &params)
+int do_it(Darwin &darwin)
 {
+    Params &params = darwin.params;
+
+    std::cout << "Darwin running with" 
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
+              << " dimension=" << params.dimension << " grid=" << params.grid << std::endl;
+    std::cout << "   grow=" << (params.grow ? "on" : "off") << " verify=" << (params.verify ? "on" : "off") << " antialias=" << (params.antialias ? "on" : "off") 
+              << " verbose=" << (params.verbose ? "on" : "off") << " visual=" << (params.visual ? "on" : "off")
+              << " max-clusters=" << params.max_clusters << " min-events=" << params.min_events << std::endl;
+
+    // Load the event data
     typename Weighty<Dimension>::Events events;
     std::string ext = params.ascii ? ".txt" : ".dat";
-    std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
+    std::cout << "Loading events from " << params.filename << ext << "...";
     if (!events.read(params.filename + ext, params.ascii))
     {
-        std::cerr << "Error: Could not open event file: " << params.filename << ext << std::endl;
+        std::cerr << std::endl << "Error: Could not open event file: " << params.filename << ext << std::endl;
         return 1;
     }
-    std::cout << "Loaded " << events.size() << " events." << std::endl;
-
-    // Create output directory
-    fs::create_directories(params.out_dir);
-
-    // Create logs folder and truncate the session log file
-    std::string log_dir = params.out_dir + "/logs";
-    fs::create_directories(log_dir);
-    params.log_path = log_dir + "/gnuplot.log";
-    std::ofstream(params.log_path, std::ios::trunc);
+    std::cout << " loaded " << events.size() << " events." << std::endl;
 
     // Riemann object for the whole n-dimensional sample
     Riemann<Dimension> global(params.grid);
@@ -298,67 +284,26 @@ int do_it(Params &params)
     marginal.antialias = params.antialias;
     marginal.verify = params.verify;
 
+    // Compute weights for whole sample
     size_t valid_events = 0;
     for (const auto &e : events)
         if (global.event(e)) ++valid_events;
 
-    std::cout << "Initial global analysis found " << valid_events << " valid events..." << std::endl;
+    std::cout << "Initial global analysis found " << valid_events << " valid events...";
     global.Laplace<Dimension>::analyze(params.smooth, params.threshold);
     params.num_clusters = global.cluster(params.threshold, params.grow);
-    std::cout << "Found " << params.num_clusters << " clusters. Starting per-cluster analysis..." << std::endl;
+    std::cout << " in " << params.num_clusters << " clusters." << std::endl;
 
     // Save the global classification volume once
     global.cluster_id.write(params.out_dir + "/" + params.filename + "_classes.bin");
 
-    json report;
-    report["filename"] = params.filename;
-    report["dimension"] = Dimension;
-    report["grid_size"] = params.grid;
-    report["total_events"] = events.size();
-    report["num_clusters"] = params.num_clusters;
-    report["clusters"] = json::array();
+    darwin.report["total_events"] = events.size();
+    darwin.report["num_clusters"] = params.num_clusters;
 
-    std::ofstream xml_out(params.filename + ".report.xml");
-    xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    xml_out << "<DarwinReport file=\"" << params.filename << "\" dimensions=\"" << Dimension << "\">\n";
-    xml_out << "  <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << params.num_clusters << "\" />\n";
-    xml_out << "  <Clusters>\n";
+    darwin.xml_out << "  <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << params.num_clusters << "\" />\n";
+    darwin.xml_out << "  <Clusters>\n";
 
-    // Prepare HTML report
-    std::ofstream html_out(params.out_dir + "/index.html");
-    html_out << "<html><head><title>Darwin Report: " << params.filename << "</title>";
-    html_out << "<style>body{font-family:sans-serif;margin:40px;} table{border-collapse:collapse;width:100%;} th,td{padding:10px;border:1px solid #ccc;text-align:left;} img{max-width:800px;}</style></head>";
-    html_out << "<body><h1>Darwin Report: " << params.filename << "</h1>";
-    html_out << "<table><tr><th>ID</th><th>Events</th><th>Diff Error</th><th>Factor Prob</th><th>Mean Vector</th><th>Visualization</th></tr>";
-
-    std::string img_dir = params.out_dir + "/images";
-    fs::create_directories(img_dir);
-
-    std::vector<pid_t> active_pids;
-    unsigned max_concurrent = std::max(1u, std::thread::hardware_concurrency());
-
-    auto dispatch_plot = [&](const std::string &path, const std::vector<std::vector<double>> &class_data, const std::vector<std::vector<double>> &quant_data) {
-        std::cout.flush();
-        html_out.flush();
-        xml_out.flush();
-
-        while (active_pids.size() >= max_concurrent) {
-            int status;
-            pid_t done = waitpid(-1, &status, 0);
-            if (done > 0) {
-                active_pids.erase(std::remove(active_pids.begin(), active_pids.end(), done), active_pids.end());
-            }
-        }
-
-        pid_t pid = fork();
-        if (pid == 0) {
-            make_plot(path, params, class_data, quant_data);
-            std::exit(0);
-        } else if (pid > 0) {
-            active_pids.push_back(pid);
-        }
-    };
-
+    // Analysis of the whole sample
     std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(params.max_clusters + 1);
     for (const auto &e : events)
     {
@@ -369,12 +314,12 @@ int do_it(Params &params)
             size_t idx = (size_t)coord;
             c = static_cast<const Function<Dimension, unsigned short> &>(global.cluster_id)[idx];
         }
-        if (c < params.max_clusters)
+        if (c < params.max_clusters + 1)
             cluster_events[c].push_back(e);
         else
             cluster_events[0].push_back(e);
     }
-    for_each_plane<Dimension>([&params, &cluster_events, &marginal, &img_dir, &dispatch_plot](unsigned i, unsigned j)
+    for_each_plane<Dimension>([&darwin, &params, &cluster_events, &marginal](unsigned i, unsigned j)
     {
         marginal.reset();
         Coordinate<2> marginal_coord(marginal);
@@ -401,19 +346,31 @@ int do_it(Params &params)
         }
         marginal.prepare(params.smooth);
 
-        if (params.visual) {
-            std::vector<std::vector<double>> class_data(params.points, std::vector<double>(params.points));
+        if (params.visual) 
+        {
+            using namespace matplot;
+
+            std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(params.points, std::vector<double>(params.points)));
+
+
             std::vector<std::vector<double>> quant_data(params.points, std::vector<double>(params.points));
             for (unsigned y = 0; y < params.points; ++y) {
                 for (unsigned x = 0; x < params.points; ++x) {
                     size_t idx = x + y * params.points;
-                    class_data[y][x] = (double)marginal_klass[idx];
+                    for (unsigned i = 0; i < 3; ++i)
+                        if (marginal_klass[idx] == 0)
+                            class_data[i][y][x] = 255;
+                        else
+                        {
+                            unsigned hue = (255 * marginal_klass[idx] / (std::min(params.num_clusters, params.max_clusters)));
+                            class_data[i][y][x] = 255 * darwin.colors[hue][i];
+                        }
                     quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
                 }
             }
 
-            std::string path = img_dir + "/sample_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
-            dispatch_plot(path, class_data, quant_data);
+            std::string path = params.img_dir + "/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
+            darwin.dispatch_plot(path, class_data, quant_data);
     } });
     
     for (unsigned c = 1; c <= std::min(params.num_clusters, params.max_clusters); ++c)
@@ -446,9 +403,26 @@ int do_it(Params &params)
             for (unsigned j = 0; j < Dimension; j++)
                 covariance[i][j] /= (cluster_events[c].size() - 1);
 
+        double pct = 100.0 * cluster_events[c].size() / valid_events;
+        std::cout << "Cluster " << c << " contains " << std::fixed << std::setprecision(1) << pct << "% or " << cluster_events[c].size() << " valid events." << std::endl;
+        int w = 10;
+        std::cout << "+-----+" << std::string(w + 2, '-') << "+" << std::string((w + 1) * Dimension + 1, '-') << "+" << std::endl;
+        std::cout << "| Dim | " << std::setw(w) << std::left << "Mean" << " | " << std::setw((w + 1) * Dimension - 1) << std::left << "Covariance" << " |" << std::endl;
+        std::cout << "+-----+" << std::string(w + 2, '-') << "+" << std::string((w + 1) * Dimension + 1, '-') << "+" << std::endl;
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            std::string label_sub = darwin.labels[i].length() > 3 ? darwin.labels[i].substr(0, 3) : darwin.labels[i];
+            std::cout << "| " << std::setw(3) << std::right << label_sub << " | " 
+                      << std::setw(w) << std::fixed << std::setprecision(4) << mean[i] << " |";
+            for (unsigned j = 0; j < Dimension; j++)
+                std::cout << " " << std::setw(w) << std::fixed << std::setprecision(4) << covariance[i][j];
+            std::cout << " |" << std::endl;
+        }
+        std::cout << "+-----+" << std::string(w + 2, '-') << "+" << std::string((w + 1) * Dimension + 1, '-') << "+" << std::endl;
+
         global.Riemann<Dimension>::analyze(params.smooth, params.threshold);
 
-        for_each_plane<Dimension>([&params, c, &cluster_events, &marginal, &img_dir, &dispatch_plot](unsigned i, unsigned j)
+        for_each_plane<Dimension>([&darwin, &params, c, &cluster_events, &marginal](unsigned i, unsigned j)
         {
             Weighty<2>::Event marginal_event;
             Coordinate<2> marginal_coord(marginal);
@@ -469,75 +443,77 @@ int do_it(Params &params)
             marginal.prepare(params.smooth);
 
             // make cluster marginal plot
-            if (params.visual) {
-                std::vector<std::vector<double>> class_data(params.points, std::vector<double>(params.points));
+            if (params.visual) 
+            {
+                std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(params.points, std::vector<double>(params.points)));
                 std::vector<std::vector<double>> quant_data(params.points, std::vector<double>(params.points));
 
                 for (unsigned y = 0; y < params.points; ++y) {
                     for (unsigned x = 0; x < params.points; ++x) {
                         size_t idx = x + y * params.points;
-                        class_data[y][x] = (double)marginal_klass[idx];
+                        for (unsigned i = 0; i < 3; ++i)
+                            if (marginal_klass[idx] == 0)
+                                class_data[i][y][x] = 255;
+                            else
+                            {
+                                unsigned hue = (255 * marginal_klass[idx] / (std::min(params.num_clusters, params.max_clusters)));
+                                class_data[i][y][x] = 255 * darwin.colors[hue][i];
+                            }
                         quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
                     }
                 }
 
-                std::string path = img_dir + "/cluster_" + std::to_string(c) + "_" + std::to_string(i + 1) + "X" + std::to_string(j + 1) + ".png";
-                dispatch_plot(path, class_data, quant_data);
+                // auto class_data = std::make_tuple(std::move(class_r), std::move(class_g), std::move(class_b));
+                std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
+                darwin.dispatch_plot(path, class_data, quant_data);
         } });
 
-        std::string img_rel_name = "images/cluster_" + std::to_string(c) + "_1X2.png";
+        std::string img_rel_name = "images/cluster_" + std::to_string(c) + "_" + darwin.labels[0] + "_" + darwin.labels[1] + ".png";
 
         // Populate JSON report
         json c_info;
         c_info["id"] = c;
         c_info["event_count"] = cluster_event_count;
+        c_info["event_percentage"] = pct;
         c_info["differential_error"] = global.differentialError();
         c_info["factor_probability"] = global.factorProbability();
         c_info["mean"] = mean;
         c_info["covariance"] = covariance;
         c_info["image"] = img_rel_name;
-        report["clusters"].push_back(c_info);
+        darwin.report["clusters"].push_back(c_info);
 
         // Populate XML data
-        xml_out << "    <Cluster id=\"" << c << "\" events=\"" << cluster_event_count << "\">\n";
-        xml_out << "      <Metrics diffError=\"" << global.differentialError() << "\" ";
-        xml_out << "factorProb=\"" << global.factorProbability() << "\" />\n";
-        xml_out << "      <Mean>";
+        darwin.xml_out << "    <Cluster id=\"" << c << "\" events=\"" << cluster_event_count << "\" percentage=\"" << std::fixed << std::setprecision(1) << pct << "\">\n";
+        darwin.xml_out << "      <Metrics diffError=\"" << global.differentialError() << "\" ";
+        darwin.xml_out << "factorProb=\"" << global.factorProbability() << "\" />\n";
+        darwin.xml_out << "      <Mean>";
         for (unsigned i = 0; i < Dimension; ++i)
-            xml_out << (i == 0 ? "" : " ") << mean[i];
-        xml_out << "</Mean>\n";
-        xml_out << "      <Visualization src=\"" << img_rel_name << "\" />\n";
-        xml_out << "    </Cluster>\n";
+            darwin.xml_out << (i == 0 ? "" : " ") << mean[i];
+        darwin.xml_out << "</Mean>\n";
+        darwin.xml_out << "      <Visualization src=\"" << img_rel_name << "\" />\n";
+        darwin.xml_out << "    </Cluster>\n";
 
         // Update HTML
-        html_out << "<tr><td>" << c << "</td><td>" << cluster_event_count << "</td>";
-        html_out << "<td>" << global.differentialError() << "</td><td>" << global.factorProbability() << "</td>";
-        html_out << "<td>";
+        darwin.html_out << "<tr><td>" << c << "</td><td>" << cluster_event_count << " (" << std::fixed << std::setprecision(1) << pct << "%)</td>";
+        darwin.html_out << "<td>" << global.differentialError() << "</td><td>" << global.factorProbability() << "</td>";
         for (unsigned i = 0; i < Dimension; ++i)
         {
-            html_out << (i == 0 ? "" : ", ") << std::fixed << std::setprecision(3) << mean[i];
+            darwin.html_out << "<td>" << std::fixed << std::setprecision(3) << mean[i] << "</td>";
         }
-        html_out << "</td>";
-        html_out << "<td><img src=\"" << img_rel_name << "\"></td></tr>";
+        darwin.html_out << "<td><img src=\"" << img_rel_name << "\"></td></tr>";
     }
 
-    if (!active_pids.empty()) {
-        std::cout << "Waiting for " << active_pids.size() << " background plots to finish rendering..." << std::endl;
-        for (pid_t pid : active_pids) {
-            int status;
-            waitpid(pid, &status, 0);
-        }
-    }
+    darwin.wait_all();
 
-    html_out << "</table></body></html>";
-    html_out.close();
+    darwin.html_out << "</table></body></html>";
+    darwin.html_out.close();
 
-    xml_out << "  </Clusters>\n";
-    xml_out << "</DarwinReport>\n";
-    xml_out.close();
+    darwin.xml_out << "  </Clusters>\n";
+    darwin.xml_out << "</DarwinReport>\n";
+    darwin.xml_out.close();
 
     std::ofstream json_out(params.filename + ".report.json");
-    json_out << report.dump(4);
+    json_out << darwin.report.dump(4);
     json_out.close();
 
     std::cout << "Analysis complete. Reports saved." << std::endl;
@@ -562,7 +538,8 @@ int main(int argc, char *argv[])
     ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
     ("visual", "Save visualization files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
     ("max-clusters", "Maximum number of clusters to report", cxxopts::value<unsigned>()->default_value("10"))
-    ("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("1"))
+    ("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("2")->implicit_value("100"))
+    ("labels", "Comma or space separated list of labels", cxxopts::value<std::string>())
     ("v,verbose", "Verbose", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
     ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
     ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
@@ -592,8 +569,17 @@ int main(int argc, char *argv[])
     params.grow = result["grow"].as<bool>();
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
+    if (result.count("labels"))
+        params.labels_str = result["labels"].as<std::string>();
 
     params.out_dir = params.filename + ".darwin";
+    params.img_dir = params.out_dir + "/images";
+    params.max_concurrent = std::max(1u, std::thread::hardware_concurrency());
+    if (params.min_events <= 1)
+    {
+        std::cerr << "Error: min-events must be greater than 1." << std::endl;
+        return 1;
+    }
     if (result.count("grid"))
         params.grid = result["grid"].as<unsigned>();
     else
@@ -611,18 +597,17 @@ int main(int argc, char *argv[])
         }
     params.points = params.grid + 1;
 
-    std::cout << "Darwin running: " << params.filename << " (Dim: " << params.dimension << ")" << std::endl;
-    std::cout << "  Max clusters to report: " << params.max_clusters << std::endl;
-    std::cout << "  Min events per cluster: " << params.min_events << std::endl;
+    Darwin darwin(params);
+    darwin.setup();
 
     switch (params.dimension)
     {
     case 2:
-        return do_it<2>(params);
+        return do_it<2>(darwin);
     case 3:
-        return do_it<3>(params);
+        return do_it<3>(darwin);
     case 4:
-        return do_it<4>(params);
+        return do_it<4>(darwin);
     default:
         std::cerr << "Unsupported dimension." << std::endl;
         return 1;

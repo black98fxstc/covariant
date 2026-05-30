@@ -25,6 +25,12 @@ struct Params
 template <unsigned Dimension>
 int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned grid_size)
 {
+    std::cout << "Riemann running with" 
+              << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
+              << " dimension=" << params.dimension << " grid=" << params.grid << std::endl;
+    std::cout << "   grow=" << (params.grow ? "on" : "off") << " verify=" << (params.verify ? "on" : "off") << " antialias=" << (params.antialias ? "on" : "off") 
+              << " verbose=" << (params.verbose ? "on" : "off") << " visual=" << (params.visual ? "on" : "off") << std::endl;
+
     typename Weighty<Dimension>::Events events;
     std::string ext = params.ascii ? ".txt" : ".dat";
     std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
@@ -153,16 +159,21 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    params.smooth = result["smooth"].as<float>();
+    params.threshold = result["threshold"].as<float>();
+    params.visual = result["visual"].as<bool>();
+    params.antialias = result["antialias"].as<bool>();
+    params.verify = result["verify"].as<bool>();
+    params.grow = result["grow"].as<bool>();
+    params.verbose = result["verbose"].as<bool>();
+    params.ascii = result["ascii"].as<bool>();
     params.filename = result["file"].as<std::string>();
     params.dimension = result["dimension"].as<unsigned>();
     params.cluster = result["cluster"].as<unsigned>();
 
     if (result.count("grid"))
-    {
         params.grid = result["grid"].as<unsigned>();
-    }
     else
-    {
         switch (params.dimension)
         {
         case 2:
@@ -178,23 +189,6 @@ int main(int argc, char *argv[])
             params.grid = 32;
             break;
         }
-    }
-
-    params.smooth = result["smooth"].as<float>();
-    params.threshold = result["threshold"].as<float>();
-    params.visual = result["visual"].as<bool>();
-    params.antialias = result["antialias"].as<bool>();
-    params.verify = result["verify"].as<bool>();
-    params.grow = result["grow"].as<bool>();
-    params.verbose = result["verbose"].as<bool>();
-    params.ascii = result["ascii"].as<bool>();
-
-    std::cout << "Program running with dimension=" << params.dimension << " grid=" << params.grid << " filename=" << params.filename
-              << " smooth=" << params.smooth << " threshold=" << params.threshold
-              << " antialias=" << (params.antialias ? "on" : "off")
-              << " verify=" << (params.verify ? "on" : "off")
-              << " grow=" << (params.grow ? "on" : "off") << std::endl;
-    std::cout << "Analyzing events in " << params.dimension << " dimensions..." << std::endl;
 
     switch (params.dimension)
     {
