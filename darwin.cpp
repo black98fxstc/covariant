@@ -7,15 +7,18 @@
 #include <iomanip>
 #include <nlohmann/json.hpp>
 #include <cstdlib>
-#include <unistd.h>
 #include <fcntl.h>
 #include <matplot/matplot.h>
-#include <sys/wait.h>
 #include <thread>
 #include <algorithm>
 #include <sstream>
 #include <cctype>
 #include <tuple>
+#include <cmath>
+#ifndef _WIN32
+    #include <unistd.h>
+    #include <sys/wait.h>
+#endif
 
 #include "Covariant.hpp"
 
@@ -42,7 +45,6 @@ struct Params
     bool verify;
     bool grow;
     bool ascii;
-    unsigned num_clusters = 0;
     unsigned max_concurrent = 1;
     std::string labels_str;
 };
@@ -59,12 +61,15 @@ class Darwin
 {
 public:
     Params params;
-    std::vector<pid_t> active_pids;
+    unsigned num_clusters = 0;
     std::ofstream html_out;
     std::ofstream xml_out;
     json report;
     std::vector<std::string> labels;
     std::vector<std::vector<double>> colors;
+#ifndef _WIN32
+    std::vector<pid_t> active_pids;
+#endif
 
     Darwin(const Params& p) : params(p) {}
 
@@ -79,7 +84,7 @@ public:
      * @param v Value [0, 1]
      * @return std::vector<double> RGB components
      */
-    std::vector<double> hsv_to_rgb(double h, double s, double v) {
+    static std::vector<double> hsv_to_rgb(double h, double s, double v) {
         double r = 0, g = 0, b = 0;
         if (s == 0) {
             r = g = b = v;
@@ -167,9 +172,58 @@ public:
         report["labels"] = labels;
         report["clusters"] = json::array();
 
-        xml_out.open(params.filename + ".report.xml");
+        xml_out.open(params.out_dir + "/report.xml");
         xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        xml_out << "<?xml-stylesheet type=\"text/xsl\" href=\"report.xsl\"?>\n";
         xml_out << "<DarwinReport file=\"" << params.filename << "\" dimensions=\"" << params.dimension << "\">\n";
+
+        // Generate the XSLT stylesheet right next to the XML file
+        std::ofstream xslt_out(params.out_dir + "/report.xsl");
+        xslt_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                 << "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">\n"
+                 << "  <xsl:output method=\"html\" indent=\"yes\"/>\n"
+                 << "  <xsl:template match=\"/DarwinReport\">\n"
+                 << "    <html>\n"
+                 << "      <head>\n"
+                 << "        <title>Darwin Report: <xsl:value-of select=\"@file\"/></title>\n"
+                 << "        <style>\n"
+                 << "          body { font-family: sans-serif; margin: 40px; }\n"
+                 << "          table { border-collapse: collapse; width: 100%; }\n"
+                 << "          th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }\n"
+                 << "          img { max-width: 400px; }\n"
+                 << "        </style>\n"
+                 << "      </head>\n"
+                 << "      <body>\n"
+                 << "        <h1>Darwin Report: <xsl:value-of select=\"@file\"/></h1>\n"
+                 << "        <p>\n"
+                 << "          <strong>Dimensions:</strong> <xsl:value-of select=\"@dimensions\"/><br/>\n"
+                 << "          <strong>Total Events:</strong> <xsl:value-of select=\"Summary/@totalEvents\"/><br/>\n"
+                 << "          <strong>Clusters Found:</strong> <xsl:value-of select=\"Summary/@clustersFound\"/>\n"
+                 << "        </p>\n"
+                 << "        <table>\n"
+                 << "          <tr>\n"
+                 << "            <th>ID</th>\n"
+                 << "            <th>Events</th>\n"
+                 << "            <th>Diff Error</th>\n"
+                 << "            <th>Factor Prob</th>\n"
+                 << "            <th>Mean</th>\n"
+                 << "            <th>Visualization</th>\n"
+                 << "          </tr>\n"
+                 << "          <xsl:for-each select=\"Clusters/Cluster\">\n"
+                 << "            <tr>\n"
+                 << "              <td><xsl:value-of select=\"@id\"/></td>\n"
+                 << "              <td><xsl:value-of select=\"@events\"/> (<xsl:value-of select=\"@percentage\"/>%)</td>\n"
+                 << "              <td><xsl:value-of select=\"Metrics/@diffError\"/></td>\n"
+                 << "              <td><xsl:value-of select=\"Metrics/@factorProb\"/></td>\n"
+                 << "              <td><xsl:value-of select=\"Mean\"/></td>\n"
+                 << "              <td><img src=\"{Visualization/@src}\"/></td>\n"
+                 << "            </tr>\n"
+                 << "          </xsl:for-each>\n"
+                 << "        </table>\n"
+                 << "      </body>\n"
+                 << "    </html>\n"
+                 << "  </xsl:template>\n"
+                 << "</xsl:stylesheet>\n";
 
         html_out.open(params.out_dir + "/index.html");
         html_out << "<html><head><title>Darwin Report: " << params.filename << "</title>";
@@ -220,6 +274,7 @@ public:
         if (html_out.is_open()) html_out.flush();
         if (xml_out.is_open()) xml_out.flush();
 
+#ifndef _WIN32
         while (active_pids.size() >= params.max_concurrent) {
             int status;
             pid_t done = waitpid(-1, &status, 0);
@@ -231,13 +286,21 @@ public:
         pid_t pid = fork();
         if (pid == 0) {
             make_plot(path, class_data, quant_data);
-            std::exit(0);
+            _exit(0);
         } else if (pid > 0) {
             active_pids.push_back(pid);
+        } else {
+            std::cerr << "Warning: fork() failed! Plotting synchronously." << std::endl;
+            make_plot(path, class_data, quant_data);
         }
+#else
+        // Windows MSVC natively does not support fork(). Fallback to synchronous.
+        make_plot(path, class_data, quant_data);
+#endif
     }
 
     void wait_all() {
+#ifndef _WIN32
         if (!active_pids.empty()) {
             std::cout << "Waiting for " << active_pids.size() << " background plots to finish rendering..." << std::endl;
             for (pid_t pid : active_pids) {
@@ -246,6 +309,7 @@ public:
             }
             active_pids.clear();
         }
+#endif
     }
 };
 
@@ -291,17 +355,14 @@ int do_it(Darwin &darwin)
 
     std::cout << "Initial global analysis found " << valid_events << " valid events...";
     global.Laplace<Dimension>::analyze(params.smooth, params.threshold);
-    params.num_clusters = global.cluster(params.threshold, params.grow);
-    std::cout << " in " << params.num_clusters << " clusters." << std::endl;
+    darwin.num_clusters = global.cluster(params.threshold, params.grow);
+    std::cout << " in " << darwin.num_clusters << " clusters." << std::endl;
 
     // Save the global classification volume once
     global.cluster_id.write(params.out_dir + "/" + params.filename + "_classes.bin");
 
     darwin.report["total_events"] = events.size();
-    darwin.report["num_clusters"] = params.num_clusters;
-
-    darwin.xml_out << "  <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << params.num_clusters << "\" />\n";
-    darwin.xml_out << "  <Clusters>\n";
+    darwin.report["num_clusters"] = darwin.num_clusters;
 
     // Analysis of the whole sample
     std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(params.max_clusters + 1);
@@ -319,14 +380,15 @@ int do_it(Darwin &darwin)
         else
             cluster_events[0].push_back(e);
     }
-    for_each_plane<Dimension>([&darwin, &params, &cluster_events, &marginal](unsigned i, unsigned j)
+    std::vector<std::string> sample_images;
+    for_each_plane<Dimension>([&darwin, &params, &cluster_events, &marginal, &sample_images](unsigned i, unsigned j)
     {
         marginal.reset();
         Coordinate<2> marginal_coord(marginal);
         Weighty<2>::Event marginal_event;
         std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
-        for (unsigned short c = 0; c <= params.num_clusters; ++c)
+        for (unsigned short c = 0; c <= darwin.num_clusters; ++c)
         {
             for (auto &e : cluster_events[c])
             {
@@ -351,8 +413,6 @@ int do_it(Darwin &darwin)
             using namespace matplot;
 
             std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(params.points, std::vector<double>(params.points)));
-
-
             std::vector<std::vector<double>> quant_data(params.points, std::vector<double>(params.points));
             for (unsigned y = 0; y < params.points; ++y) {
                 for (unsigned x = 0; x < params.points; ++x) {
@@ -362,7 +422,7 @@ int do_it(Darwin &darwin)
                             class_data[i][y][x] = 255;
                         else
                         {
-                            unsigned hue = (255 * marginal_klass[idx] / (std::min(params.num_clusters, params.max_clusters)));
+                            unsigned hue = (255 * marginal_klass[idx] / (std::min(darwin.num_clusters, params.max_clusters)));
                             class_data[i][y][x] = 255 * darwin.colors[hue][i];
                         }
                     quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
@@ -371,9 +431,33 @@ int do_it(Darwin &darwin)
 
             std::string path = params.img_dir + "/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
             darwin.dispatch_plot(path, class_data, quant_data);
+            sample_images.push_back("images/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png");
     } });
     
-    for (unsigned c = 1; c <= std::min(params.num_clusters, params.max_clusters); ++c)
+    darwin.xml_out << "  <Sample>\n";
+    darwin.xml_out << "    <Summary totalEvents=\"" << events.size() << "\" clustersFound=\"" << darwin.num_clusters << "\" />\n";
+    darwin.xml_out << "    <Visualizations>\n";
+    for (const auto& img : sample_images) {
+        darwin.xml_out << "      <Visualization src=\"" << img << "\" />\n";
+    }
+    darwin.xml_out << "    </Visualizations>\n";
+    darwin.xml_out << "  </Sample>\n";
+    darwin.xml_out << "  <Clusters>\n";
+    
+    darwin.html_out << "<div class=\"row\">\n"
+                    << "  <div class=\"info\">\n"
+                    << "    <h2>Global Sample</h2>\n"
+                    << "    <p><strong>Dimensions:</strong> " << params.dimension << "</p>\n"
+                    << "    <p><strong>Total Events:</strong> " << events.size() << "</p>\n"
+                    << "    <p><strong>Clusters Found:</strong> " << darwin.num_clusters << "</p>\n"
+                    << "  </div>\n"
+                    << "  <div class=\"plots\">\n";
+    for (const auto& img : sample_images) {
+        darwin.html_out << "    <div class=\"plot\"><img src=\"" << img << "\"></div>\n";
+    }
+    darwin.html_out << "  </div>\n</div>\n";
+
+    for (unsigned c = 1; c <= std::min(darwin.num_clusters, params.max_clusters); ++c)
     {
         size_t cluster_event_count = cluster_events[c].size();
         if (cluster_events[c].size() < params.min_events)
@@ -422,7 +506,8 @@ int do_it(Darwin &darwin)
 
         global.Riemann<Dimension>::analyze(params.smooth, params.threshold);
 
-        for_each_plane<Dimension>([&darwin, &params, c, &cluster_events, &marginal](unsigned i, unsigned j)
+        std::vector<std::string> cluster_images;
+        for_each_plane<Dimension>([&darwin, &params, c, &cluster_events, &marginal, &cluster_images](unsigned i, unsigned j)
         {
             Weighty<2>::Event marginal_event;
             Coordinate<2> marginal_coord(marginal);
@@ -456,7 +541,7 @@ int do_it(Darwin &darwin)
                                 class_data[i][y][x] = 255;
                             else
                             {
-                                unsigned hue = (255 * marginal_klass[idx] / (std::min(params.num_clusters, params.max_clusters)));
+                                unsigned hue = (255 * marginal_klass[idx] / (std::min(darwin.num_clusters, params.max_clusters)));
                                 class_data[i][y][x] = 255 * darwin.colors[hue][i];
                             }
                         quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
@@ -466,9 +551,8 @@ int do_it(Darwin &darwin)
                 // auto class_data = std::make_tuple(std::move(class_r), std::move(class_g), std::move(class_b));
                 std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
                 darwin.dispatch_plot(path, class_data, quant_data);
+                cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png");
         } });
-
-        std::string img_rel_name = "images/cluster_" + std::to_string(c) + "_" + darwin.labels[0] + "_" + darwin.labels[1] + ".png";
 
         // Populate JSON report
         json c_info;
@@ -479,40 +563,73 @@ int do_it(Darwin &darwin)
         c_info["factor_probability"] = global.factorProbability();
         c_info["mean"] = mean;
         c_info["covariance"] = covariance;
-        c_info["image"] = img_rel_name;
+        c_info["images"] = cluster_images;
         darwin.report["clusters"].push_back(c_info);
 
         // Populate XML data
         darwin.xml_out << "    <Cluster id=\"" << c << "\" events=\"" << cluster_event_count << "\" percentage=\"" << std::fixed << std::setprecision(1) << pct << "\">\n";
         darwin.xml_out << "      <Metrics diffError=\"" << global.differentialError() << "\" ";
         darwin.xml_out << "factorProb=\"" << global.factorProbability() << "\" />\n";
-        darwin.xml_out << "      <Mean>";
+        darwin.xml_out << "      <Mean>\n";
         for (unsigned i = 0; i < Dimension; ++i)
-            darwin.xml_out << (i == 0 ? "" : " ") << mean[i];
-        darwin.xml_out << "</Mean>\n";
-        darwin.xml_out << "      <Visualization src=\"" << img_rel_name << "\" />\n";
+            darwin.xml_out << "        <Value label=\"" << darwin.labels[i] << "\">" << std::fixed << std::setprecision(4) << mean[i] << "</Value>\n";
+        darwin.xml_out << "      </Mean>\n";
+        darwin.xml_out << "      <Covariance>\n";
+        for (unsigned i = 0; i < Dimension; ++i) {
+            darwin.xml_out << "        <Row>\n";
+            for (unsigned j = 0; j < Dimension; ++j) {
+                darwin.xml_out << "          <Cell>" << std::fixed << std::setprecision(4) << covariance[i][j] << "</Cell>\n";
+            }
+            darwin.xml_out << "        </Row>\n";
+        }
+        darwin.xml_out << "      </Covariance>\n";
+        darwin.xml_out << "      <Visualizations>\n";
+        for (const auto& img : cluster_images) {
+            darwin.xml_out << "        <Visualization src=\"" << img << "\" />\n";
+        }
+        darwin.xml_out << "      </Visualizations>\n";
         darwin.xml_out << "    </Cluster>\n";
 
         // Update HTML
-        darwin.html_out << "<tr><td>" << c << "</td><td>" << cluster_event_count << " (" << std::fixed << std::setprecision(1) << pct << "%)</td>";
-        darwin.html_out << "<td>" << global.differentialError() << "</td><td>" << global.factorProbability() << "</td>";
+        darwin.html_out << "<div class=\"row\">\n"
+                        << "  <div class=\"info\">\n"
+                        << "    <h2>Cluster " << c << "</h2>\n"
+                        << "    <p><strong>Events:</strong> " << cluster_event_count << " (" << std::fixed << std::setprecision(1) << pct << "%)</p>\n"
+                        << "    <h4>Mean</h4>\n"
+                        << "    <table class=\"data-table\">\n"
+                        << "      <tr>";
+        for (unsigned i = 0; i < Dimension; ++i) darwin.html_out << "<th>" << darwin.labels[i] << "</th>";
+        darwin.html_out << "</tr>\n      <tr>";
         for (unsigned i = 0; i < Dimension; ++i)
-        {
-            darwin.html_out << "<td>" << std::fixed << std::setprecision(3) << mean[i] << "</td>";
+            darwin.html_out << "<td>" << std::fixed << std::setprecision(4) << mean[i] << "</td>";
+        darwin.html_out << "</tr>\n    </table>\n"
+                        << "    <h4>Covariance</h4>\n"
+                        << "    <table class=\"data-table\">\n";
+        for (unsigned i = 0; i < Dimension; ++i) {
+            darwin.html_out << "      <tr>";
+            for (unsigned j = 0; j < Dimension; ++j) {
+                darwin.html_out << "<td>" << std::fixed << std::setprecision(4) << covariance[i][j] << "</td>";
+            }
+            darwin.html_out << "</tr>\n";
         }
-        darwin.html_out << "<td><img src=\"" << img_rel_name << "\"></td></tr>";
+        darwin.html_out << "    </table>\n  </div>\n"
+                        << "  <div class=\"plots\">\n";
+        for (const auto& img : cluster_images) {
+            darwin.html_out << "    <div class=\"plot\"><img src=\"" << img << "\"></div>\n";
+        }
+        darwin.html_out << "  </div>\n</div>\n";
     }
 
     darwin.wait_all();
 
-    darwin.html_out << "</table></body></html>";
+    darwin.html_out << "</body>\n</html>\n";
     darwin.html_out.close();
 
     darwin.xml_out << "  </Clusters>\n";
     darwin.xml_out << "</DarwinReport>\n";
     darwin.xml_out.close();
 
-    std::ofstream json_out(params.filename + ".report.json");
+    std::ofstream json_out(params.out_dir + "/report.json");
     json_out << darwin.report.dump(4);
     json_out.close();
 
@@ -526,7 +643,11 @@ int main(int argc, char *argv[])
     Params params;
 
     // Force Gnuplot to use a non-interactive terminal. 
+#ifdef _WIN32
+    _putenv_s("GNUTERM", "png");
+#else
     setenv("GNUTERM", "png", 1);
+#endif
 
     cxxopts::Options options("Darwin", "Hierarchical Laplacian and Riemannian analysis");
 
