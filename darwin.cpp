@@ -20,6 +20,11 @@
     #include <sys/wait.h>
 #endif
 
+#include <libxml/parser.h>
+#include <libxslt/xslt.h>
+#include <libxslt/transform.h>
+#include <libxslt/xsltutils.h>
+
 #include "Covariant.hpp"
 
 using json = nlohmann::json;
@@ -47,6 +52,7 @@ struct Params
     bool ascii;
     unsigned max_concurrent = 1;
     std::string labels_str;
+    std::string style;
 };
 
 template <unsigned Dimension>
@@ -57,12 +63,36 @@ void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func
             func(i, j);
 };
 
+void apply_stylesheet(const std::string& xml_path, const std::string& xsl_path, const std::string& out_path) {
+    xmlDocPtr xml_doc = xmlParseFile(xml_path.c_str());
+    if (!xml_doc) {
+        std::cerr << "Error parsing XML file: " << xml_path << std::endl;
+        return;
+    }
+    xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile((const xmlChar*)xsl_path.c_str());
+    if (!xsl_doc) {
+        std::cerr << "Error parsing XSLT file: " << xsl_path << std::endl;
+        xmlFreeDoc(xml_doc);
+        return;
+    }
+    xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, NULL);
+    if (res_doc) {
+        if (xsltSaveResultToFilename(out_path.c_str(), res_doc, xsl_doc, 0) == -1) {
+            std::cerr << "Error writing output file: " << out_path << std::endl;
+        }
+        xmlFreeDoc(res_doc);
+    } else {
+        std::cerr << "Error applying stylesheet." << std::endl;
+    }
+    xsltFreeStylesheet(xsl_doc);
+    xmlFreeDoc(xml_doc);
+}
+
 class Darwin
 {
 public:
     Params params;
     unsigned num_clusters = 0;
-    std::ofstream html_out;
     std::ofstream xml_out;
     json report;
     std::vector<std::string> labels;
@@ -187,53 +217,61 @@ public:
                  << "      <head>\n"
                  << "        <title>Darwin Report: <xsl:value-of select=\"@file\"/></title>\n"
                  << "        <style>\n"
-                 << "          body { font-family: sans-serif; margin: 40px; }\n"
-                 << "          table { border-collapse: collapse; width: 100%; }\n"
-                 << "          th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }\n"
-                 << "          img { max-width: 400px; }\n"
+                 << "          body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }\n"
+                 << "          .row { display: flex; flex-direction: row; background: #fff; margin-bottom: 20px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
+                 << "          .info { flex: 0 0 350px; padding-right: 20px; border-right: 1px solid #eee; margin-right: 20px; }\n"
+                 << "          .plots { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }\n"
+                 << "          .plot img { width: 300px; height: auto; border: 1px solid #ddd; border-radius: 4px; }\n"
+                 << "          .data-table { border-collapse: collapse; margin-top: 10px; width: 100%; font-size: 0.9em; }\n"
+                 << "          .data-table th, .data-table td { border: 1px solid #ccc; padding: 6px; text-align: center; }\n"
+                 << "          .data-table th { background: #f9f9f9; }\n"
+                 << "          h2 { margin-top: 0; }\n"
+                 << "          h4 { margin-bottom: 5px; margin-top: 15px; color: #555; }\n"
                  << "        </style>\n"
                  << "      </head>\n"
                  << "      <body>\n"
                  << "        <h1>Darwin Report: <xsl:value-of select=\"@file\"/></h1>\n"
-                 << "        <p>\n"
-                 << "          <strong>Dimensions:</strong> <xsl:value-of select=\"@dimensions\"/><br/>\n"
-                 << "          <strong>Total Events:</strong> <xsl:value-of select=\"Summary/@totalEvents\"/><br/>\n"
-                 << "          <strong>Clusters Found:</strong> <xsl:value-of select=\"Summary/@clustersFound\"/>\n"
-                 << "        </p>\n"
-                 << "        <table>\n"
-                 << "          <tr>\n"
-                 << "            <th>ID</th>\n"
-                 << "            <th>Events</th>\n"
-                 << "            <th>Diff Error</th>\n"
-                 << "            <th>Factor Prob</th>\n"
-                 << "            <th>Mean</th>\n"
-                 << "            <th>Visualization</th>\n"
-                 << "          </tr>\n"
+                 << "        <div class=\"row\">\n"
+                 << "          <div class=\"info\">\n"
+                 << "            <h2>Whole Sample</h2>\n"
+                 << "            <p><strong>Dimensions:</strong> <xsl:value-of select=\"@dimensions\"/></p>\n"
+                 << "            <p><strong>Total Events:</strong> <xsl:value-of select=\"Sample/Summary/@totalEvents\"/></p>\n"
+                 << "            <p><strong>Clusters Found:</strong> <xsl:value-of select=\"Sample/Summary/@clustersFound\"/></p>\n"
+                 << "          </div>\n"
+                 << "          <div class=\"plots\">\n"
+                 << "            <xsl:for-each select=\"Sample/Visualizations/Visualization\">\n"
+                 << "              <div class=\"plot\"><img src=\"{@src}\"/></div>\n"
+                 << "            </xsl:for-each>\n"
+                 << "          </div>\n"
+                 << "        </div>\n"
                  << "          <xsl:for-each select=\"Clusters/Cluster\">\n"
-                 << "            <tr>\n"
-                 << "              <td><xsl:value-of select=\"@id\"/></td>\n"
-                 << "              <td><xsl:value-of select=\"@events\"/> (<xsl:value-of select=\"@percentage\"/>%)</td>\n"
-                 << "              <td><xsl:value-of select=\"Metrics/@diffError\"/></td>\n"
-                 << "              <td><xsl:value-of select=\"Metrics/@factorProb\"/></td>\n"
-                 << "              <td><xsl:value-of select=\"Mean\"/></td>\n"
-                 << "              <td><img src=\"{Visualization/@src}\"/></td>\n"
-                 << "            </tr>\n"
+                 << "          <div class=\"row\">\n"
+                 << "            <div class=\"info\">\n"
+                 << "              <h2>Cluster <xsl:value-of select=\"@id\"/></h2>\n"
+                 << "              <p><strong>Events:</strong> <xsl:value-of select=\"@events\"/> (<xsl:value-of select=\"@percentage\"/>%)</p>\n"
+                 << "              <h4>Mean</h4>\n"
+                 << "              <table class=\"data-table\">\n"
+                 << "                <tr><xsl:for-each select=\"Mean/Value\"><th><xsl:value-of select=\"@label\"/></th></xsl:for-each></tr>\n"
+                 << "                <tr><xsl:for-each select=\"Mean/Value\"><td><xsl:value-of select=\".\"/></td></xsl:for-each></tr>\n"
+                 << "              </table>\n"
+                 << "              <h4>Covariance</h4>\n"
+                 << "              <table class=\"data-table\">\n"
+                 << "                <xsl:for-each select=\"Covariance/Row\">\n"
+                 << "                  <tr><xsl:for-each select=\"Cell\"><td><xsl:value-of select=\".\"/></td></xsl:for-each></tr>\n"
+                 << "                </xsl:for-each>\n"
+                 << "              </table>\n"
+                 << "            </div>\n"
+                 << "            <div class=\"plots\">\n"
+                 << "              <xsl:for-each select=\"Visualizations/Visualization\">\n"
+                 << "                <div class=\"plot\"><img src=\"{@src}\"/></div>\n"
+                 << "              </xsl:for-each>\n"
+                 << "            </div>\n"
+                 << "          </div>\n"
                  << "          </xsl:for-each>\n"
-                 << "        </table>\n"
                  << "      </body>\n"
                  << "    </html>\n"
                  << "  </xsl:template>\n"
                  << "</xsl:stylesheet>\n";
-
-        html_out.open(params.out_dir + "/index.html");
-        html_out << "<html><head><title>Darwin Report: " << params.filename << "</title>";
-        html_out << "<style>body{font-family:sans-serif;margin:40px;} table{border-collapse:collapse;width:100%;} th,td{padding:10px;border:1px solid #ccc;text-align:left;} img{max-width:800px;}</style></head>";
-        html_out << "<body><h1>Darwin Report: " << params.filename << "</h1>";
-        html_out << "<table><tr><th>ID</th><th>Events</th><th>Diff Error</th><th>Factor Prob</th>";
-        for (const auto& label : labels) {
-            html_out << "<th>Mean " << label << "</th>";
-        }
-        html_out << "<th>Visualization</th></tr>";
     }
 
     void make_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
@@ -255,6 +293,7 @@ public:
         c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
         c->color("black");
         c->line_width(1.2);
+        ax->grid(true);
 
         // Update limits to fit the data grid
         ax->xlim({0, (double)quant_data[0].size() - 1});
@@ -271,7 +310,6 @@ public:
 
     void dispatch_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data) {
         std::cout.flush();
-        if (html_out.is_open()) html_out.flush();
         if (xml_out.is_open()) xml_out.flush();
 
 #ifndef _WIN32
@@ -444,19 +482,6 @@ int do_it(Darwin &darwin)
     darwin.xml_out << "  </Sample>\n";
     darwin.xml_out << "  <Clusters>\n";
     
-    darwin.html_out << "<div class=\"row\">\n"
-                    << "  <div class=\"info\">\n"
-                    << "    <h2>Global Sample</h2>\n"
-                    << "    <p><strong>Dimensions:</strong> " << params.dimension << "</p>\n"
-                    << "    <p><strong>Total Events:</strong> " << events.size() << "</p>\n"
-                    << "    <p><strong>Clusters Found:</strong> " << darwin.num_clusters << "</p>\n"
-                    << "  </div>\n"
-                    << "  <div class=\"plots\">\n";
-    for (const auto& img : sample_images) {
-        darwin.html_out << "    <div class=\"plot\"><img src=\"" << img << "\"></div>\n";
-    }
-    darwin.html_out << "  </div>\n</div>\n";
-
     for (unsigned c = 1; c <= std::min(darwin.num_clusters, params.max_clusters); ++c)
     {
         size_t cluster_event_count = cluster_events[c].size();
@@ -589,41 +614,9 @@ int do_it(Darwin &darwin)
         }
         darwin.xml_out << "      </Visualizations>\n";
         darwin.xml_out << "    </Cluster>\n";
-
-        // Update HTML
-        darwin.html_out << "<div class=\"row\">\n"
-                        << "  <div class=\"info\">\n"
-                        << "    <h2>Cluster " << c << "</h2>\n"
-                        << "    <p><strong>Events:</strong> " << cluster_event_count << " (" << std::fixed << std::setprecision(1) << pct << "%)</p>\n"
-                        << "    <h4>Mean</h4>\n"
-                        << "    <table class=\"data-table\">\n"
-                        << "      <tr>";
-        for (unsigned i = 0; i < Dimension; ++i) darwin.html_out << "<th>" << darwin.labels[i] << "</th>";
-        darwin.html_out << "</tr>\n      <tr>";
-        for (unsigned i = 0; i < Dimension; ++i)
-            darwin.html_out << "<td>" << std::fixed << std::setprecision(4) << mean[i] << "</td>";
-        darwin.html_out << "</tr>\n    </table>\n"
-                        << "    <h4>Covariance</h4>\n"
-                        << "    <table class=\"data-table\">\n";
-        for (unsigned i = 0; i < Dimension; ++i) {
-            darwin.html_out << "      <tr>";
-            for (unsigned j = 0; j < Dimension; ++j) {
-                darwin.html_out << "<td>" << std::fixed << std::setprecision(4) << covariance[i][j] << "</td>";
-            }
-            darwin.html_out << "</tr>\n";
-        }
-        darwin.html_out << "    </table>\n  </div>\n"
-                        << "  <div class=\"plots\">\n";
-        for (const auto& img : cluster_images) {
-            darwin.html_out << "    <div class=\"plot\"><img src=\"" << img << "\"></div>\n";
-        }
-        darwin.html_out << "  </div>\n</div>\n";
     }
 
     darwin.wait_all();
-
-    darwin.html_out << "</body>\n</html>\n";
-    darwin.html_out.close();
 
     darwin.xml_out << "  </Clusters>\n";
     darwin.xml_out << "</DarwinReport>\n";
@@ -633,7 +626,25 @@ int do_it(Darwin &darwin)
     json_out << darwin.report.dump(4);
     json_out.close();
 
-    std::cout << "Analysis complete. Reports saved." << std::endl;
+    std::string xml_path = params.out_dir + "/report.xml";
+    std::string default_xsl_path = params.out_dir + "/report.xsl";
+    std::string default_out_path = params.out_dir + "/index.html";
+    
+    std::cout << "Generating HTML report..." << std::endl;
+    apply_stylesheet(xml_path, default_xsl_path, default_out_path);
+
+    if (!params.style.empty()) {
+        fs::path style_path(params.style);
+        std::string stem = style_path.stem().string();
+        if (fs::path(stem).extension().empty()) {
+            stem += ".html";
+        }
+        std::string custom_out_path = params.out_dir + "/" + stem;
+        std::cout << "Generating custom report..." << std::endl;
+        apply_stylesheet(xml_path, params.style, custom_out_path);
+    }
+
+    std::cout << "Analysis complete. Reports saved and HTML generated." << std::endl;
 
     return 0;
 }
@@ -666,6 +677,7 @@ int main(int argc, char *argv[])
     ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
     ("grow", "Grow clusters", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
     ("a,ascii", "Use ASCII data", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+    ("style", "Path to custom XSLT stylesheet", cxxopts::value<std::string>())
     ("h,help", "Print usage");
 
     options.parse_positional({"file"});
@@ -692,9 +704,27 @@ int main(int argc, char *argv[])
     params.ascii = result["ascii"].as<bool>();
     if (result.count("labels"))
         params.labels_str = result["labels"].as<std::string>();
+    if (result.count("style"))
+        params.style = result["style"].as<std::string>();
 
     params.out_dir = params.filename + ".darwin";
     params.img_dir = params.out_dir + "/images";
+
+    if (!params.style.empty()) {
+        std::string xml_path = params.out_dir + "/report.xml";
+        if (fs::exists(xml_path)) {
+            fs::path style_path(params.style);
+            std::string stem = style_path.stem().string();
+            if (fs::path(stem).extension().empty()) {
+                stem += ".html";
+            }
+            std::string custom_out_path = params.out_dir + "/" + stem;
+            std::cout << "XML already exists. Rendering custom report directly to " << custom_out_path << "..." << std::endl;
+            apply_stylesheet(xml_path, params.style, custom_out_path);
+            return 0;
+        }
+    }
+
     params.max_concurrent = std::max(1u, std::thread::hardware_concurrency());
     if (params.min_events <= 1)
     {

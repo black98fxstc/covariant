@@ -21,6 +21,9 @@ find_package(FFTW3f CONFIG REQUIRED)
 find_package(Matplot++ CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+# Find the packages provided by vcpkg
+find_package(LibXml2 REQUIRED)
+find_package(LibXslt REQUIRED)
 
 # Note: vcpkg provides FFTW3::fftw3f and FFTW3::fftw3f_threads when the threads feature is enabled.
 # We will use these directly in target_link_libraries
@@ -31,7 +34,7 @@ if(UNIX)
 endif()
 
 # Include the current directory for headers like Weighty.hpp and cxxopts.hpp
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} /usr/include/libxml2/ )
 
 # Define targets for the various tools and main programs
 add_executable(testdata testdata.cpp)
@@ -45,7 +48,8 @@ add_executable(riemann riemann.cpp)
 target_link_libraries(riemann PRIVATE FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
 add_executable(darwin darwin.cpp)
-target_link_libraries(darwin PRIVATE FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts ${MATH_LIB})
+target_link_libraries(darwin PRIVATE FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts ${MATH_LIB} LibXml2::LibXml2 LibXslt::LibXslt )
+# Add LibXml2::LibXml2 and LibXslt::LibXslt to your existing link libraries
 
 # Set output names to match your Makefile targets
 set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")

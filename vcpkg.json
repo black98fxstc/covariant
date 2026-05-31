@@ -8,6 +8,8 @@
     },
     "cxxopts",
     "matplotplusplus",
-    "nlohmann-json"
+    "nlohmann-json",
+    "libxslt",
+    "libxml2"
   ]
 }
