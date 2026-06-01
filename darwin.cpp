@@ -403,7 +403,7 @@ int do_it(Darwin &darwin)
     darwin.report["num_clusters"] = darwin.num_clusters;
 
     // Analysis of the whole sample
-    std::vector<std::vector<typename Weighty<Dimension>::Event>> cluster_events(params.max_clusters + 1);
+    std::vector<std::vector<Event<Dimension>>> cluster_events(params.max_clusters + 1);
     for (const auto &e : events)
     {
         unsigned short c = 0;
@@ -423,7 +423,7 @@ int do_it(Darwin &darwin)
     {
         marginal.reset();
         Coordinate<2> marginal_coord(marginal);
-        Weighty<2>::Event marginal_event;
+        Event<2> marginal_event;
         std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
         for (unsigned short c = 0; c <= darwin.num_clusters; ++c)
@@ -534,7 +534,7 @@ int do_it(Darwin &darwin)
         std::vector<std::string> cluster_images;
         for_each_plane<Dimension>([&darwin, &params, c, &cluster_events, &marginal, &cluster_images](unsigned i, unsigned j)
         {
-            Weighty<2>::Event marginal_event;
+            Event<2> marginal_event;
             Coordinate<2> marginal_coord(marginal);
             std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 

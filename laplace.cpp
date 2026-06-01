@@ -30,7 +30,7 @@ int do_it(const Params &params, unsigned grid_size)
     std::cout << "   grow=" << (params.grow ? "on" : "off") << " verify=" << (params.verify ? "on" : "off") << " antialias=" << (params.antialias ? "on" : "off") 
               << " verbose=" << (params.verbose ? "on" : "off") << " visual=" << (params.visual ? "on" : "off") << std::endl;
 
-    typename Weighty<Dimension>::Events events;
+    Events<Dimension> events;
     std::string ext = params.ascii ? ".txt" : ".dat";
     std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
     if (!events.read(params.filename + ext, params.ascii))

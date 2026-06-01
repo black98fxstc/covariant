@@ -9,12 +9,13 @@
 #include <iostream>
 
 #include "Dimensions.hpp"
+#include "Events.hpp"
 
 template <unsigned Dimension>
 class Weighty;
 
 template <unsigned Dimension>
-class TestData : public Dimensions<Dimension>::Events
+class TestData : public Events<Dimension>
 {
     class RandomEvent
     {
@@ -39,7 +40,7 @@ class TestData : public Dimensions<Dimension>::Events
         typename std::exponential_distribution<float> exponential_distribution{1.0f};
 
     public:
-        virtual unsigned short sample(typename Dimensions<Dimension>::Event &event) = 0;
+        virtual unsigned short sample(Event<Dimension> &event) = 0;
         virtual ~RandomEvent() = default;
     };
 
@@ -49,10 +50,10 @@ public:
     class Normal : public RandomEvent
     {
     public:
-        typename Dimensions<Dimension>::Event mean;
+        Event<Dimension> mean;
         float stddev;
 
-        unsigned short sample(typename Dimensions<Dimension>::Event &event)
+        unsigned short sample(Event<Dimension> &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
                 event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
@@ -72,12 +73,12 @@ public:
     public:
         const double pi = 3.14159265358979323846;
         const float half_pi = (float)(pi / 2);
-        typename Dimensions<Dimension>::Event mean;
+        Event<Dimension> mean;
         unsigned X, Y;
         float stddev;
         double s, c;
 
-        unsigned short sample(typename Dimensions<Dimension>::Event &event)
+        unsigned short sample(Event<Dimension> &event)
         {
             // two quarter arcs of the circle, one flipped
             double delta_x, delta_y;
@@ -122,11 +123,11 @@ public:
     {
         unsigned X;
         float lambda;
-        typename Dimensions<Dimension>::Event mean;
+        Event<Dimension> mean;
         float stddev;
 
     public:
-        unsigned short sample(typename Dimensions<Dimension>::Event &event)
+        unsigned short sample(Event<Dimension> &event)
         {
             for (unsigned i = 0; i < Dimension; i++)
                 if (i == X)
@@ -183,7 +184,7 @@ public:
                 fractions.insert(fractions.begin() + n, fractions[n - 1] + max * this->normal_distribution(this->rng(), this->halfish_param));
         }
 
-        unsigned short sample(typename Dimensions<Dimension>::Event &event)
+        unsigned short sample(Event<Dimension> &event)
         {
             // pick a random population with appropriate frequency and then sample it
             int p = std::upper_bound(fractions.begin(), fractions.end(), this->uniform_distribution(this->rng(), this->fraction_param)) - fractions.begin();
