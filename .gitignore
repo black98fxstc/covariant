@@ -9,6 +9,8 @@ norminv.cpp
 *.cluster
 *.png
 *.darwin
+*.fcs
+*.class
 testdata
 laplace
 riemann
