@@ -1,0 +1,10 @@
+{
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/wmoore/git/covariant",
+            "binaryPath": "/home/wmoore/git/covariant/covariant",
+            "binaryArgs": []
+        }
+    ],
+    "bucketExplorer.buckets": []
+}

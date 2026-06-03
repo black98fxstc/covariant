@@ -1,0 +1,420 @@
+#include "Samples.hpp"
+#include <iostream>
+#include <stdexcept>
+#include <type_traits>
+#include <fstream>
+#include <sstream>
+#include <map>
+#include <cmath>
+#include <algorithm>
+#include <libxml/parser.h>
+#include <libxslt/xslt.h>
+#include <libxslt/transform.h>
+#include <libxslt/xsltutils.h>
+#include <filesystem>
+
+Variable::Variable(std::string n) : name(std::move(n)), scale(Scale::unknown) {}
+
+Variable::Variable(std::string n, Parameters p) : name(std::move(n)), params(std::move(p)) 
+{
+    scale = std::visit([](auto&& arg) -> Scale {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, LinearParams>) return Scale::linear;
+        else if constexpr (std::is_same_v<T, LogParams>) return Scale::log;
+        else if constexpr (std::is_same_v<T, BiexpParams>) return Scale::biexp;
+        else if constexpr (std::is_same_v<T, LogicleParams>) return Scale::logicle;
+        else return Scale::unknown;
+    }, params);
+}
+
+void DataSet::add_variable(const std::string& name)
+{
+    variables.emplace_back(name);
+}
+
+void DataSet::add_classification(const std::string& name)
+{
+    Variable var(name);
+    var.data = std::vector<unsigned short>{};
+    variables.push_back(std::move(var));
+}
+
+void DataSet::add_data(const std::vector<float>& datum)
+{
+    // Implementation
+}
+
+void DataSet::for_each_class(const Variable& classification, std::function<void(unsigned short)> func)
+{
+    if (std::holds_alternative<std::vector<unsigned short>>(classification.data)) {
+        for (auto val : std::get<std::vector<unsigned short>>(classification.data)) {
+            func(val);
+        }
+    }
+}
+
+void DataSet::for_each_member(const Variable& membership, std::function<void(bool)> func)
+{
+    if (std::holds_alternative<std::vector<bool>>(membership.data)) {
+        for (auto val : std::get<std::vector<bool>>(membership.data)) {
+            func(val);
+        }
+    }
+}
+
+void DataSet::setup_float_variables(const std::vector<std::string>& headers)
+{
+    variables.clear();
+    for (const auto& h : headers) {
+        Variable var(h, LinearParams{});
+        var.data = std::vector<float>{};
+        variables.push_back(std::move(var));
+    }
+}
+
+bool DataSet::read_csv(const std::string& filename, char delimiter)
+    {
+        std::ifstream in(filename);
+        if (!in.is_open()) return false;
+
+        std::string line;
+        if (!std::getline(in, line)) return false;
+
+        // Parse the header for variable names
+        std::vector<std::string> headers;
+        std::stringstream ss(line);
+        std::string token;
+        while (std::getline(ss, token, delimiter)) {
+            token.erase(0, token.find_first_not_of(" \r\n\t"));
+            token.erase(token.find_last_not_of(" \r\n\t") + 1);
+            headers.push_back(token);
+        }
+
+        setup_float_variables(headers);
+        size_t num_cols = headers.size();
+
+        // Parse data rows
+        while (std::getline(in, line)) {
+            if (line.empty() || line.find_first_not_of(" \r\n\t") == std::string::npos) continue;
+            
+            std::stringstream line_ss(line);
+            for (size_t i = 0; i < num_cols; ++i) {
+                if (!std::getline(line_ss, token, delimiter)) break;
+                try {
+                    float val = std::stof(token);
+                    std::get<std::vector<float>>(variables[i].data).push_back(val);
+                } catch (...) {
+                    std::get<std::vector<float>>(variables[i].data).push_back(std::nanf(""));
+                }
+            }
+        }
+        return true;
+    }
+
+bool DataSet::read_xml_xslt(const std::string& xml_file, const std::string& xsl_file, char delimiter)
+    {
+        xmlDocPtr xml_doc = xmlParseFile(xml_file.c_str());
+        if (!xml_doc) return false;
+
+        xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile((const xmlChar*)xsl_file.c_str());
+        if (!xsl_doc) {
+            xmlFreeDoc(xml_doc);
+            return false;
+        }
+
+        xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, NULL);
+        std::string tmp_csv = xml_file + ".tmp.csv";
+        bool success = false;
+        
+        if (res_doc) {
+            if (xsltSaveResultToFilename(tmp_csv.c_str(), res_doc, xsl_doc, 0) != -1) {
+                success = true;
+            }
+            xmlFreeDoc(res_doc);
+        }
+        xsltFreeStylesheet(xsl_doc);
+        xmlFreeDoc(xml_doc);
+
+        // Parse the CSV output and cleanup
+        if (success) {
+            success = read_csv(tmp_csv, delimiter);
+            std::remove(tmp_csv.c_str());
+        }
+        return success;
+    }
+
+bool DataSet::read_binary(const std::string& filename, const std::vector<std::string>& headers)
+    {
+        std::ifstream in(filename, std::ios::binary | std::ios::ate);
+        if (!in.is_open()) return false;
+        
+        setup_float_variables(headers);
+        size_t num_cols = headers.size();
+        if (num_cols == 0) return false;
+
+        size_t file_size = in.tellg();
+        in.seekg(0, std::ios::beg);
+
+        size_t num_floats = file_size / sizeof(float);
+        size_t num_rows = num_floats / num_cols;
+
+        std::vector<float> row(num_cols);
+        for (size_t r = 0; r < num_rows; ++r) {
+            in.read(reinterpret_cast<char*>(row.data()), num_cols * sizeof(float));
+            for (size_t c = 0; c < num_cols; ++c) {
+                std::get<std::vector<float>>(variables[c].data).push_back(row[c]);
+            }
+        }
+        return in.good();
+    }
+
+bool DataSet::read_fcs(const std::string& filename)
+    {
+        std::ifstream in(filename, std::ios::binary);
+        if (!in.is_open()) return false;
+
+        char version[11] = {0};
+        in.read(version, 10); // Check FCS2.0, FCS3.0, etc.
+        
+        auto read_offset = [&in]() -> size_t {
+            char buf[9] = {0};
+            in.read(buf, 8);
+            std::string s(buf);
+            s.erase(0, s.find_first_not_of(' '));
+            return s.empty() ? 0 : std::stoull(s);
+        };
+
+        size_t text_start = read_offset();
+        size_t text_end = read_offset();
+        size_t data_start = read_offset();
+        size_t data_end = read_offset();
+
+        // Parse the TEXT segment for basic structure dimensions and labels
+        in.seekg(text_start, std::ios::beg);
+        size_t text_size = text_end - text_start + 1;
+        std::vector<char> text_seg(text_size);
+        in.read(text_seg.data(), text_size);
+
+        char delimiter = text_seg[0];
+        std::map<std::string, std::string> metadata;
+        std::string key, value;
+        bool is_key = true;
+        
+        for (size_t i = 1; i < text_size; ++i) {
+            if (text_seg[i] == delimiter) {
+                if (i + 1 < text_size && text_seg[i+1] == delimiter) { // Escaped delimiter
+                    (is_key ? key : value) += delimiter;
+                    i++;
+                } else {
+                    if (is_key) is_key = false;
+                    else {
+                        std::transform(key.begin(), key.end(), key.begin(), ::toupper);
+                        
+                        size_t start = value.find_first_not_of(" \r\n\t");
+                        if (start == std::string::npos) value.clear();
+                        else {
+                            value.erase(0, start);
+                            value.erase(value.find_last_not_of(" \r\n\t") + 1);
+                        }
+                        
+                        metadata[key] = value;
+                        key.clear(); value.clear();
+                        is_key = true;
+                    }
+                }
+            } else {
+                (is_key ? key : value) += text_seg[i];
+            }
+        }
+        if (!key.empty()) {
+            std::transform(key.begin(), key.end(), key.begin(), ::toupper);
+            
+            size_t start = value.find_first_not_of(" \r\n\t");
+            if (start == std::string::npos) value.clear();
+            else {
+                value.erase(0, start);
+                value.erase(value.find_last_not_of(" \r\n\t") + 1);
+            }
+            
+            metadata[key] = value;
+        }
+
+        // Fallback checks for > 99,999,999 byte offsets in FCS 3.0+
+        if (data_start == 0 && metadata.count("$BEGINDATA")) data_start = std::stoull(metadata["$BEGINDATA"]);
+        if (data_end == 0 && metadata.count("$ENDDATA")) data_end = std::stoull(metadata["$ENDDATA"]);
+
+        int num_params = metadata.count("$PAR") ? std::stoi(metadata["$PAR"]) : 0;
+        size_t tot_events = metadata.count("$TOT") ? std::stoull(metadata["$TOT"]) : 0;
+
+        std::vector<std::string> headers;
+        for (int i = 1; i <= num_params; ++i) {
+            std::string p_name = "$P" + std::to_string(i) + "N";
+            std::string p_stain = "$P" + std::to_string(i) + "S";
+            
+            headers.push_back(p_name); // much easier to type on the command line
+        }
+
+        setup_float_variables(headers);
+
+        // Check if little or big endian. Assuming host CPU is little-endian x86_64
+        bool swap_bytes = (metadata.count("$BYTEORD") && metadata["$BYTEORD"] == "4,3,2,1");
+
+        // Extract raw floats from DATA segment
+        in.seekg(data_start, std::ios::beg);
+        for (size_t e = 0; e < tot_events; ++e) {
+            for (int p = 0; p < num_params; ++p) {
+                float val = 0.0f;
+                in.read(reinterpret_cast<char*>(&val), sizeof(float));
+                if (swap_bytes) {
+                    char* v_bytes = reinterpret_cast<char*>(&val);
+                    std::swap(v_bytes[0], v_bytes[3]);
+                    std::swap(v_bytes[1], v_bytes[2]);
+                }
+                std::get<std::vector<float>>(variables[p].data).push_back(val);
+            }
+        }
+
+        // Check for auxiliary .clr, .csv, and .truth files associated with this .fcs file
+        auto read_aux = [this, tot_events](const std::filesystem::path& path, bool is_bool) {
+            std::ifstream in(path);
+            if (!in.is_open()) return;
+
+            std::string line;
+            if (!std::getline(in, line)) return;
+
+            std::vector<std::string> aux_headers;
+            std::stringstream ss(line);
+            std::string token;
+            while (std::getline(ss, token, ',')) {
+                token.erase(0, token.find_first_not_of(" \r\n\t"));
+                token.erase(token.find_last_not_of(" \r\n\t") + 1);
+                aux_headers.push_back(token);
+            }
+
+            size_t num_cols = aux_headers.size();
+            size_t start_idx = variables.size();
+
+            for (const auto& h : aux_headers) {
+                Variable var(h);
+                if (is_bool) {
+                    var.data = std::vector<bool>{};
+                    std::get<std::vector<bool>>(var.data).reserve(tot_events);
+                } else {
+                    var.data = std::vector<unsigned short>{};
+                    std::get<std::vector<unsigned short>>(var.data).reserve(tot_events);
+                }
+                variables.push_back(std::move(var));
+            }
+
+            while (std::getline(in, line)) {
+                if (line.empty() || line.find_first_not_of(" \r\n\t") == std::string::npos) continue;
+                std::stringstream line_ss(line);
+                for (size_t i = 0; i < num_cols; ++i) {
+                    std::string t;
+                    if (!std::getline(line_ss, t, ',')) break;
+                    t.erase(0, t.find_first_not_of(" \r\n\t"));
+                    t.erase(t.find_last_not_of(" \r\n\t") + 1);
+                    
+                    if (is_bool) {
+                        bool val = false;
+                        if (!t.empty()) {
+                            try { val = (std::stoi(t) != 0); } catch (...) {}
+                        }
+                        std::get<std::vector<bool>>(variables[start_idx + i].data).push_back(val);
+                    } else {
+                        unsigned short val = 0;
+                        if (!t.empty()) {
+                            try { val = static_cast<unsigned short>(std::stoul(t)); } catch (...) {}
+                        }
+                        std::get<std::vector<unsigned short>>(variables[start_idx + i].data).push_back(val);
+                    }
+                }
+            }
+        };
+
+        std::filesystem::path fcs_path(filename);
+        
+        std::filesystem::path clr_path = fcs_path;
+        clr_path.replace_extension(".clr");
+        if (std::filesystem::exists(clr_path)) {
+            read_aux(clr_path, true);
+        }
+
+        std::filesystem::path csv_path = fcs_path;
+        csv_path.replace_extension(".csv");
+        if (std::filesystem::exists(csv_path)) {
+            read_aux(csv_path, false);
+        }
+
+        std::filesystem::path truth_path = fcs_path;
+        truth_path.replace_extension(".truth");
+        if (std::filesystem::exists(truth_path)) {
+            read_aux(truth_path, false);
+        }
+
+        return true;
+    }
+
+bool DataSet::read(const std::string& filename, const std::vector<std::string>& headers)
+{
+    auto do_read = [this, &headers](const std::string& fname, const std::string& ext) -> bool {
+        std::string e = ext;
+        std::transform(e.begin(), e.end(), e.begin(), ::tolower);
+        if (e == ".fcs") return read_fcs(fname);
+        if (e == ".csv") return read_csv(fname, ',');
+        if (e == ".tsv" || e == ".txt") return read_csv(fname, '\t');
+        if (e == ".bin" || e == ".dat") return read_binary(fname, headers);
+        return false;
+    };
+
+    std::filesystem::path p(filename);
+    if (p.has_extension()) {
+        std::string ext = p.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (ext == ".fcs" || ext == ".csv" || ext == ".tsv" || ext == ".txt" || ext == ".bin" || ext == ".dat") {
+            return do_read(filename, ext);
+        }
+    }
+
+    const char* exts[] = {".fcs", ".csv", ".tsv", ".txt", ".bin", ".dat"};
+    for (const char* ext : exts) {
+        if (std::filesystem::exists(filename + ext)) {
+            if (do_read(filename + ext, ext)) return true;
+        }
+    }
+
+    return false;
+}
+
+Variable& DataSet::operator[](size_t i)
+{
+    return variables[i];
+}
+
+const Variable& DataSet::operator[](size_t i) const
+{
+    return variables[i];
+}
+
+size_t DataSet::size() const
+{
+    return variables.size();
+}
+
+Projection::Projection(std::vector<size_t> indices, DataSet& base) 
+    : variable_indices(std::move(indices)), base_dataset(base) {}
+
+Variable& Projection::operator[](size_t i)
+{
+    return base_dataset[variable_indices[i]];
+}
+
+const Variable& Projection::operator[](size_t i) const
+{
+    return base_dataset[variable_indices[i]];
+}
+
+size_t Projection::size() const
+{
+    return variable_indices.size();
+}

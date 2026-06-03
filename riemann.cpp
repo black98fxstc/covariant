@@ -5,10 +5,12 @@
 #include <cxxopts.hpp>
 
 #include "Covariant.hpp"
+#include "Samples.hpp"
 
 struct Params
 {
     std::string filename;
+    std::vector<std::string> variables;
     unsigned dimension;
     unsigned cluster;
     unsigned grid;
@@ -23,7 +25,7 @@ struct Params
 };
 
 template <unsigned Dimension>
-int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned grid_size)
+int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned grid_size, const Projection& proj)
 {
     std::cout << "Riemann running with" 
               << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
@@ -32,12 +34,13 @@ int do_it(const Params &params, const cxxopts::ParseResult &result, unsigned gri
               << " verbose=" << (params.verbose ? "on" : "off") << " visual=" << (params.visual ? "on" : "off") << std::endl;
 
     typename Weighty<Dimension>::Events events;
-    std::string ext = params.ascii ? ".txt" : ".dat";
-    std::cout << "Loading events from " << params.filename << ext << "..." << std::endl;
-    if (!events.read(params.filename + ext, params.ascii))
-    {
-        std::cerr << "Error: Could not open event file for loading: " << params.filename + ext << std::endl;
-        return 1; // Return 1 on error
+    size_t num_events = proj[0].get_data<float>().size();
+    events.resize(num_events);
+    for (unsigned d = 0; d < Dimension; ++d) {
+        const auto& col = proj[d].get_data<float>();
+        for (size_t i = 0; i < num_events; ++i) {
+            events[i][d] = col[i];
+        }
     }
     std::cout << "Loaded " << events.size() << " events." << std::endl;
 
@@ -136,6 +139,8 @@ int main(int argc, char *argv[])
     // Add the command-line options.
     options.add_options()
     ("f,file", "Output filename for generated data", cxxopts::value<std::string>()->default_value("test_data"))
+    ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
+    ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
     ("c,cluster", "Process data from the specified cluster", cxxopts::value<unsigned>()->default_value("0"))
     ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
     ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
@@ -149,7 +154,7 @@ int main(int argc, char *argv[])
     ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
     ("h,help", "Print usage");
 
-    options.parse_positional({"file"});
+    options.parse_positional({"file", "variables", "populations"});
 
     auto result = options.parse(argc, argv);
 
@@ -159,6 +164,12 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    if (result.count("variables")) {
+        params.variables = result["variables"].as<std::vector<std::string>>();
+        params.dimension = params.variables.size();
+    } else {
+        params.dimension = result["dimension"].as<unsigned>();
+    }
     params.smooth = result["smooth"].as<float>();
     params.threshold = result["threshold"].as<float>();
     params.visual = result["visual"].as<bool>();
@@ -168,7 +179,6 @@ int main(int argc, char *argv[])
     params.verbose = result["verbose"].as<bool>();
     params.ascii = result["ascii"].as<bool>();
     params.filename = result["file"].as<std::string>();
-    params.dimension = result["dimension"].as<unsigned>();
     params.cluster = result["cluster"].as<unsigned>();
 
     if (result.count("grid"))
@@ -190,14 +200,66 @@ int main(int argc, char *argv[])
             break;
         }
 
+    DataSet dataset;
+    if (!dataset.read(params.filename)) {
+        std::cerr << "Error: Could not open data file: " << params.filename << std::endl;
+        return 1;
+    }
+
+    std::vector<size_t> var_indices;
+    if (!params.variables.empty()) {
+        for (const auto& var_name : params.variables) {
+            bool found = false;
+            for (size_t i = 0; i < dataset.size(); ++i) {
+                if (dataset[i].name == var_name) {
+                    var_indices.push_back(i);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::cerr << "Error: Could not find variable '" << var_name << "' in dataset." << std::endl;
+                return 1;
+            }
+        }
+    } else {
+        for (size_t i = 0; i < params.dimension && i < dataset.size(); ++i) {
+            var_indices.push_back(i);
+        }
+        if (var_indices.size() != params.dimension) {
+            std::cerr << "Error: Dataset has fewer variables than requested dimension." << std::endl;
+            return 1;
+        }
+    }
+
+    Projection proj(var_indices, dataset);
+
+    std::vector<size_t> pop_indices;
+    if (result.count("populations")) {
+        for (const auto& pop_name : result["populations"].as<std::vector<std::string>>()) {
+            bool found = false;
+            for (size_t i = 0; i < dataset.size(); ++i) {
+                if (dataset[i].name == pop_name) {
+                    pop_indices.push_back(i);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::cerr << "Error: Could not find population '" << pop_name << "' in dataset." << std::endl;
+                return 1;
+            }
+        }
+    }
+
     switch (params.dimension)
     {
     case 2:
-        return do_it<2>(params, result, params.grid);
+        return do_it<2>(params, result, params.grid, proj);
     case 3:
-        return do_it<3>(params, result, params.grid);
+        return do_it<3>(params, result, params.grid, proj);
     case 4:
-        return do_it<4>(params, result, params.grid);
+        return do_it<4>(params, result, params.grid, proj);
 
     default:
         std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;

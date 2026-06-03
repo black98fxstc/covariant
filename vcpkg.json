@@ -10,6 +10,8 @@
     "matplotplusplus",
     "nlohmann-json",
     "libxslt",
-    "libxml2"
+    "libxml2",
+    "eigen3",
+    "ftxui"
   ]
 }

@@ -6,7 +6,7 @@ ny = dims(2);
 nz = dims(3);
 data = fread(fid, inf, 'single');
 fclose(fid);
-data = reshape(data, nx, ny, nz);
+data = reshape(data, nx, ny, nz);op
 end
 
 function data = read_marginal(filename)

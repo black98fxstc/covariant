@@ -1,0 +1,17 @@
+create a .len directory with the same base name as the workspace
+create a session log in the .len directory with filename an ISO datetime stamp.
+create a stream say that goes to the log and also to stdout unless the --quiet flag is set.
+one called log that always goes to the file and goes to stdout if --verbose is present
+use say or leonard.say I suppose where it currently use stdout. I'll figure out what I want to downgrade to log
+if there is a more standard way to achieve this let me know.
+
+ cd /home/wmoore/git/covariant
+wget "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5387%20VB%20IT%20080420_Tube_001.fcs"
+wget "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978%20%20d0%20VB%201T_Tube_001.fcs"
+wget "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978b%20%20d1%20VB%201T_Tube_001.fcs"
+wget "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5980%20d3%20VB%201T_Tube_001.fcs"
+
+Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5387%20VB%20IT%20080420_Tube_001.fcs" -OutFile "5387 VB IT 080420_Tube_001.fcs"
+Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978%20%20d0%20VB%201T_Tube_001.fcs" -OutFile "5978  d0 VB 1T_Tube_001.fcs"
+Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978b%20%20d1%20VB%201T_Tube_001.fcs" -OutFile "5978b  d1 VB 1T_Tube_001.fcs"
+Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5980%20d3%20VB%201T_Tube_001.fcs" -OutFile "5980 d3 VB 1T_Tube_001.fcs"
