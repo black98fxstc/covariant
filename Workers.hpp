@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
 
 class Work
 {
@@ -25,7 +26,7 @@ public:
     // then only one thread at a time can run
     virtual void serial() noexcept = 0;
 
-    virtual ~Work() {};
+    virtual ~Work();
 
 protected:
     explicit Work() noexcept {};
@@ -33,7 +34,7 @@ protected:
 
 // a generic worker thread. looks for work, does it, deletes it
 // virtual functions in the work object do all the real work
-class Worker
+class Worker : public std::thread
 {
 private:
     static std::queue<Work *> work_list;

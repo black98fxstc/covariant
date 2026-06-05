@@ -26,6 +26,7 @@
 #include <ftxui/dom/elements.hpp>
 
 #include "Samples.hpp"
+#include "Gating.hpp"
 
 int main(int argc, char* argv[]) {
     std::string filename;
@@ -73,6 +74,7 @@ int main(int argc, char* argv[]) {
         std::vector<std::string> variables;
         std::vector<std::string> stains;
         std::vector<std::string> populations;
+        std::vector<std::shared_ptr<Gate>> gates;
         bool selected = false;
         bool enabled = true;
     };
@@ -167,6 +169,62 @@ int main(int argc, char* argv[]) {
                         if (!pname.empty()) {
                             if (std::find(sd.populations.begin(), sd.populations.end(), pname) == sd.populations.end()) {
                                 sd.populations.push_back(pname);
+                                std::shared_ptr<Gate> gate;
+                                xpathCtx->node = popObj->nodesetval->nodeTab[j];
+                                xmlXPathObjectPtr gateObj = xmlXPathEvalExpression((const xmlChar*)".//*[contains(local-name(), 'Gate')]", xpathCtx);
+                                if (gateObj && gateObj->nodesetval) {
+                                    for (int k = 0; k < gateObj->nodesetval->nodeNr; ++k) {
+                                        xmlNodePtr gateNode = gateObj->nodesetval->nodeTab[k];
+                                        std::string gname = (const char*)gateNode->name;
+                                        if (gname == "Gate") continue;
+
+                                        std::string id = pname;
+                                        xmlChar* idAttr = xmlGetProp(gateNode, (const xmlChar*)"gating:id");
+                                        if (!idAttr) idAttr = xmlGetProp(gateNode, (const xmlChar*)"id");
+                                        if (idAttr) { id = (const char*)idAttr; xmlFree(idAttr); }
+
+                                        std::string parent_id;
+                                        xmlChar* parentIdAttr = xmlGetProp(gateNode, (const xmlChar*)"gating:parent_id");
+                                        if (!parentIdAttr) parentIdAttr = xmlGetProp(gateNode, (const xmlChar*)"parent_id");
+                                        if (parentIdAttr) { parent_id = (const char*)parentIdAttr; xmlFree(parentIdAttr); }
+
+                                        if (gname.find("RectangleGate") != std::string::npos) gate = std::make_shared<RectangleGate>(id, parent_id);
+                                        else if (gname.find("PolygonGate") != std::string::npos) gate = std::make_shared<PolygonGate>(id, parent_id);
+                                        else if (gname.find("BooleanGate") != std::string::npos) gate = std::make_shared<BooleanGate>(id, parent_id);
+                                        else if (gname.find("EllipsoidGate") != std::string::npos) gate = std::make_shared<EllipsoidGate>(id, parent_id);
+                                        else if (gname.find("QuadrantGate") != std::string::npos) gate = std::make_shared<QuadrantGate>(id, parent_id);
+
+                                        if (gate) {
+                                            xmlXPathObjectPtr dimObj = xmlXPathNodeEval(gateNode, (const xmlChar*)".//*[contains(local-name(), 'dimension') or contains(local-name(), 'Dimension') or contains(local-name(), 'fcs-dimension')]", xpathCtx);
+                                            if (dimObj && dimObj->nodesetval) {
+                                                for (int d = 0; d < dimObj->nodesetval->nodeNr; ++d) {
+                                                    xmlNodePtr dimNode = dimObj->nodesetval->nodeTab[d];
+                                                    Gate::Dimension dim;
+
+                                                    xmlChar* nAttr = xmlGetProp(dimNode, (const xmlChar*)"data-type:name");
+                                                    if (!nAttr) nAttr = xmlGetProp(dimNode, (const xmlChar*)"name");
+                                                    if (nAttr) { dim.name = (char*)nAttr; xmlFree(nAttr); }
+
+                                                    xmlChar* sAttr = xmlGetProp(dimNode, (const xmlChar*)"data-type:transformation-ref");
+                                                    if (!sAttr) sAttr = xmlGetProp(dimNode, (const xmlChar*)"transformation-ref");
+                                                    if (sAttr) { dim.scale = (char*)sAttr; xmlFree(sAttr); }
+
+                                                    xmlChar* cAttr = xmlGetProp(dimNode, (const xmlChar*)"data-type:compensation-ref");
+                                                    if (!cAttr) cAttr = xmlGetProp(dimNode, (const xmlChar*)"compensation-ref");
+                                                    if (cAttr) { dim.compensation = (char*)cAttr; xmlFree(cAttr); }
+
+                                                    if (!dim.name.empty()) {
+                                                        gate->dimensions.push_back(dim);
+                                                    }
+                                                }
+                                            }
+                                            if (dimObj) xmlXPathFreeObject(dimObj);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (gateObj) xmlXPathFreeObject(gateObj);
+                                sd.gates.push_back(gate);
                             }
                             if (std::find(all_populations.begin(), all_populations.end(), pname) == all_populations.end()) {
                                 all_populations.push_back(pname);
@@ -209,7 +267,7 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < all_populations.size(); ++i) pop_states[i] = false;
     
     int num_samples_selected = 0;
-    SampleData* selected_sample = nullptr;
+    std::vector<SampleData*> selected_samples;
     int num_vars_selected = 0;
     int num_pops_selected = 0;
     std::vector<std::string> selected_pops;
@@ -235,8 +293,8 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < all_variables.size(); ++i) {
         auto cb = Checkbox(&all_variables[i], &var_states[i]);
         var_container->Add(Maybe(cb, [&, i] {
-            if (num_samples_selected == 0 || !selected_sample) return false;
-            return std::find(selected_sample->variables.begin(), selected_sample->variables.end(), all_variables[i]) != selected_sample->variables.end();
+            if (selected_samples.empty()) return false;
+            return std::find(selected_samples.front()->variables.begin(), selected_samples.front()->variables.end(), all_variables[i]) != selected_samples.front()->variables.end();
         }));
     }
 
@@ -244,8 +302,8 @@ int main(int argc, char* argv[]) {
     for (size_t i = 0; i < all_populations.size(); ++i) {
         auto cb = Checkbox(&all_populations[i], &pop_states[i]);
         pop_container->Add(Maybe(cb, [&, i] {
-            if (num_samples_selected == 0 || !selected_sample) return false;
-            return std::find(selected_sample->populations.begin(), selected_sample->populations.end(), all_populations[i]) != selected_sample->populations.end();
+            if (selected_samples.empty()) return false;
+            return std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), all_populations[i]) != selected_samples.front()->populations.end();
         }));
     }
 
@@ -288,18 +346,18 @@ int main(int argc, char* argv[]) {
     auto renderer = Renderer(top_level_handled, [&] {
         // Pre-render state resolution 
         num_samples_selected = 0;
-        selected_sample = nullptr;
+        selected_samples.clear();
         for (auto& s : samples) {
             if (s.selected) {
                 num_samples_selected++;
-                selected_sample = &s;
+                selected_samples.push_back(&s);
             }
         }
         
         num_vars_selected = 0;
         for (size_t i = 0; i < all_variables.size(); ++i) {
-            if (var_states[i] && selected_sample && 
-                std::find(selected_sample->variables.begin(), selected_sample->variables.end(), all_variables[i]) != selected_sample->variables.end()) {
+            if (var_states[i] && !selected_samples.empty() && 
+                std::find(selected_samples.front()->variables.begin(), selected_samples.front()->variables.end(), all_variables[i]) != selected_samples.front()->variables.end()) {
                 num_vars_selected++;
             } else {
                 var_states[i] = false; // ensure variables hidden by a new sample are deselected
@@ -309,7 +367,7 @@ int main(int argc, char* argv[]) {
         num_pops_selected = 0;
         selected_pops.clear();
         for (size_t i = 0; i < all_populations.size(); ++i) {
-            bool in_sample = selected_sample && std::find(selected_sample->populations.begin(), selected_sample->populations.end(), all_populations[i]) != selected_sample->populations.end();
+            bool in_sample = !selected_samples.empty() && std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), all_populations[i]) != selected_samples.front()->populations.end();
             if (pop_states[i] && in_sample) {
                 num_pops_selected++;
                 selected_pops.push_back(all_populations[i]);
@@ -329,20 +387,19 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 s.enabled = has_all;
-            } else if (num_samples_selected > 0) {
-                s.enabled = s.selected;
+                if (!s.enabled) s.selected = false;
             } else {
                 s.enabled = true;
             }
         }
 
         Elements stain_elements;
-        if (selected_sample) {
+        if (!selected_samples.empty()) {
             for (size_t i = 0; i < all_variables.size(); ++i) {
-                auto it = std::find(selected_sample->variables.begin(), selected_sample->variables.end(), all_variables[i]);
-                if (it != selected_sample->variables.end()) {
-                    int idx = std::distance(selected_sample->variables.begin(), it);
-                    stain_elements.push_back(text(selected_sample->stains[idx]) | size(HEIGHT, EQUAL, 1));
+                auto it = std::find(selected_samples.front()->variables.begin(), selected_samples.front()->variables.end(), all_variables[i]);
+                if (it != selected_samples.front()->variables.end()) {
+                    int idx = std::distance(selected_samples.front()->variables.begin(), it);
+                    stain_elements.push_back(text(selected_samples.front()->stains[idx]) | size(HEIGHT, EQUAL, 1));
                 }
             }
         }
@@ -406,9 +463,26 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    DataSet data;
+    for (const auto& s : samples) {
+        if (s.selected) {
+            data.read(s.name);
+            for (size_t i = 0; i < s.populations.size(); ++i) {
+                for (const auto& q : selected_pops) {
+                    if (s.populations[i] == q) {
+                        data.add_gate(s.populations[i], s.gates[i]);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     std::cout << "\n=== LEONARD SELECTIONS ===\n";
-    if (selected_sample) {
-        std::cout << "Sample: " << selected_sample->name << "\n";
+    if (!selected_samples.empty()) {
+        std::cout << "Samples:";
+        for (const auto& s : selected_samples) std::cout << " " << s->name;
+        std::cout << "\n";
     }
     std::cout << "Variables: ";
     for (size_t i = 0; i < all_variables.size(); ++i) {
@@ -421,17 +495,3 @@ int main(int argc, char* argv[]) {
     std::cout << "\nAnalysis Method:\n" << choices[analysis_choice] << "\n\n";
     return 0;
 };
-/*
-Strip the .fcs from the file names
-Rename Variables to Detectors, move populations over and insert a new one called Stains
-not checkboxs just labels
-When a user selects a sample fill in the stain column with $PnS from that sample
-there is cruft before the first real population with a real checkbox.
-It seems to be related to a label with special characters so they may need to be sanitized unless you have a better idea
-probably have to be carful passing everything in quotes to command line
-it leaves the screen in a nasty state lets do a screen clear on either escape or return.
-Is it possible to change the bottom banner to include Space to select and Arrow keys to navigate?
-I'm not sure the logic on the sample selection is right. Only populations that are in the first sample should be enabled.
-Other opuplations that contain all the populations selected in the first sample can be selected but only if they contain all.
-can we make tab break out of the selection menu boxes to the decision menu? 
-*/

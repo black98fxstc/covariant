@@ -1,0 +1,298 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <unordered_map>
+#include <memory>
+
+#include <libxml/parser.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
+#include <libxml/tree.h>
+
+#include "Gating.hpp"
+#include "Samples.hpp"
+
+// ----------------------------------------------------------------------------
+// Parsing and Tree Construction
+// ----------------------------------------------------------------------------
+
+Gate::~Gate() = default;
+
+void Gate::apply(DataSet &data)
+{
+    std::vector<std::reference_wrapper<Variable>> dims;
+    for (const auto &dim : dimensions)
+    {
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            if (data[i].name == dim.name)
+            {
+                // TODO: load the dimension scale parameters into the variables
+                dims.push_back(std::ref(data[i]));
+                break;
+            }
+        }
+    }
+
+    Variable *gate_var = nullptr;
+    for (size_t i = 0; i < data.size(); ++i)
+    {
+        if (data[i].name == id)
+        {
+            gate_var = &data[i];
+            break;
+        }
+    }
+
+    if (gate_var)
+    {
+        this->evaluate(dims, *gate_var);
+    }
+}
+
+RectangleGate::~RectangleGate() = default;
+
+void RectangleGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+{
+    std::cout << "Applying RectangleGate: " << id << std::endl;
+    // TODO: Parse and process relevant parameters (dimensions, min/max)
+}
+
+PolygonGate::~PolygonGate() = default;
+
+void PolygonGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+{
+    std::cout << "Applying PolygonGate: " << id << std::endl;
+    // TODO: Parse and process relevant parameters (dimensions, vertices)
+}
+
+BooleanGate::~BooleanGate() = default;
+
+void BooleanGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+{
+    std::cout << "Applying BooleanGate: " << id << std::endl;
+    // TODO: Parse and process relevant parameters (logic operations: and, or, not)
+}
+
+EllipsoidGate::~EllipsoidGate() = default;
+
+void EllipsoidGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+{
+    std::cout << "Applying EllipsoidGate: " << id << std::endl;
+    // TODO: Parse and process relevant parameters (dimensions, focus, distance, etc.)
+}
+
+QuadrantGate::~QuadrantGate() = default;
+
+void QuadrantGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+{
+    std::cout << "Applying QuadrantGate: " << id << std::endl;
+    // TODO: Parse and process relevant parameters (dimensions, dividers)
+}
+
+// Preorder walk of the gating hierarchy
+void walkGatingTree(const std::shared_ptr<Gate> &node, int depth)
+{
+    if (!node)
+        return;
+
+    // Indentation for visualization based on depth
+    std::string indent(depth * 2, ' ');
+    std::cout << indent << "- ";
+
+    // 1. Visit the node itself
+    std::cout << "Gate: " << node->id << "\n";
+    for (const auto &dim : node->dimensions)
+    {
+        std::cout << indent << "  Dim: " << dim.name
+                  << " [Scale: " << (dim.scale.empty() ? "None" : dim.scale)
+                  << ", Comp: " << (dim.compensation.empty() ? "None" : dim.compensation) << "]\n";
+    }
+
+    // 2. Recursively visit the children
+    for (const auto &child : node->children)
+    {
+        walkGatingTree(child, depth + 1);
+    }
+}
+
+#ifdef BUILD_GATING_TEST
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        std::cerr << "Usage: " << argv[0] << " <gating-ml.xml>" << std::endl;
+        return 1;
+    }
+
+    xmlInitParser();
+
+    xmlDocPtr doc = xmlParseFile(argv[1]);
+    if (doc == nullptr)
+    {
+        std::cerr << "XML parsed with errors." << std::endl;
+        return 1;
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<Gate>> gates;
+    std::vector<std::shared_ptr<Gate>> root_gates;
+
+    xmlXPathContextPtr xpathCtx = xmlXPathNewContext(doc);
+    if (xpathCtx == nullptr)
+    {
+        std::cerr << "Error: unable to create new XPath context" << std::endl;
+        xmlFreeDoc(doc);
+        return 1;
+    }
+
+    // Step 1: Extract all gates across the document
+    xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression((const xmlChar *)"//*[contains(local-name(), 'Gate')]", xpathCtx);
+    if (xpathObj != nullptr && xpathObj->nodesetval != nullptr)
+    {
+        int size = xpathObj->nodesetval->nodeNr;
+        for (int i = 0; i < size; ++i)
+        {
+            xmlNodePtr node = xpathObj->nodesetval->nodeTab[i];
+            std::string name = (const char *)node->name;
+
+            std::string id;
+            xmlChar *idAttr = xmlGetProp(node, (const xmlChar *)"gating:id");
+            if (!idAttr)
+                idAttr = xmlGetProp(node, (const xmlChar *)"id");
+            if (!idAttr)
+            {
+                for (xmlAttrPtr attr = node->properties; attr != nullptr; attr = attr->next)
+                {
+                    if (xmlStrEqual(attr->name, (const xmlChar *)"id"))
+                    {
+                        idAttr = xmlNodeListGetString(node->doc, attr->children, 1);
+                        break;
+                    }
+                }
+            }
+            if (idAttr)
+            {
+                id = (const char *)idAttr;
+                xmlFree(idAttr);
+            }
+
+            std::string parent_id;
+            xmlChar *parentIdAttr = xmlGetProp(node, (const xmlChar *)"gating:parent_id");
+            if (!parentIdAttr)
+                parentIdAttr = xmlGetProp(node, (const xmlChar *)"parent_id");
+            if (!parentIdAttr)
+            {
+                for (xmlAttrPtr attr = node->properties; attr != nullptr; attr = attr->next)
+                {
+                    if (xmlStrEqual(attr->name, (const xmlChar *)"parent_id"))
+                    {
+                        parentIdAttr = xmlNodeListGetString(node->doc, attr->children, 1);
+                        break;
+                    }
+                }
+            }
+            if (parentIdAttr)
+            {
+                parent_id = (const char *)parentIdAttr;
+                xmlFree(parentIdAttr);
+            }
+
+            std::shared_ptr<Gate> gate;
+            if (name.find("RectangleGate") != std::string::npos)
+                gate = std::make_shared<RectangleGate>(id, parent_id);
+            else if (name.find("PolygonGate") != std::string::npos)
+                gate = std::make_shared<PolygonGate>(id, parent_id);
+            else if (name.find("BooleanGate") != std::string::npos)
+                gate = std::make_shared<BooleanGate>(id, parent_id);
+            else if (name.find("EllipsoidGate") != std::string::npos)
+                gate = std::make_shared<EllipsoidGate>(id, parent_id);
+            else if (name.find("QuadrantGate") != std::string::npos)
+                gate = std::make_shared<QuadrantGate>(id, parent_id);
+
+            if (gate && !id.empty())
+            {
+                xmlXPathObjectPtr dimObj = xmlXPathNodeEval(node, (const xmlChar *)".//*[contains(local-name(), 'fcs-dimension')]", xpathCtx);
+                if (dimObj && dimObj->nodesetval)
+                {
+                    for (int j = 0; j < dimObj->nodesetval->nodeNr; ++j)
+                    {
+                        xmlNodePtr dimNode = dimObj->nodesetval->nodeTab[j];
+                        Gate::Dimension dim;
+
+                        xmlChar *nAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:name");
+                        if (!nAttr)
+                            nAttr = xmlGetProp(dimNode, (const xmlChar *)"name");
+                        if (nAttr)
+                        {
+                            dim.name = (char *)nAttr;
+                            xmlFree(nAttr);
+                        }
+
+                        xmlChar *sAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:transformation-ref");
+                        if (!sAttr)
+                            sAttr = xmlGetProp(dimNode, (const xmlChar *)"transformation-ref");
+                        if (sAttr)
+                        {
+                            dim.scale = (char *)sAttr;
+                            xmlFree(sAttr);
+                        }
+
+                        xmlChar *cAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:compensation-ref");
+                        if (!cAttr)
+                            cAttr = xmlGetProp(dimNode, (const xmlChar *)"compensation-ref");
+                        if (cAttr)
+                        {
+                            dim.compensation = (char *)cAttr;
+                            xmlFree(cAttr);
+                        }
+
+                        if (!dim.name.empty())
+                        {
+                            gate->dimensions.push_back(dim);
+                        }
+                    }
+                }
+                if (dimObj)
+                    xmlXPathFreeObject(dimObj);
+
+                gates[id] = gate;
+            }
+        }
+        xmlXPathFreeObject(xpathObj);
+    }
+
+    xmlXPathFreeContext(xpathCtx);
+    xmlFreeDoc(doc);
+    xmlCleanupParser();
+
+    // Step 2: Build the hierarchy tree
+    for (auto &pair : gates)
+    {
+        auto &gate = pair.second;
+        if (gate->parent_id.empty())
+        {
+            root_gates.push_back(gate);
+        }
+        else
+        {
+            auto parent_it = gates.find(gate->parent_id);
+            if (parent_it != gates.end())
+                parent_it->second->children.push_back(gate);
+            else
+            {
+                std::cerr << "Warning: Parent ID '" << gate->parent_id << "' not found. Re-rooting gate '" << gate->id << "'\n";
+                root_gates.push_back(gate);
+            }
+        }
+    }
+
+    // Step 3: Perform preorder walk starting at the roots
+    std::cout << "Starting Preorder Walk of Gating Hierarchy..." << std::endl;
+    for (const auto &root : root_gates)
+    {
+        walkGatingTree(root);
+    }
+
+    return 0;
+}
+#endif

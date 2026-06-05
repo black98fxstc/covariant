@@ -5,24 +5,39 @@
 #include <functional>
 #include <variant>
 
-enum struct Scale { unknown, linear, log, biexp, logicle };
+#include "Gating.hpp"
+
+class DataSet;
+
+enum struct Scale
+{
+    unknown,
+    linear,
+    log,
+    biexp,
+    logicle
+};
 
 // Define parameter structs
-struct LinearParams {
+struct LinearParams
+{
     float min_val = 0.0f;
     float max_val = 1024.0f;
 };
 
-struct LogParams {
+struct LogParams
+{
     float decades = 4.0f;
 };
 
-struct BiexpParams {
+struct BiexpParams
+{
     float positive_decades = 4.0f;
     float width = 10.0f;
 };
 
-struct LogicleParams {
+struct LogicleParams
+{
     float t = 262144.0f; // Top of scale
     float w = 0.5f;      // Number of decades in the linear region
     float m = 4.5f;      // Number of decades
@@ -42,71 +57,100 @@ public:
     // Using a variant of vectors (Structure of Arrays) is much more efficient and type-safe.
     // It avoids padding overhead per element and provides great cache locality.
     std::variant<std::vector<float>, std::vector<unsigned short>, std::vector<bool>> data;
+    bool evaluated = true;
+    DataSet *dataset = nullptr;
 
     Variable(std::string n);
 
     // Construct with specific parameters and automatically deduce the Scale enum
     Variable(std::string n, Parameters p);
 
+    virtual ~Variable();
+
+    virtual void evaluate();
+
     // Template helper to safely get data of a specific type
     template <typename T>
-    std::vector<T>& get_data()
+    std::vector<T> &get_data()
     {
+        if (!evaluated)
+        {
+            evaluated = true;
+            evaluate();
+        }
         return std::get<std::vector<T>>(data);
     }
 
     template <typename T>
-    const std::vector<T>& get_data() const
+    const std::vector<T> &get_data() const
     {
+        if (!evaluated)
+        {
+            const_cast<Variable *>(this)->evaluated = true;
+            const_cast<Variable *>(this)->evaluate();
+        }
         return std::get<std::vector<T>>(data);
     }
+};
+
+class LazyVariable : public Variable
+{
+    std::shared_ptr<Gate> gate;
+
+public:
+    LazyVariable(std::string n, std::shared_ptr<Gate> g);
+    ~LazyVariable() override;
+    void evaluate() override;
 };
 
 // Base interface for polymorphism
 class IDataSet
 {
 public:
-    virtual ~IDataSet() = default;
-    virtual Variable& operator[](size_t i) = 0;
-    virtual const Variable& operator[](size_t i) const = 0;
+    virtual ~IDataSet();
+    virtual Variable &operator[](size_t i) = 0;
+    virtual const Variable &operator[](size_t i) const = 0;
     virtual size_t size() const = 0;
 };
 
 class DataSet : public IDataSet
 {
-    std::vector<Variable> variables;
+    std::vector<std::unique_ptr<Variable>> variables;
 
 public:
-    void add_variable(const std::string& name);
-    void add_classification(const std::string& name);
-    void add_data(const std::vector<float>& datum);
+    ~DataSet() override;
+    void add_variable(const std::string &name);
+    void add_classification(const std::string &name);
+    void add_gate(const std::string &name, const std::shared_ptr<Gate> &gate);
+    void add_data(const std::vector<float> &datum);
 
-    void for_each_class(const Variable& classification, std::function<void(unsigned short)> func);
-    void for_each_member(const Variable& membership, std::function<void(bool)> func);
+    void for_each_class(const Variable &classification, std::function<void(unsigned short)> func);
+    void for_each_member(const Variable &membership, std::function<void(bool)> func);
 
     // --- Data Input Reading Logic ---
-    void setup_float_variables(const std::vector<std::string>& headers);
+    void setup_float_variables(const std::vector<std::string> &headers);
 
-    bool read_csv(const std::string& filename, char delimiter = ',');
-    bool read_xml_xslt(const std::string& xml_file, const std::string& xsl_file, char delimiter = ',');
-    bool read_binary(const std::string& filename, const std::vector<std::string>& headers);
-    bool read_fcs(const std::string& filename);
-    bool read(const std::string& filename, const std::vector<std::string>& headers = {});
+    bool read_csv(const std::string &filename, char delimiter = ',');
+    bool read_xml_xslt(const std::string &xml_file, const std::string &xsl_file, char delimiter = ',');
+    bool read_binary(const std::string &filename, const std::vector<std::string> &headers);
+    bool read_fcs(const std::string &filename);
+    bool read(const std::string &filename, const std::vector<std::string> &headers = {});
 
-    Variable& operator[](size_t i) override;
-    const Variable& operator[](size_t i) const override;
+    Variable &operator[](size_t i) override;
+    const Variable &operator[](size_t i) const override;
     size_t size() const override;
 };
 
 class Projection : public IDataSet
 {
     std::vector<size_t> variable_indices;
-    DataSet& base_dataset;
+    DataSet &base_dataset;
 
 public:
-    Projection(std::vector<size_t> indices, DataSet& base);
+    ~Projection() override;
+    Projection(std::vector<size_t> indices, DataSet &base);
 
-    Variable& operator[](size_t i) override;
-    const Variable& operator[](size_t i) const override;
+    Variable &operator[](size_t i) override;
+    const Variable &operator[](size_t i) const override;
     size_t size() const override;
 };

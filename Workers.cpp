@@ -7,6 +7,8 @@ std::mutex Worker::serialize;
 std::mutex Worker::mutex;
 std::condition_variable Worker::work_available;
 
+Work::~Work() = default;
+
 void Worker::work() noexcept
 {
     Work *work = dequeue();

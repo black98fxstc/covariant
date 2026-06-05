@@ -37,7 +37,7 @@ endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # Create a static library for our separated compilation units so we don't compile them repeatedly
-add_library(covariant_core STATIC Samples.cpp Workers.cpp)
+add_library(covariant_core STATIC Samples.cpp Workers.cpp Gating.cpp Transforms.cpp)
 target_link_libraries(covariant_core PUBLIC LibXml2::LibXml2 LibXslt::LibXslt Threads::Threads)
 
 # Define targets for the various tools and main programs
@@ -56,6 +56,11 @@ target_link_libraries(darwin PRIVATE covariant_core FFTW3::fftw3f Matplot++::mat
 
 add_executable(leonard leonard.cpp)
 target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt)
+
+# Standalone gating test executable (using the main() function from Gating.cpp)
+add_executable(gating_test Gating.cpp)
+target_compile_definitions(gating_test PRIVATE BUILD_GATING_TEST)
+target_link_libraries(gating_test PRIVATE covariant_core)
 
 # Set output names to match your Makefile targets
 set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")

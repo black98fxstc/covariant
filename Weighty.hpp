@@ -9,28 +9,59 @@
 #include <algorithm>
 #include <functional>
 #include <thread>
+#include <memory>
 #include <fftw3.h>
 #include <cctype>
 #include <assert.h>
 
 #include "Dimensions.hpp"
 #include "Events.hpp"
+#include "Workers.hpp"
+#include "Gating.hpp"
 
 // Utilities for sampleing multi-dimensional data
+
+template <typename Type>
+Type squared(Type x) noexcept {return x * x;}
+
+const double pi = 3.14159265358979323846;
+
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>, public Events<Dimension>
 {
+    class Kernel : public std::array<std::vector<double>, Dimension>
+    {
+        Dimensions<Dimension> dimensions;
+    public:
+        // The radius is specified as a fraction of full scale.
+        Kernel *radius(double radius) noexcept
+        {
+            for (unsigned i = 0; i < Dimension; i++)
+                for (unsigned j = 0; j < dimensions.points(i); j++)
+                    (*this)[i][j] = exp(-2.0 * squared(j * radius * pi));
+            return this;
+        }
+
+        Kernel(Weighty* w) noexcept : dimensions(*w)
+        {
+            for (unsigned i = 0; i < Dimension; i++)
+                this->at(i).resize(w->points(i));
+        }
+    };
+
 private:
     size_t _events = 0;
     fftw_r2r_kind kind[Dimension]; // Array of FFTW transform kinds for each dimension
     fftwf_plan DCT;                // FFTW plan for float data
     unsigned long fft_normalizer = 1;
-    std::array<std::vector<double>, Dimension> kernel;
+    std::unique_ptr<Kernel> kernel = std::make_unique<Kernel>(this);
+    std::vector<Worker> computeBound;
+    std::vector<Worker> IOBound;
+    std::vector<Worker> memoryBound;
+    std::vector<Worker> attentionBound;
 
 protected:
 public:
-    const double pi = 3.14159265358979323846;
-
     Function<Dimension, float> weight = Function<Dimension, float>(*this);
     Function<Dimension, float> density = Function<Dimension, float>(*this);
     Function<Dimension, float> quantile = Function<Dimension, float>(*this);
@@ -69,23 +100,18 @@ public:
         P.zero();
     }
 
-    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
+    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, Kernel *kernel, bool normalize = false)
     {
-        // Apply a Gaussian filter to the input function using the DCT.
-        // The radius is specified as a fraction of full scale.
         // DCT because smoothing the even half-wave means no probability spill across the end points
         Function<Dimension, float> cosine = Function<Dimension, float>(*this);
         fftwf_execute_r2r(DCT, input.data, cosine.data);
-        for (unsigned i = 0; i < Dimension; i++)
-            for (unsigned j = 0; j < points(i); j++)
-                kernel[i][j] = exp(-2.0 * squared(j * radius * pi));
         for (size_t x = 0; x < size(); x++)
         {
             double k = 1.0;
             for (unsigned i = 0; i < Dimension; i++)
             {
                 unsigned j = (x / stride(i)) % points(i);
-                k *= kernel[i][j];
+                k *= (*kernel)[i][j];
             }
             cosine[x] *= k;
         }
@@ -93,6 +119,12 @@ public:
         if (normalize)
             for (unsigned x = 0; x < size(); x++)
                 output[x] /= (float)fft_normalizer;
+    }
+
+    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)
+    {
+        kernel->radius(radius);
+        filter(input, output, kernel.get(), normalize);
     }
 
     void filter(Function<Dimension, float> &data, float radius = 0.01f, bool normalize = false)
@@ -160,7 +192,7 @@ public:
     {
         if (smoothing > 0.0f)
         {
-            filter(weight, density, smoothing);
+            filter(weight, density, smoothing, false);
             for (size_t x = 0; x < size(); x++)
                 if (density[x] < 0.0f)
                     density[x] = 0.0f;
@@ -214,28 +246,39 @@ public:
     Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
     {
         init_fftw();
+        for (unsigned t = 0; t < std::thread::hardware_concurrency(); t++)
+            computeBound.emplace_back(true);
+        for (unsigned t = 0; t < 4; t++)
+            IOBound.emplace_back(true);
+        memoryBound.emplace_back(true);
     }
 
     Weighty(unsigned grid, bool column_major = false) : Dimensions<Dimension>(grid, column_major)
     {
         init_fftw();
+        for (unsigned t = 0; t < std::thread::hardware_concurrency(); t++)
+            computeBound.emplace_back(true);
+        for (unsigned t = 0; t < 4; t++)
+            IOBound.emplace_back(true);
+        memoryBound.emplace_back(true);
     }
 
     virtual ~Weighty()
     {
         if (DCT) fftwf_destroy_plan((fftwf_plan)DCT);
+        for (auto &worker : computeBound)
+            worker.kiss();
+        for (auto &worker : IOBound)
+            worker.kiss();
+        for (auto &worker : memoryBound)
+            worker.kiss();
     }
 
 private:
-    double squared(double x) { return x * x; };
-
     void init_fftw()
     {
         if (fftwf_init_threads())
             fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));
-
-        for (unsigned i = 0; i < Dimension; i++)
-            kernel[i].resize(points(i));
 
         int fftw_n[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
