@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "Gating.hpp"
+#include "Transforms.hpp"
 
 class DataSet;
 
@@ -59,6 +60,7 @@ public:
     std::variant<std::vector<float>, std::vector<unsigned short>, std::vector<bool>> data;
     bool evaluated = true;
     DataSet *dataset = nullptr;
+    std::shared_ptr<Transform> transform = nullptr;
 
     Variable(std::string n);
 
@@ -68,6 +70,9 @@ public:
     virtual ~Variable();
 
     virtual void evaluate();
+
+    double transform_value(double value) const;
+    double inverse_transform(double value) const;
 
     // Template helper to safely get data of a specific type
     template <typename T>
@@ -118,6 +123,12 @@ class DataSet : public IDataSet
     std::vector<std::unique_ptr<Variable>> variables;
 
 public:
+    DataSet() = default;
+    DataSet(const DataSet&) = delete;
+    DataSet& operator=(const DataSet&) = delete;
+    DataSet(DataSet&& other) noexcept;
+    DataSet& operator=(DataSet&& other) noexcept;
+
     ~DataSet() override;
     void add_variable(const std::string &name);
     void add_classification(const std::string &name);

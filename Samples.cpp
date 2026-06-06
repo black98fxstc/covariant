@@ -17,19 +17,43 @@ Variable::Variable(std::string n) : name(std::move(n)), scale(Scale::unknown), e
 
 Variable::Variable(std::string n, Parameters p) : name(std::move(n)), params(std::move(p)), evaluated(true)
 {
-    scale = std::visit([](auto &&arg) -> Scale
+    scale = std::visit([this](auto &&arg) -> Scale
                        {
         using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_same_v<T, LinearParams>) return Scale::linear;
-        else if constexpr (std::is_same_v<T, LogParams>) return Scale::log;
-        else if constexpr (std::is_same_v<T, BiexpParams>) return Scale::biexp;
-        else if constexpr (std::is_same_v<T, LogicleParams>) return Scale::logicle;
+        if constexpr (std::is_same_v<T, LinearParams>) {
+            transform = std::make_shared<Linear>(arg.max_val, arg.min_val);
+            return Scale::linear;
+        }
+        else if constexpr (std::is_same_v<T, LogParams>) {
+            transform = std::make_shared<Logarithmic>(262144.0, arg.decades);
+            return Scale::log;
+        }
+        else if constexpr (std::is_same_v<T, BiexpParams>) {
+            transform = std::make_shared<Logicle>(262144.0, arg.width, arg.positive_decades, 0.0);
+            return Scale::biexp;
+        }
+        else if constexpr (std::is_same_v<T, LogicleParams>) {
+            transform = std::make_shared<Logicle>(arg.t, arg.w, arg.m, arg.a);
+            return Scale::logicle;
+        }
         else return Scale::unknown; }, params);
 }
 
 Variable::~Variable() = default;
 
 void Variable::evaluate() {}
+
+double Variable::transform_value(double value) const
+{
+    if (transform) return transform->scale(value);
+    return value;
+}
+
+double Variable::inverse_transform(double value) const
+{
+    if (transform) return transform->inverse(value);
+    return value;
+}
 
 LazyVariable::LazyVariable(std::string n, std::shared_ptr<Gate> g) : Variable(std::move(n)), gate(std::move(g))
 {
@@ -329,7 +353,7 @@ bool DataSet::read_fcs(const std::string &filename)
         std::string p_name = "$P" + std::to_string(i) + "N";
         std::string p_stain = "$P" + std::to_string(i) + "S";
 
-        headers.push_back(p_name); // much easier to type on the command line
+        headers.push_back(metadata[p_name]); // much easier to type on the command line
     }
 
     setup_float_variables(headers);
@@ -508,6 +532,20 @@ bool DataSet::read(const std::string &filename, const std::vector<std::string> &
     }
 
     return false;
+}
+
+DataSet::DataSet(DataSet&& other) noexcept : variables(std::move(other.variables))
+{
+    for (auto& var : variables) var->dataset = this;
+}
+
+DataSet& DataSet::operator=(DataSet&& other) noexcept
+{
+    if (this != &other) {
+        variables = std::move(other.variables);
+        for (auto& var : variables) var->dataset = this;
+    }
+    return *this;
 }
 
 DataSet::~DataSet() = default;

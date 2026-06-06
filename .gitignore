@@ -3,6 +3,11 @@ norminv.cpp
 
 *.bin
 *.o
+*.a
+*.so
+*.dylib
+*.dylib.a
+*.so.1
 *.asv
 *.dat
 *.svg
@@ -11,10 +16,13 @@ norminv.cpp
 *.darwin
 *.fcs
 *.class
+*.list
 testdata
 laplace
 riemann
 darwin
 build
+tmp
 matplotplusplus
+vcpkg_installed
 

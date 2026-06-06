@@ -79,12 +79,34 @@ void Worker::revive() noexcept
 Worker::Worker(bool threaded) noexcept
 {
     if (threaded)
-        while (!kiss_of_death)
-            if (idle())
-                wait();
-            else
-                work();
+    {
+        th = std::thread([this]() {
+            while (!kiss_of_death)
+                if (idle())
+                    wait();
+                else
+                    work();
+        });
+    }
     else
+    {
         while (!idle())
             work();
+    }
+}
+
+Worker::~Worker()
+{
+    if (th.joinable()) th.join();
+}
+
+Worker::Worker(Worker&& other) noexcept : th(std::move(other.th)) {}
+
+Worker& Worker::operator=(Worker&& other) noexcept
+{
+    if (this != &other) {
+        if (th.joinable()) th.join();
+        th = std::move(other.th);
+    }
+    return *this;
 }

@@ -6,6 +6,8 @@
 #include <memory>
 #include <functional>
 
+#include "Transforms.hpp"
+
 class DataSet;
 class Variable;
 
@@ -21,6 +23,7 @@ public:
         std::string name;
         std::string scale;
         std::string compensation;
+        std::shared_ptr<Transform> transform;
     };
 
     std::string id;

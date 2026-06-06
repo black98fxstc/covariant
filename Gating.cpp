@@ -27,7 +27,9 @@ void Gate::apply(DataSet &data)
         {
             if (data[i].name == dim.name)
             {
-                // TODO: load the dimension scale parameters into the variables
+                if (dim.transform) {
+                    data[i].transform = dim.transform;
+                }
                 dims.push_back(std::ref(data[i]));
                 break;
             }
@@ -145,6 +147,79 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    std::unordered_map<std::string, std::shared_ptr<Transform>> transforms;
+
+    xmlXPathObjectPtr transObj = xmlXPathEvalExpression((const xmlChar *)"//*[local-name()='logicle' or local-name()='hyperlog' or local-name()='lin' or local-name()='log' or local-name()='fasinh' or local-name()='biexp']", xpathCtx);
+    if (transObj && transObj->nodesetval)
+    {
+        for (int i = 0; i < transObj->nodesetval->nodeNr; ++i)
+        {
+            xmlNodePtr node = transObj->nodesetval->nodeTab[i];
+
+            std::string id;
+            xmlChar *idAttr = xmlGetProp(node, (const xmlChar *)"id");
+            if (!idAttr)
+                idAttr = xmlGetProp(node, (const xmlChar *)"gating:id");
+            if (!idAttr && node->parent)
+            {
+                idAttr = xmlGetProp(node->parent, (const xmlChar *)"id");
+                if (!idAttr)
+                    idAttr = xmlGetProp(node->parent, (const xmlChar *)"gating:id");
+            }
+            if (idAttr)
+            {
+                id = (const char *)idAttr;
+                xmlFree(idAttr);
+            }
+
+            if (id.empty()) continue;
+
+            auto get_double = [](xmlNodePtr n, const char *attr_name, double def)
+            {
+                xmlChar *attr = xmlGetProp(n, (const xmlChar *)attr_name);
+                if (attr)
+                {
+                    double val = def;
+                    try { val = std::stod((char *)attr); } catch (...) {}
+                    xmlFree(attr);
+                    return val;
+                }
+                return def;
+            };
+
+            std::string name = (const char *)node->name;
+            std::shared_ptr<Transform> transform;
+            try
+            {
+                if (name.find("logicle") != std::string::npos) {
+                    transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                }
+                else if (name.find("hyperlog") != std::string::npos) {
+                    transform = std::make_shared<Hyperlog>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                }
+                else if (name.find("lin") != std::string::npos) {
+                    transform = std::make_shared<Linear>(get_double(node, "T", 262144.0), get_double(node, "A", 0.0));
+                }
+                else if (name.find("log") != std::string::npos) {
+                    transform = std::make_shared<Logarithmic>(get_double(node, "T", 262144.0), get_double(node, "M", 4.5));
+                }
+                else if (name.find("fasinh") != std::string::npos) {
+                    transform = std::make_shared<Arcsinh>(get_double(node, "T", 262144.0), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                }
+                else if (name.find("biexp") != std::string::npos) {
+                    transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                }
+            }
+            catch (...) {}
+
+            if (transform)
+            {
+                transforms[id] = transform;
+            }
+        }
+        xmlXPathFreeObject(transObj);
+    }
+
     // Step 1: Extract all gates across the document
     xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression((const xmlChar *)"//*[contains(local-name(), 'Gate')]", xpathCtx);
     if (xpathObj != nullptr && xpathObj->nodesetval != nullptr)
@@ -234,6 +309,10 @@ int main(int argc, char **argv)
                         if (sAttr)
                         {
                             dim.scale = (char *)sAttr;
+                            auto it = transforms.find(dim.scale);
+                            if (it != transforms.end()) {
+                                dim.transform = it->second;
+                            }
                             xmlFree(sAttr);
                         }
 

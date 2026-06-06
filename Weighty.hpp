@@ -52,7 +52,7 @@ class Weighty : public Dimensions<Dimension>, public Events<Dimension>
 private:
     size_t _events = 0;
     fftw_r2r_kind kind[Dimension]; // Array of FFTW transform kinds for each dimension
-    fftwf_plan DCT;                // FFTW plan for float data
+    fftwf_plan DCT = nullptr;      // FFTW plan for float data
     unsigned long fft_normalizer = 1;
     std::unique_ptr<Kernel> kernel = std::make_unique<Kernel>(this);
     std::vector<Worker> computeBound;

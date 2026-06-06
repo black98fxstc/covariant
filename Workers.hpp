@@ -34,11 +34,12 @@ protected:
 
 // a generic worker thread. looks for work, does it, deletes it
 // virtual functions in the work object do all the real work
-class Worker : public std::thread
+class Worker
 {
 private:
     static std::queue<Work *> work_list;
     volatile static bool kiss_of_death;
+    std::thread th;
 
 protected:
     static std::mutex serialize;
@@ -56,4 +57,8 @@ public:
     static void revive() noexcept;
 
     Worker(bool threaded = true) noexcept;
+    ~Worker();
+
+    Worker(Worker&& other) noexcept;
+    Worker& operator=(Worker&& other) noexcept;
 };
