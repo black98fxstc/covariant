@@ -67,7 +67,7 @@ void LazyVariable::evaluate()
 {
     if (gate && dataset)
     {
-        gate->apply(*dataset);
+        // gate->apply(*dataset);
     }
 }
 
@@ -558,6 +558,38 @@ Variable &DataSet::operator[](size_t i)
 const Variable &DataSet::operator[](size_t i) const
 {
     return *variables[i];
+}
+
+Variable &DataSet::operator[](const std::string &name)
+{
+    auto it = variables_by_name.find(name);
+    if (it != variables_by_name.end())
+        return *it->second;
+    throw std::runtime_error("Variable not found: " + name);
+}
+
+const Variable &DataSet::operator[](const std::string &name) const
+{
+    auto it = variables_by_name.find(name);
+    if (it != variables_by_name.end())
+        return *it->second;
+    throw std::runtime_error("Variable not found: " + name);
+}
+
+Variable *DataSet::get(const std::string &name) noexcept
+{
+    auto it = variables_by_name.find(name);
+    if (it != variables_by_name.end())
+        return it->second.get();
+    return nullptr;
+}
+
+const Variable *DataSet::get(const std::string &name) const noexcept
+{
+    auto it = variables_by_name.find(name);
+    if (it != variables_by_name.end())
+        return it->second.get();
+    return nullptr;
 }
 
 size_t DataSet::size() const

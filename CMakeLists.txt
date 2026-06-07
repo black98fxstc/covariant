@@ -55,7 +55,7 @@ add_executable(darwin darwin.cpp)
 target_link_libraries(darwin PRIVATE covariant_core FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts Eigen3::Eigen ${MATH_LIB})
 
 add_executable(leonard leonard.cpp)
-target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt)
+target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f)
 
 # Standalone gating test executable (using the main() function from Gating.cpp)
 add_executable(gating_test Gating.cpp)

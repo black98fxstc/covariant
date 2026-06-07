@@ -4,7 +4,7 @@
 #include <vector>
 #include <functional>
 #include <variant>
-
+#include <map>
 #include "Gating.hpp"
 #include "Transforms.hpp"
 
@@ -121,6 +121,8 @@ public:
 class DataSet : public IDataSet
 {
     std::vector<std::unique_ptr<Variable>> variables;
+    std::unordered_map<std::string, std::shared_ptr<Variable>> variables_by_name;
+
 
 public:
     DataSet() = default;
@@ -149,6 +151,10 @@ public:
 
     Variable &operator[](size_t i) override;
     const Variable &operator[](size_t i) const override;
+    Variable &operator[](const std::string &name);
+    const Variable &operator[](const std::string &name) const;
+    Variable *get(const std::string &name) noexcept;
+    const Variable *get(const std::string &name) const noexcept;
     size_t size() const override;
 };
 

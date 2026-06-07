@@ -18,43 +18,14 @@
 
 Gate::~Gate() = default;
 
-void Gate::apply(DataSet &data)
+void Gate::apply(std::vector<bool> &membership)
 {
-    std::vector<std::reference_wrapper<Variable>> dims;
-    for (const auto &dim : dimensions)
-    {
-        for (size_t i = 0; i < data.size(); ++i)
-        {
-            if (data[i].name == dim.name)
-            {
-                if (dim.transform) {
-                    data[i].transform = dim.transform;
-                }
-                dims.push_back(std::ref(data[i]));
-                break;
-            }
-        }
-    }
-
-    Variable *gate_var = nullptr;
-    for (size_t i = 0; i < data.size(); ++i)
-    {
-        if (data[i].name == id)
-        {
-            gate_var = &data[i];
-            break;
-        }
-    }
-
-    if (gate_var)
-    {
-        this->evaluate(dims, *gate_var);
-    }
+    this->evaluate(membership);
 }
 
 RectangleGate::~RectangleGate() = default;
 
-void RectangleGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+void RectangleGate::evaluate(std::vector<bool> &membership) const
 {
     std::cout << "Applying RectangleGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, min/max)
@@ -62,7 +33,7 @@ void RectangleGate::evaluate(const std::vector<std::reference_wrapper<Variable>>
 
 PolygonGate::~PolygonGate() = default;
 
-void PolygonGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+void PolygonGate::evaluate(std::vector<bool> &membership) const
 {
     std::cout << "Applying PolygonGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, vertices)
@@ -70,7 +41,7 @@ void PolygonGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &
 
 BooleanGate::~BooleanGate() = default;
 
-void BooleanGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+void BooleanGate::evaluate(std::vector<bool> &membership) const
 {
     std::cout << "Applying BooleanGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (logic operations: and, or, not)
@@ -78,7 +49,7 @@ void BooleanGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &
 
 EllipsoidGate::~EllipsoidGate() = default;
 
-void EllipsoidGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+void EllipsoidGate::evaluate(std::vector<bool> &membership) const
 {
     std::cout << "Applying EllipsoidGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, focus, distance, etc.)
@@ -86,7 +57,7 @@ void EllipsoidGate::evaluate(const std::vector<std::reference_wrapper<Variable>>
 
 QuadrantGate::~QuadrantGate() = default;
 
-void QuadrantGate::evaluate(const std::vector<std::reference_wrapper<Variable>> &dims, Variable &gate_var) const
+void QuadrantGate::evaluate(std::vector<bool> &membership) const
 {
     std::cout << "Applying QuadrantGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, dividers)
