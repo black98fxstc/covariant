@@ -22,6 +22,8 @@ public:
     virtual double scale(double value) const = 0;
     virtual double inverse(double scale) const = 0;
     virtual std::vector<double> axisLabels() const = 0;
+    virtual void transform(const std::vector<double> &source, std::vector<double> &destination) const = 0;
+    virtual void transform(const std::vector<float> &source, std::vector<float> &destination) const = 0;
 
 protected:
     virtual double slope(double scale) const = 0;
@@ -39,6 +41,8 @@ public:
     double scale(double value) const override;
     double inverse(double scale) const override;
     std::vector<double> axisLabels() const override;
+    void transform(const std::vector<double> &source, std::vector<double> &destination) const override;
+    void transform(const std::vector<float> &source, std::vector<float> &destination) const override;
 
 protected:
     double slope(double scale) const override;
@@ -65,6 +69,8 @@ public:
     double scale(double value) const override;
     double inverse(double scale) const override;
     std::vector<double> axisLabels() const override;
+    void transform(const std::vector<double> &source, std::vector<double> &destination) const override;
+    void transform(const std::vector<float> &source, std::vector<float> &destination) const override;
 
 protected:
     double taylorSeries(double scale) const;
@@ -87,6 +93,8 @@ public:
     double scale(double value) const override;
     double inverse(double scale) const override;
     std::vector<double> axisLabels() const override;
+    void transform(const std::vector<double> &source, std::vector<double> &destination) const override;
+    void transform(const std::vector<float> &source, std::vector<float> &destination) const override;
 
 protected:
     double slope(double scale) const override;
@@ -108,6 +116,8 @@ public:
     double scale(double value) const override;
     double inverse(double scale) const override;
     std::vector<double> axisLabels() const override;
+    void transform(const std::vector<double> &source, std::vector<double> &destination) const override;
+    void transform(const std::vector<float> &source, std::vector<float> &destination) const override;
 
 protected:
     double slope(double scale) const override;
@@ -134,6 +144,8 @@ public:
     double scale(double value) const override;
     double inverse(double scale) const override;
     std::vector<double> axisLabels() const override;
+    void transform(const std::vector<double> &source, std::vector<double> &destination) const override;
+    void transform(const std::vector<float> &source, std::vector<float> &destination) const override;
 
 protected:
     double slope(double scale) const override;

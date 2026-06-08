@@ -27,23 +27,119 @@ RectangleGate::~RectangleGate() = default;
 
 void RectangleGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying RectangleGate: " << id << std::endl;
-    // TODO: Parse and process relevant parameters (dimensions, min/max)
+    std::cout << "Applying RectangleGate: " << name << std::endl;
+    for (size_t i = 0; i < dimensions.size(); ++i)
+    {
+        float *bare_data = data[i].get()->data();
+        float lower = dimensions[i].transform->scale(dimensions[i].min_val);
+        for (size_t j = 0; j < data[i]->size(); j++)
+            if (membership[i] && bare_data[j] < lower)
+                membership[i] = false;
+        float upper = dimensions[i].transform->scale(dimensions[i].max_val);
+        for (size_t j = 0; j < data[i]->size(); j++)
+            if (membership[i] && bare_data[j] >= upper)
+                membership[i] = false;
+    }
 }
 
 PolygonGate::~PolygonGate() = default;
 
 void PolygonGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying PolygonGate: " << id << std::endl;
-    // TODO: Parse and process relevant parameters (dimensions, vertices)
+    std::cout << "Applying PolygonGate: " << name << std::endl;
+    enum Orientation { horizontal, vertical, upward, downward };
+    struct Edge
+    {
+        float x0, y0, x1, y1, ymin, ymax, slope;
+        Orientation orientation;
+        Edge(float x0, float y0, float x1, float y1) : x0(x0), y0(y0), x1(x1), y1(y1), ymin(std::min(y0,y1)), ymax(std::max(y0,y1))
+        {
+            if (x0 > x1)
+            {
+                std::swap(x0,x1);
+                std::swap(y0,y1);
+            }
+            if (x0 == x1)
+                orientation = vertical;
+            else if (y0 == y1)
+                orientation = horizontal;
+            else
+            {
+                slope = (y1 - y0) / (x1 - x0);
+                if (slope > 0)
+                    orientation = upward;
+                else
+                    orientation = downward;
+            }
+        }
+    };
+    
+    std::vector<Edge> edges;
+    if (edges.empty())
+    {
+        float x0, y0, x1, y1;
+        for (size_t i = 0; i < vertices.size() - 1; ++i)
+        {
+            x0 = dimensions[0].transform->scale(vertices[i][0]);
+            y0 = dimensions[1].transform->scale(vertices[i][1]);
+            x1 = dimensions[0].transform->scale(vertices[i+1][0]);
+            y1 = dimensions[1].transform->scale(vertices[i+1][1]);
+            edges.emplace_back(x0, y0, x1, y1);
+        }
+        x0 = dimensions[0].transform->scale(vertices[vertices.size()-1][0]);
+        y0 = dimensions[1].transform->scale(vertices[vertices.size()-1][1]);
+        x1 = dimensions[0].transform->scale(vertices[0][0]);
+        y1 = dimensions[1].transform->scale(vertices[0][1]);
+        edges.emplace_back(x0, y0, x1, y1);
+
+        std::sort(edges.begin(), edges.end(), [](const Edge &a, const Edge & b) -> bool
+        { return a.x1 < b.x1; });
+    }
+
+    float *xdata = data[0].get()->data();
+    float *ydata = data[1].get()->data();
+    for (size_t i = 0; i < membership.size(); ++i)
+    {
+        if (!membership[i])
+            continue;
+        float x = xdata[i];
+        float y = ydata[i];
+        unsigned winding = 0;
+        for (const Edge &edge : edges)
+        {
+            if (x < edge.x0)
+                continue; // doesn't apply to this edge
+            if (x > edge.x1)
+                break;  // nothing left in the list is possible
+            switch (edge.orientation)
+            {
+            case horizontal:
+                ++winding;
+                break;
+            case vertical:
+                if (y >= edge.ymin && y < edge.ymax)
+                    ++winding;
+                break;
+            case upward:
+                if ((y - edge.y0) <= edge.slope * (x - edge.x0))
+                    ++winding;
+                break;
+            case downward:
+                if ((y - edge.y0) >= edge.slope * (x - edge.x0))
+                    ++winding;
+                break;
+            }
+        }
+        if ((winding & 1) == 0)
+            membership[i] = false;
+    }
 }
 
 BooleanGate::~BooleanGate() = default;
 
 void BooleanGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying BooleanGate: " << id << std::endl;
+    std::cout << "Applying BooleanGate: " << name << std::endl;
     // TODO: Parse and process relevant parameters (logic operations: and, or, not)
 }
 
@@ -51,7 +147,7 @@ EllipsoidGate::~EllipsoidGate() = default;
 
 void EllipsoidGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying EllipsoidGate: " << id << std::endl;
+    std::cout << "Applying EllipsoidGate: " << name << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, focus, distance, etc.)
 }
 
@@ -59,7 +155,7 @@ QuadrantGate::~QuadrantGate() = default;
 
 void QuadrantGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying QuadrantGate: " << id << std::endl;
+    std::cout << "Applying QuadrantGate: " << name << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, dividers)
 }
 

@@ -34,7 +34,6 @@ public:
     std::string parent_id;
     std::vector<Dimension> dimensions;
     std::vector<std::shared_ptr<std::vector<float>>> data;
-    std::shared_ptr<std::vector<bool>> membership;
     std::vector<std::shared_ptr<Gate>> children;
 
     Gate(const std::string &id, const std::string &parent_id)

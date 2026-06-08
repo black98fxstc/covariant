@@ -68,6 +68,24 @@ double Arcsinh::inverse(double scale) const
     return a * std::sinh(b * scale - c);
 }
 
+void Arcsinh::transform(const std::vector<double> &source, std::vector<double> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = this->scale(source[i]);
+    }
+}
+
+void Arcsinh::transform(const std::vector<float> &source, std::vector<float> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = static_cast<float>(this->scale(source[i]));
+    }
+}
+
 double Arcsinh::slope(double scale) const
 {
     return a * b * std::cosh(b * scale - c);
@@ -247,6 +265,24 @@ double Hyperlog::inverse(double scale) const
         return inv;
 }
 
+void Hyperlog::transform(const std::vector<double> &source, std::vector<double> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = this->scale(source[i]);
+    }
+}
+
+void Hyperlog::transform(const std::vector<float> &source, std::vector<float> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = static_cast<float>(this->scale(source[i]));
+    }
+}
+
 double Hyperlog::slope(double scale) const
 {
     if (scale < x1)
@@ -331,6 +367,24 @@ double Linear::inverse(double scale) const
     return a * scale + b;
 }
 
+void Linear::transform(const std::vector<double> &source, std::vector<double> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = this->scale(source[i]);
+    }
+}
+
+void Linear::transform(const std::vector<float> &source, std::vector<float> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = static_cast<float>(this->scale(source[i]));
+    }
+}
+
 double Linear::slope(double scale) const
 {
     return a;
@@ -396,6 +450,24 @@ double Logarithmic::scale(double value) const
 double Logarithmic::inverse(double scale) const
 {
     return a * std::exp(b * scale);
+}
+
+void Logarithmic::transform(const std::vector<double> &source, std::vector<double> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = this->scale(source[i]);
+    }
+}
+
+void Logarithmic::transform(const std::vector<float> &source, std::vector<float> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = static_cast<float>(this->scale(source[i]));
+    }
 }
 
 double Logarithmic::slope(double scale) const
@@ -632,6 +704,24 @@ double Logicle::inverse(double scale) const
         return -inv;
     else
         return inv;
+}
+
+void Logicle::transform(const std::vector<double> &source, std::vector<double> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = this->scale(source[i]);
+    }
+}
+
+void Logicle::transform(const std::vector<float> &source, std::vector<float> &destination) const
+{
+    destination.resize(source.size());
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        destination[i] = static_cast<float>(this->scale(source[i]));
+    }
 }
 
 std::vector<double> Logicle::axisLabels() const

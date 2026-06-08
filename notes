@@ -15,3 +15,16 @@ Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077
 Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978%20%20d0%20VB%201T_Tube_001.fcs" -OutFile "5978  d0 VB 1T_Tube_001.fcs"
 Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5978b%20%20d1%20VB%201T_Tube_001.fcs" -OutFile "5978b  d1 VB 1T_Tube_001.fcs"
 Invoke-WebRequest "https://storage.googleapis.com/cytogenie.org/Samples/OMIP-077/5980%20d3%20VB%201T_Tube_001.fcs" -OutFile "5980 d3 VB 1T_Tube_001.fcs"
+
+add an --output switch that takes a full file name to laplace, riemann and darwin
+if the variables argument is an integer that is within range use it. 1 origin
+if a DataSet file had no headers initially, when you know how many columns it has
+if it's four or less use X Y W Z if it's 26 or less use A B ... otherwise Col n
+give the dataset a clear method and clear it if necessary before reading and anything else so it's reusable
+
+generate Gating.cpp that parses a Gating-ML input
+generate suitable stubs for the different types
+then performs a preorder walk of nodes of the gating 
+hierarchy discribed and  and call them with the relevant parameters.
+
+the name of the variables read from the file is getting $
