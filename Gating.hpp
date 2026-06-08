@@ -29,6 +29,7 @@ public:
         double max_val = std::numeric_limits<double>::infinity();
     };
 
+    std::string name;
     std::string id;
     std::string parent_id;
     std::vector<Dimension> dimensions;
@@ -42,7 +43,7 @@ public:
     virtual ~Gate();
 
     virtual void apply(std::vector<bool> &membership);
-    virtual void evaluate(std::vector<bool> &membership) const = 0;
+    virtual void evaluate(std::vector<bool> &superset) = 0;
 };
 
 class RectangleGate : public Gate
@@ -54,7 +55,7 @@ public:
         : Gate(id, parent_id) {}
     ~RectangleGate() override;
 
-    void evaluate(std::vector<bool> &membership) const override;
+    void evaluate(std::vector<bool> &membership) override;
 };
 
 class PolygonGate : public Gate
@@ -66,7 +67,7 @@ public:
         : Gate(id, parent_id) {}
     ~PolygonGate() override;
 
-    void evaluate(std::vector<bool> &membership) const override;
+    void evaluate(std::vector<bool> &membership) override;
 };
 
 class BooleanGate : public Gate
@@ -76,7 +77,7 @@ public:
         : Gate(id, parent_id) {}
     ~BooleanGate() override;
 
-    void evaluate(std::vector<bool> &membership) const override;
+    void evaluate(std::vector<bool> &membership) override;
 };
 
 class EllipsoidGate : public Gate
@@ -89,7 +90,7 @@ public:
         : Gate(id, parent_id) {}
     ~EllipsoidGate() override;
 
-    void evaluate(std::vector<bool> &membership) const override;
+    void evaluate(std::vector<bool> &membership) override;
 };
 
 class QuadrantGate : public Gate
@@ -99,7 +100,7 @@ public:
         : Gate(id, parent_id) {}
     ~QuadrantGate() override;
 
-    void evaluate(std::vector<bool> &membership) const override;
+    void evaluate(std::vector<bool> &membership) override;
 };
 
 void walkGatingTree(const std::shared_ptr<Gate> &node, int depth = 0);

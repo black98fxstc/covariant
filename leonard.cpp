@@ -26,9 +26,22 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include <Eigen/Dense>
+
 #include "Covariant.hpp"
 #include "Samples.hpp"
 #include "Gating.hpp"
+
+struct SpilloverMatrix
+{
+    std::string id;
+    std::string name;
+    std::string prefix;
+    std::string suffix;
+    std::vector<std::string> parameters;
+    std::unordered_map<std::string, std::string> comp_infix_map;
+    std::vector<std::vector<double>> matrix;
+};
 
 struct SampleData
 {
@@ -38,6 +51,9 @@ struct SampleData
     std::vector<std::string> populations;
     std::vector<std::shared_ptr<Gate>> gates;
     std::unordered_map<std::string, std::shared_ptr<Transform>> transforms;
+    SpilloverMatrix spillover_matrix;
+    std::unordered_map<std::string, std::string> gate_id_to_pop;
+    std::unordered_map<std::string, std::string> pop_to_gate_id;
     bool selected = false;
     bool enabled = true;
 };
@@ -74,7 +90,7 @@ const std::vector<std::string> analysis_choices = {
     "Sample that cannot be resolved in two dimensions, try higher dimensional methods that cannot be sorted or visualized."};
 
 template <unsigned Dimension>
-void do_it(const std::vector<std::vector<float>*> &data, const std::vector<bool> &included, std::vector<unsigned short> &classes, SelectionState &params)
+void do_it(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::vector<unsigned short> &classes, SelectionState &params)
 {
     std::vector<size_t> idx;
     for (size_t i = 0; i < included.size(); ++i)
@@ -107,6 +123,163 @@ void do_it(const std::vector<std::vector<float>*> &data, const std::vector<bool>
         classes[idx[i]] = laplace.classify(events[i]);
     std::cout << "Found " << found << " clusters." << std::endl;
 };
+
+SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr xpathCtx)
+{
+    SpilloverMatrix sm;
+    xmlChar *idAttr = xmlGetProp(matrixNode, (const xmlChar *)"transforms:id");
+    if (!idAttr)
+        idAttr = xmlGetProp(matrixNode, (const xmlChar *)"gating:id");
+    if (!idAttr)
+        idAttr = xmlGetProp(matrixNode, (const xmlChar *)"id");
+    if (idAttr)
+    {
+        sm.id = (char *)idAttr;
+        xmlFree(idAttr);
+    }
+
+    xmlChar *nameAttr = xmlGetProp(matrixNode, (const xmlChar *)"name");
+    if (nameAttr)
+    {
+        sm.name = (char *)nameAttr;
+        xmlFree(nameAttr);
+    }
+
+    xmlChar *prefixAttr = xmlGetProp(matrixNode, (const xmlChar *)"prefix");
+    if (prefixAttr)
+    {
+        sm.prefix = (char *)prefixAttr;
+        xmlFree(prefixAttr);
+    }
+
+    xmlChar *suffixAttr = xmlGetProp(matrixNode, (const xmlChar *)"suffix");
+    if (suffixAttr)
+    {
+        sm.suffix = (char *)suffixAttr;
+        xmlFree(suffixAttr);
+    }
+
+    xmlXPathObjectPtr paramObj = xmlXPathNodeEval(matrixNode, (const xmlChar *)".//*[local-name()='parameters']/*[local-name()='parameter']", xpathCtx);
+    if (paramObj && paramObj->nodesetval)
+    {
+        for (int i = 0; i < paramObj->nodesetval->nodeNr; ++i)
+        {
+            xmlNodePtr pNode = paramObj->nodesetval->nodeTab[i];
+            std::string pname;
+            xmlChar *nAttr = xmlGetProp(pNode, (const xmlChar *)"data-type:name");
+            if (!nAttr)
+                nAttr = xmlGetProp(pNode, (const xmlChar *)"name");
+            if (nAttr)
+            {
+                pname = (char *)nAttr;
+                xmlFree(nAttr);
+            }
+
+            std::string pinfix;
+            xmlChar *iAttr = xmlGetProp(pNode, (const xmlChar *)"userProvidedCompInfix");
+            if (iAttr)
+            {
+                pinfix = (char *)iAttr;
+                xmlFree(iAttr);
+            }
+
+            sm.parameters.push_back(pname);
+            if (!pname.empty() && !pinfix.empty())
+            {
+                sm.comp_infix_map[pname] = pinfix;
+            }
+        }
+    }
+    if (paramObj)
+        xmlXPathFreeObject(paramObj);
+
+    sm.matrix.resize(sm.parameters.size(), std::vector<double>(sm.parameters.size(), 0.0));
+
+    xmlXPathObjectPtr spillObj = xmlXPathNodeEval(matrixNode, (const xmlChar *)".//*[local-name()='spillover']", xpathCtx);
+    if (spillObj && spillObj->nodesetval)
+    {
+        for (int i = 0; i < spillObj->nodesetval->nodeNr; ++i)
+        {
+            xmlNodePtr sNode = spillObj->nodesetval->nodeTab[i];
+            std::string row_param;
+            xmlChar *nAttr = xmlGetProp(sNode, (const xmlChar *)"data-type:parameter");
+            if (!nAttr)
+                nAttr = xmlGetProp(sNode, (const xmlChar *)"parameter");
+            if (nAttr)
+            {
+                row_param = (char *)nAttr;
+                xmlFree(nAttr);
+            }
+
+            int row_idx = -1;
+            for (size_t p = 0; p < sm.parameters.size(); ++p)
+            {
+                if (sm.parameters[p] == row_param)
+                {
+                    row_idx = p;
+                    break;
+                }
+            }
+
+            if (row_idx >= 0)
+            {
+                xmlXPathObjectPtr coefObj = xmlXPathNodeEval(sNode, (const xmlChar *)".//*[local-name()='coefficient']", xpathCtx);
+                if (coefObj && coefObj->nodesetval)
+                {
+                    for (int j = 0; j < coefObj->nodesetval->nodeNr; ++j)
+                    {
+                        xmlNodePtr cNode = coefObj->nodesetval->nodeTab[j];
+                        std::string col_param;
+                        xmlChar *cnAttr = xmlGetProp(cNode, (const xmlChar *)"data-type:parameter");
+                        if (!cnAttr)
+                            cnAttr = xmlGetProp(cNode, (const xmlChar *)"parameter");
+                        if (cnAttr)
+                        {
+                            col_param = (char *)cnAttr;
+                            xmlFree(cnAttr);
+                        }
+
+                        double val = 0.0;
+                        xmlChar *vAttr = xmlGetProp(cNode, (const xmlChar *)"transforms:value");
+                        if (!vAttr)
+                            vAttr = xmlGetProp(cNode, (const xmlChar *)"value");
+                        if (vAttr)
+                        {
+                            try
+                            {
+                                val = std::stod((char *)vAttr);
+                            }
+                            catch (...)
+                            {
+                            }
+                            xmlFree(vAttr);
+                        }
+
+                        int col_idx = -1;
+                        for (size_t p = 0; p < sm.parameters.size(); ++p)
+                        {
+                            if (sm.parameters[p] == col_param)
+                            {
+                                col_idx = p;
+                                break;
+                            }
+                        }
+                        if (col_idx >= 0)
+                        {
+                            sm.matrix[row_idx][col_idx] = val;
+                        }
+                    }
+                }
+                if (coefObj)
+                    xmlXPathFreeObject(coefObj);
+            }
+        }
+    }
+    if (spillObj)
+        xmlXPathFreeObject(spillObj);
+
+    return sm;
+}
 
 std::string find_workspace(int argc, char *argv[])
 {
@@ -283,6 +456,14 @@ Workspace parse_workspace(const std::string &filename)
             if (transObj)
                 xmlXPathFreeObject(transObj);
 
+            xmlXPathObjectPtr sampleMatObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)".//*[local-name()='spilloverMatrix']", xpathCtx);
+            if (sampleMatObj && sampleMatObj->nodesetval && sampleMatObj->nodesetval->nodeNr > 0)
+            {
+                sd.spillover_matrix = parse_spillover_matrix(sampleMatObj->nodesetval->nodeTab[0], xpathCtx);
+            }
+            if (sampleMatObj)
+                xmlXPathFreeObject(sampleMatObj);
+
             // Try fetching name from 'name' attribute
             xmlChar *nameAttr = xmlGetProp(sampleNode, (const xmlChar *)"name");
             if (nameAttr)
@@ -395,6 +576,8 @@ Workspace parse_workspace(const std::string &filename)
                             {
                                 sd.populations.push_back(pname);
                                 std::shared_ptr<Gate> gate;
+                                std::string id;
+                                std::string parent_id;
                                 xpathCtx->node = popObj->nodesetval->nodeTab[j];
                                 xmlXPathObjectPtr gateObj = xmlXPathEvalExpression((const xmlChar *)".//*[contains(local-name(), 'Gate')]", xpathCtx);
                                 if (gateObj && gateObj->nodesetval)
@@ -403,31 +586,33 @@ Workspace parse_workspace(const std::string &filename)
                                     {
                                         xmlNodePtr gateNode = gateObj->nodesetval->nodeTab[k];
                                         std::string gname = (const char *)gateNode->name;
+                                        // get the graph ids
                                         if (gname == "Gate")
+                                        {
+                                            xmlChar *idAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:id");
+                                            if (!idAttr)
+                                                idAttr = xmlGetProp(gateNode, (const xmlChar *)"id");
+                                            if (idAttr)
+                                            {
+                                                id = (const char *)idAttr;
+                                                xmlFree(idAttr);
+                                            }
+
+                                            xmlChar *parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:parent_id");
+                                            if (!parentIdAttr)
+                                                parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"parent_id");
+                                            if (parentIdAttr)
+                                            {
+                                                parent_id = (const char *)parentIdAttr;
+                                                xmlFree(parentIdAttr);
+                                            }
+
+                                            sd.gate_id_to_pop[id] = pname;
+                                            sd.pop_to_gate_id[pname] = id;
                                             continue;
-
-                                        std::string id = pname;
-                                        xmlChar *idAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:id");
-                                        if (!idAttr)
-                                            idAttr = xmlGetProp(gateNode, (const xmlChar *)"id");
-                                        if (idAttr)
-                                        {
-                                            id = (const char *)idAttr;
-                                            xmlFree(idAttr);
                                         }
-
-                                        std::string parent_id;
-                                        xmlChar *parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:parent_id");
-                                        if (!parentIdAttr)
-                                            parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"parent_id");
-                                        if (parentIdAttr)
-                                        {
-                                            parent_id = (const char *)parentIdAttr;
-                                            xmlFree(parentIdAttr);
-                                        }
-
                                         // in need the min and max for each dimension
-                                        if (gname.find("RectangleGate") != std::string::npos)
+                                        else if (gname.find("RectangleGate") != std::string::npos)
                                             gate = std::make_shared<RectangleGate>(id, parent_id);
                                         // I need the verticies of the polygon
                                         else if (gname.find("PolygonGate") != std::string::npos)
@@ -444,20 +629,29 @@ Workspace parse_workspace(const std::string &filename)
                                                     {
                                                         for (int c = 0; c < coordObj->nodesetval->nodeNr; ++c)
                                                         {
-                                                            xmlChar* valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
-                                                            if (!valAttr) valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
+                                                            xmlChar *valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
+                                                            if (!valAttr)
+                                                                valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
                                                             if (valAttr)
                                                             {
-                                                                try { vertex.push_back(std::stod((char*)valAttr)); } catch (...) {}
+                                                                try
+                                                                {
+                                                                    vertex.push_back(std::stod((char *)valAttr));
+                                                                }
+                                                                catch (...)
+                                                                {
+                                                                }
                                                                 xmlFree(valAttr);
                                                             }
                                                         }
                                                     }
-                                                    if (coordObj) xmlXPathFreeObject(coordObj);
+                                                    if (coordObj)
+                                                        xmlXPathFreeObject(coordObj);
                                                     poly->vertices.push_back(vertex);
                                                 }
                                             }
-                                            if (vObj) xmlXPathFreeObject(vObj);
+                                            if (vObj)
+                                                xmlXPathFreeObject(vObj);
                                             gate = poly;
                                         }
                                         // do not need for now
@@ -472,16 +666,24 @@ Workspace parse_workspace(const std::string &filename)
                                             {
                                                 for (int c = 0; c < meanObj->nodesetval->nodeNr; ++c)
                                                 {
-                                                    xmlChar* valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
-                                                    if (!valAttr) valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
+                                                    xmlChar *valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
+                                                    if (!valAttr)
+                                                        valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
                                                     if (valAttr)
                                                     {
-                                                        try { ellip->mean.push_back(std::stod((char*)valAttr)); } catch (...) {}
+                                                        try
+                                                        {
+                                                            ellip->mean.push_back(std::stod((char *)valAttr));
+                                                        }
+                                                        catch (...)
+                                                        {
+                                                        }
                                                         xmlFree(valAttr);
                                                     }
                                                 }
                                             }
-                                            if (meanObj) xmlXPathFreeObject(meanObj);
+                                            if (meanObj)
+                                                xmlXPathFreeObject(meanObj);
                                             xmlXPathObjectPtr rowObj = xmlXPathNodeEval(gateNode, (const xmlChar *)".//*[local-name()='covarianceMatrix']//*[local-name()='row']", xpathCtx);
                                             if (rowObj && rowObj->nodesetval)
                                             {
@@ -493,20 +695,29 @@ Workspace parse_workspace(const std::string &filename)
                                                     {
                                                         for (int e = 0; e < entryObj->nodesetval->nodeNr; ++e)
                                                         {
-                                                            xmlChar* valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"data-type:value");
-                                                            if (!valAttr) valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"value");
+                                                            xmlChar *valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"data-type:value");
+                                                            if (!valAttr)
+                                                                valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"value");
                                                             if (valAttr)
                                                             {
-                                                                try { row.push_back(std::stod((char*)valAttr)); } catch (...) {}
+                                                                try
+                                                                {
+                                                                    row.push_back(std::stod((char *)valAttr));
+                                                                }
+                                                                catch (...)
+                                                                {
+                                                                }
                                                                 xmlFree(valAttr);
                                                             }
                                                         }
                                                     }
-                                                    if (entryObj) xmlXPathFreeObject(entryObj);
+                                                    if (entryObj)
+                                                        xmlXPathFreeObject(entryObj);
                                                     ellip->covariance_matrix.push_back(row);
                                                 }
                                             }
-                                            if (rowObj) xmlXPathFreeObject(rowObj);
+                                            if (rowObj)
+                                                xmlXPathFreeObject(rowObj);
                                             gate = ellip;
                                         }
                                         // do not need for now
@@ -521,36 +732,56 @@ Workspace parse_workspace(const std::string &filename)
                                                 for (int d = 0; d < dimObj->nodesetval->nodeNr; ++d)
                                                 {
                                                     xmlNodePtr dimNode = dimObj->nodesetval->nodeTab[d];
-                                                    std::string nodeName = (const char*)dimNode->name;
-                                                    if (nodeName.find("fcs-dimension") != std::string::npos && dimNode->parent) {
-                                                        std::string parentName = (const char*)dimNode->parent->name;
-                                                        if (parentName.find("dimension") != std::string::npos || parentName.find("Dimension") != std::string::npos) {
+                                                    std::string nodeName = (const char *)dimNode->name;
+                                                    if (nodeName.find("fcs-dimension") != std::string::npos && dimNode->parent)
+                                                    {
+                                                        std::string parentName = (const char *)dimNode->parent->name;
+                                                        if (parentName.find("dimension") != std::string::npos || parentName.find("Dimension") != std::string::npos)
+                                                        {
                                                             continue;
                                                         }
                                                     }
 
                                                     Gate::Dimension dim;
 
-                                                    xmlChar* minAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:min");
-                                                    if (!minAttr) minAttr = xmlGetProp(dimNode, (const xmlChar *)"min");
-                                                    if (minAttr) {
-                                                        try { dim.min_val = std::stod((char*)minAttr); } catch(...) {}
+                                                    xmlChar *minAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:min");
+                                                    if (!minAttr)
+                                                        minAttr = xmlGetProp(dimNode, (const xmlChar *)"min");
+                                                    if (minAttr)
+                                                    {
+                                                        try
+                                                        {
+                                                            dim.min_val = std::stod((char *)minAttr);
+                                                        }
+                                                        catch (...)
+                                                        {
+                                                        }
                                                         xmlFree(minAttr);
                                                     }
 
-                                                    xmlChar* maxAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:max");
-                                                    if (!maxAttr) maxAttr = xmlGetProp(dimNode, (const xmlChar *)"max");
-                                                    if (maxAttr) {
-                                                        try { dim.max_val = std::stod((char*)maxAttr); } catch(...) {}
+                                                    xmlChar *maxAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:max");
+                                                    if (!maxAttr)
+                                                        maxAttr = xmlGetProp(dimNode, (const xmlChar *)"max");
+                                                    if (maxAttr)
+                                                    {
+                                                        try
+                                                        {
+                                                            dim.max_val = std::stod((char *)maxAttr);
+                                                        }
+                                                        catch (...)
+                                                        {
+                                                        }
                                                         xmlFree(maxAttr);
                                                     }
 
                                                     xmlNodePtr paramNode = dimNode;
                                                     xmlXPathObjectPtr fcsDimObj = xmlXPathNodeEval(dimNode, (const xmlChar *)".//*[local-name()='fcs-dimension']", xpathCtx);
-                                                    if (fcsDimObj && fcsDimObj->nodesetval && fcsDimObj->nodesetval->nodeNr > 0) {
+                                                    if (fcsDimObj && fcsDimObj->nodesetval && fcsDimObj->nodesetval->nodeNr > 0)
+                                                    {
                                                         paramNode = fcsDimObj->nodesetval->nodeTab[0];
                                                     }
-                                                    if (fcsDimObj) xmlXPathFreeObject(fcsDimObj);
+                                                    if (fcsDimObj)
+                                                        xmlXPathFreeObject(fcsDimObj);
 
                                                     xmlChar *nAttr = xmlGetProp(paramNode, (const xmlChar *)"data-type:name");
                                                     if (!nAttr)
@@ -598,6 +829,7 @@ Workspace parse_workspace(const std::string &filename)
                                 }
                                 if (gateObj)
                                     xmlXPathFreeObject(gateObj);
+                                gate->name = pname;
                                 sd.gates.push_back(gate);
                             }
                             if (std::find(ws.all_populations.begin(), ws.all_populations.end(), pname) == ws.all_populations.end())
@@ -611,6 +843,23 @@ Workspace parse_workspace(const std::string &filename)
             }
             if (popObj)
                 xmlXPathFreeObject(popObj);
+
+            std::unordered_map<std::string, std::shared_ptr<Gate>> id_to_gate;
+            for (auto &gate : sd.gates)
+                if (gate)
+                    id_to_gate[gate->id] = gate;
+
+            for (auto &gate : sd.gates)
+            {
+                if (gate && !gate->parent_id.empty())
+                {
+                    auto parent_it = id_to_gate.find(gate->parent_id);
+                    if (parent_it != id_to_gate.end())
+                    {
+                        parent_it->second->children.push_back(gate);
+                    }
+                }
+            }
 
             ws.samples.push_back(sd);
         }
@@ -711,12 +960,10 @@ SelectionState build_ftxui_interface(Workspace &ws)
     auto input_max_clusters = Input(&state.max_clusters_str, "50");
     auto input_min_events = Input(&state.min_events_str, "100");
 
-    auto settings_container = Container::Vertical({
-        input_smoothing,
-        input_threshold,
-        input_max_clusters,
-        input_min_events
-    });
+    auto settings_container = Container::Vertical({input_smoothing,
+                                                   input_threshold,
+                                                   input_max_clusters,
+                                                   input_min_events});
 
     auto main_layout = Container::Horizontal({sample_container,
                                               Maybe(var_container, [&]
@@ -724,15 +971,11 @@ SelectionState build_ftxui_interface(Workspace &ws)
                                               Maybe(pop_container, [&]
                                                     { return num_vars_selected >= 2; })});
 
-    auto bottom_container = Container::Horizontal({
-        choice_handled,
-        settings_container
-    });
+    auto bottom_container = Container::Horizontal({choice_handled,
+                                                   settings_container});
 
-    auto top_level = Container::Vertical({
-        main_layout,
-        bottom_container
-    });
+    auto top_level = Container::Vertical({main_layout,
+                                          bottom_container});
 
     auto top_level_handled = CatchEvent(top_level, [&, main_layout, bottom_container](ftxui::Event e)
                                         {
@@ -888,10 +1131,38 @@ SelectionState build_ftxui_interface(Workspace &ws)
         }
         state.analysis_choice = analysis_choice;
 
-        try { state.smoothing = std::stof(state.smoothing_str); } catch (...) { state.smoothing = 0.01f; }
-        try { state.threshold = std::stof(state.threshold_str); } catch (...) { state.threshold = 0.001f; }
-        try { state.max_clusters = std::stoul(state.max_clusters_str); } catch (...) { state.max_clusters = 50; }
-        try { state.min_events = std::stoull(state.min_events_str); } catch (...) { state.min_events = 100; }
+        try
+        {
+            state.smoothing = std::stof(state.smoothing_str);
+        }
+        catch (...)
+        {
+            state.smoothing = 0.01f;
+        }
+        try
+        {
+            state.threshold = std::stof(state.threshold_str);
+        }
+        catch (...)
+        {
+            state.threshold = 0.001f;
+        }
+        try
+        {
+            state.max_clusters = std::stoul(state.max_clusters_str);
+        }
+        catch (...)
+        {
+            state.max_clusters = 50;
+        }
+        try
+        {
+            state.min_events = std::stoull(state.min_events_str);
+        }
+        catch (...)
+        {
+            state.min_events = 100;
+        }
     }
 
     return state;
@@ -913,137 +1184,170 @@ int main(int argc, char *argv[])
     SelectionState selections = build_ftxui_interface(ws);
     if (selections.cancelled)
         return 1;
-
     DataSet dataset;
     for (const auto *s_ptr : selections.samples)
     {
         const auto &s = *s_ptr;
+        std::unordered_map<std::string, std::shared_ptr<Gate>> gate_id_to_gate;
+        for (const auto &g : s.gates)
+            if (g)
+                gate_id_to_gate[g->id] = g;
+
         dataset.read(s.name);
 
-        // set the scales on the variables for this sample
-        for (size_t i = 0; i < dataset.size(); ++i)
+        // setup spectral unmixing
+        std::vector<std::vector<float> *> detector_data;
+        for (const auto &v : s.spillover_matrix.parameters)
+            detector_data.push_back(dataset.variable[v].data.get());
+
+        const std::vector<std::vector<double>> &spill = s.spillover_matrix.matrix;
+        Eigen::MatrixXf spectrum(spill.size(), spill[0].size());
+        for (size_t i = 0; i < spill.size(); i++)
+            for (size_t j = 0; j < spill[i].size(); j++)
+                spectrum(i, j) = spill[i][j];
+        Eigen::BDCSVD<Eigen::MatrixXf, Eigen::ComputeThinU | Eigen::ComputeThinV> svd(spectrum);
+        Eigen::MatrixXf pseudo(svd.matrixV() * svd.singularValues().asDiagonal().inverse() * svd.matrixU().transpose());
+        for (size_t i = 0; i < pseudo.rows(); i++)
         {
-            auto it = s.transforms.find(dataset[i].name);
-            if (it != s.transforms.end())
-                dataset[i].transform = it->second;
+            const auto &p = s.spillover_matrix.parameters[i];
+            auto v = s.spillover_matrix.comp_infix_map.find(p);
+            if (v == s.spillover_matrix.comp_infix_map.end())
+                continue;
+            Variable &var = dataset.variable[v->second];
+            for (size_t j = 0; j < pseudo.cols(); j++)
+                var.unmixing.push_back(pseudo(i, j));
         }
 
+        // set the scales on the variables for this sample
+        for (auto &var : dataset.variable)
+        {
+            auto xfrm = s.transforms.find(var.first);
+            if (xfrm != s.transforms.end())
+                var.second.transform = xfrm->second;
+        }
+
+        // cache of transformed data
         std::unordered_map<std::string, std::shared_ptr<std::vector<float>>> transformed_data;
-        std::vector<std::vector<float>*> data(selections.variables.size());
 
         auto get_transformed = [&](const std::string &var_name) -> std::shared_ptr<std::vector<float>>
         {
             auto it = transformed_data.find(var_name);
             if (it != transformed_data.end())
-            {
                 return it->second;
+
+            auto &var = dataset.variable[var_name];
+
+            // if the data don't exist we need to do the unmixing first
+            if (!var.data && !var.unmixing.empty())
+            {
+                var.data = std::make_shared<std::vector<float>>(dataset.size(), 0.0f);
+                std::vector<float> *bare_data = var.data.get();
+                for (size_t i = 0; i < dataset.size(); ++i)
+                    for (size_t j = 0; j < detector_data.size(); ++j)
+                        (*bare_data)[i] += (*detector_data[j])[i] * var.unmixing[j];
             }
 
             std::shared_ptr<std::vector<float>> transformed;
-            size_t var_idx = static_cast<size_t>(-1);
-            for (size_t i = 0; i < dataset.size(); ++i)
-                if (dataset[i].name == var_name)
-                {
-                    var_idx = i;
-                    break;
-                }
-
-            if (var_idx == static_cast<size_t>(-1))
-                return transformed;
-
-            const auto &orig_data = dataset[var_idx].get_data<float>();
-            transformed = std::make_shared<std::vector<float>>(orig_data.size());
-            for (size_t i = 0; i < orig_data.size(); ++i)
-                (*transformed)[i] = dataset[var_idx].transform_value(orig_data[i]);
+            const std::shared_ptr<std::vector<float>> &orig_data = var.data;
+            transformed = std::make_shared<std::vector<float>>(orig_data->size());
+            for (size_t i = 0; i < orig_data->size(); ++i)
+                (*transformed)[i] = var.transform_value((*orig_data)[i]);
 
             transformed_data[var_name] = transformed; // Cache it for future lookups
             return transformed;
         };
 
-        // generate the appropriate scaled projection for analysis
-        std::vector<size_t> var_indices;
+        // generate the appropriate scaled data for analysis
         for (size_t v = 0; v < selections.variables.size(); ++v)
         {
             const auto &vname = selections.variables[v];
-            for (size_t j = 0; j < dataset.size(); ++j)
+            Variable &var = dataset.variable[vname];
+            auto transformed = get_transformed(vname);
+            if (transformed)
+                var.data = transformed;
+        }
+
+        // find all the gates and any data they need
+        std::vector<std::shared_ptr<Gate>> gates;
+        for (size_t i = 0; i < selections.populations.size(); ++i)
+        {
+            std::string pop_name = selections.populations[i];
+            std::string gate_id;
+            std::shared_ptr<Gate> gate;
+            auto it = s.pop_to_gate_id.find(pop_name);
+            if (it != s.pop_to_gate_id.end())
             {
-                if (dataset[j].name == vname)
+                gate_id = it->second;
+                do
                 {
-                    var_indices.push_back(j);
-                    auto transformed = get_transformed(vname);
-                    if (transformed)
-                    {
-                        data[v] = transformed.get();
-                    }
-                    break;
-                }
+                    gate = gate_id_to_gate[gate_id];
+                    for (const auto &g : gates)
+                        if (g == gate)
+                            continue;
+                    gates.push_back(gate);
+                    for (const auto &dim : gate->dimensions)
+                        gate->data.push_back(get_transformed(dim.name));
+                    gate_id = gate->parent_id;
+                } while (!gate_id.empty());
             }
         }
-        
-        // find all the gates and any data they need
-        for (size_t i = 0; i < s.populations.size(); ++i)
+
+        // evaluate all the gates
+        std::vector<bool> whole(dataset.size(), true);
+        for (auto it = gates.rbegin(); it != gates.rend(); ++it)
         {
-            std::string population = s.populations[i];
-            do
+            auto &gate = *it;
+            if (gate->parent_id.empty())
+                gate->membership = std::make_shared<std::vector<bool>>(dataset.size(), true);
+            else
             {
-                size_t j;
-                for (j = 0; j < dataset.size(); j++)
-                    if (dataset[i].name == s.populations[i])
-                        break;
-                if (j < dataset.size())
-                    continue;
-                auto &gate = s.gates[i];
-                gate->data.resize(0);
-                for (const auto &dim : gate->dimensions)
-                    gate->data.push_back(get_transformed(dim.name));
-                dataset.add_gate(s.populations[i], gate);
-                population = s.gates[i]->parent_id;
-            } while (!population.empty());
+                std::shared_ptr<Gate> parent = gate_id_to_gate[gate->parent_id];
+                gate->membership = std::make_shared<std::vector<bool>>(*(parent->membership.get()));
+            }
+            gate->evaluate(*gate->membership);
         }
 
-        std::function<void(const std::shared_ptr<Gate> &, std::vector<bool> &)> preorder_walk = [&](const std::shared_ptr<Gate> &node, std::vector<bool> &membership) -> void
-        {
-            node->evaluate(membership);
-            for (const auto &child : node->children)
-                preorder_walk(child, membership);
-        };
+        // someplace for the data to go
+        std::vector<unsigned short> *classification = dataset.classification["Laplace"].classifications.get();
 
-        auto &subpopulation = dataset[0].get_data<bool>();
-        for (const auto &gate : s.gates)
-            preorder_walk(gate, subpopulation);
-
-        auto &classification = dataset[0].get_data<unsigned short>();
-        Projection proj(var_indices, dataset);
-
+        // scaled data marshalled as events for analysis
         int num_vars_selected = selections.variables.size();
-        switch (selections.analysis_choice)
+        std::vector<std::vector<float> *> data(num_vars_selected);
+        for (size_t i = 0; i < num_vars_selected; ++i)
+            data[i] = dataset.variable[selections.variables[i]].data.get();
+
+        for (std::string &pop_name : selections.populations)
         {
-        case 0:
-            // EPP
-            break;
-        case 1:
-            // Laplace
-            switch (num_vars_selected)
+            std::vector<bool> *subpopulation = dataset.subset[pop_name].membership.get();
+            switch (selections.analysis_choice)
             {
-            case 2:
-                do_it<2>(data, subpopulation, classification, selections);
+            case 0:
+                // EPP
                 break;
-            case 3:
-                do_it<3>(data, subpopulation, classification, selections);
-                break;
-            case 4:
-                do_it<4>(data, subpopulation, classification, selections);
+            case 1:
+                // Laplace
+                switch (num_vars_selected)
+                {
+                case 2:
+                    do_it<2>(data, *subpopulation, *classification, selections);
+                    break;
+                case 3:
+                    do_it<3>(data, *subpopulation, *classification, selections);
+                    break;
+                case 4:
+                    do_it<4>(data, *subpopulation, *classification, selections);
+                    break;
+                default:
+                    // error
+                    break;
+                }
                 break;
             default:
                 // error
                 break;
             }
-            break;
-        default:
-            // error
-            break;
         }
-    }
+    };
 
     std::cout << "\n=== LEONARD SELECTIONS ===\n";
     if (!selections.samples.empty())

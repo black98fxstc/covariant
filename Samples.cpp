@@ -1,4 +1,3 @@
-#include "Samples.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <type_traits>
@@ -13,31 +12,9 @@
 #include <libxslt/xsltutils.h>
 #include <filesystem>
 
-Variable::Variable(std::string n) : name(std::move(n)), scale(Scale::unknown), evaluated(true) {}
+#include "Samples.hpp"
 
-Variable::Variable(std::string n, Parameters p) : name(std::move(n)), params(std::move(p)), evaluated(true)
-{
-    scale = std::visit([this](auto &&arg) -> Scale
-                       {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_same_v<T, LinearParams>) {
-            transform = std::make_shared<Linear>(arg.max_val, arg.min_val);
-            return Scale::linear;
-        }
-        else if constexpr (std::is_same_v<T, LogParams>) {
-            transform = std::make_shared<Logarithmic>(262144.0, arg.decades);
-            return Scale::log;
-        }
-        else if constexpr (std::is_same_v<T, BiexpParams>) {
-            transform = std::make_shared<Logicle>(262144.0, arg.width, arg.positive_decades, 0.0);
-            return Scale::biexp;
-        }
-        else if constexpr (std::is_same_v<T, LogicleParams>) {
-            transform = std::make_shared<Logicle>(arg.t, arg.w, arg.m, arg.a);
-            return Scale::logicle;
-        }
-        else return Scale::unknown; }, params);
-}
+Variable::Variable() : scale(Scale::unknown) {}
 
 Variable::~Variable() = default;
 
@@ -45,78 +22,34 @@ void Variable::evaluate() {}
 
 double Variable::transform_value(double value) const
 {
-    if (transform) return transform->scale(value);
+    if (transform)
+        return transform->scale(value);
     return value;
 }
 
 double Variable::inverse_transform(double value) const
 {
-    if (transform) return transform->inverse(value);
+    if (transform)
+        return transform->inverse(value);
     return value;
 }
 
-LazyVariable::LazyVariable(std::string n, std::shared_ptr<Gate> g) : Variable(std::move(n)), gate(std::move(g))
+void DataSet::for_each_class(const Classification &cls, std::function<void(unsigned short)> func)
 {
-    evaluated = false;
-    data = std::vector<bool>{};
-}
-
-LazyVariable::~LazyVariable() = default;
-
-void LazyVariable::evaluate()
-{
-    if (gate && dataset)
+    if (cls.classifications)
     {
-        // gate->apply(*dataset);
-    }
-}
-
-void DataSet::add_variable(const std::string &name)
-{
-    auto var = std::make_unique<Variable>(name);
-    var->dataset = this;
-    variables.push_back(std::move(var));
-}
-
-void DataSet::add_classification(const std::string &name)
-{
-    auto var = std::make_unique<Variable>(name);
-    var->data = std::vector<unsigned short>{};
-    var->dataset = this;
-    variables.push_back(std::move(var));
-}
-
-void DataSet::add_gate(const std::string &name, const std::shared_ptr<Gate> &gate)
-{
-    if (gate)
-    {
-        auto var = std::make_unique<LazyVariable>(name, gate);
-        var->dataset = this;
-        variables.push_back(std::move(var));
-    }
-}
-
-void DataSet::add_data(const std::vector<float> &datum)
-{
-    // Implementation
-}
-
-void DataSet::for_each_class(const Variable &classification, std::function<void(unsigned short)> func)
-{
-    if (std::holds_alternative<std::vector<unsigned short>>(classification.data))
-    {
-        for (auto val : classification.get_data<unsigned short>())
+        for (auto val : *cls.classifications)
         {
             func(val);
         }
     }
 }
 
-void DataSet::for_each_member(const Variable &membership, std::function<void(bool)> func)
+void DataSet::for_each_member(const Subset &sub, std::function<void(bool)> func)
 {
-    if (std::holds_alternative<std::vector<bool>>(membership.data))
+    if (sub.membership)
     {
-        for (auto val : membership.get_data<bool>())
+        for (auto val : *sub.membership)
         {
             func(val);
         }
@@ -126,12 +59,14 @@ void DataSet::for_each_member(const Variable &membership, std::function<void(boo
 void DataSet::setup_float_variables(const std::vector<std::string> &headers)
 {
     variables.clear();
+    variable.clear();
+    subset.clear();
+    classification.clear();
     for (const auto &h : headers)
     {
-        auto var = std::make_unique<Variable>(h, LinearParams{});
-        var->data = std::vector<float>{};
-        var->dataset = this;
-        variables.push_back(std::move(var));
+        auto &var = variable[h];
+        var.data = std::make_shared<std::vector<float>>();
+        variables.push_back(&var);
     }
 }
 
@@ -173,13 +108,14 @@ bool DataSet::read_csv(const std::string &filename, char delimiter)
             try
             {
                 float val = std::stof(token);
-                std::get<std::vector<float>>(variables[i]->data).push_back(val);
+                variables[i]->data->push_back(val);
             }
             catch (...)
             {
-                std::get<std::vector<float>>(variables[i]->data).push_back(std::nanf(""));
+                variables[i]->data->push_back(std::nanf(""));
             }
         }
+        ++_size;
     }
     return true;
 }
@@ -244,9 +180,10 @@ bool DataSet::read_binary(const std::string &filename, const std::vector<std::st
         in.read(reinterpret_cast<char *>(row.data()), num_cols * sizeof(float));
         for (size_t c = 0; c < num_cols; ++c)
         {
-            std::get<std::vector<float>>(variables[c]->data).push_back(row[c]);
+            variables[c]->data->push_back(row[c]);
         }
     }
+    _size = num_rows;
     return in.good();
 }
 
@@ -352,8 +289,10 @@ bool DataSet::read_fcs(const std::string &filename)
     {
         std::string p_name = "$P" + std::to_string(i) + "N";
         std::string p_stain = "$P" + std::to_string(i) + "S";
-
-        headers.push_back(metadata[p_name]); // much easier to type on the command line
+        // needed because spillover matrix does it
+        std::string mangle = metadata[p_name];
+        std::replace(mangle.begin(), mangle.end(), '/', '_');
+        headers.push_back(mangle);
     }
 
     setup_float_variables(headers);
@@ -375,9 +314,10 @@ bool DataSet::read_fcs(const std::string &filename)
                 std::swap(v_bytes[0], v_bytes[3]);
                 std::swap(v_bytes[1], v_bytes[2]);
             }
-            std::get<std::vector<float>>(variables[p]->data).push_back(val);
+            variables[p]->data->push_back(val);
         }
     }
+    _size = tot_events;
 
     // Check for auxiliary .clr, .csv, and .truth files associated with this .fcs file
     auto read_aux = [this, tot_events](const std::filesystem::path &path, bool is_bool)
@@ -401,23 +341,25 @@ bool DataSet::read_fcs(const std::string &filename)
         }
 
         size_t num_cols = aux_headers.size();
-        size_t start_idx = variables.size();
+        std::vector<std::shared_ptr<std::vector<bool>>> bool_cols;
+        std::vector<std::shared_ptr<std::vector<unsigned short>>> class_cols;
 
         for (const auto &h : aux_headers)
         {
-            auto var = std::make_unique<Variable>(h);
             if (is_bool)
             {
-                var->data = std::vector<bool>{};
-                std::get<std::vector<bool>>(var->data).reserve(tot_events);
+                auto &sub = this->subset[h];
+                sub.membership = std::make_shared<std::vector<bool>>();
+                sub.membership->reserve(tot_events);
+                bool_cols.push_back(sub.membership);
             }
             else
             {
-                var->data = std::vector<unsigned short>{};
-                std::get<std::vector<unsigned short>>(var->data).reserve(tot_events);
+                auto &cls = this->classification[h];
+                cls.classifications = std::make_shared<std::vector<unsigned short>>();
+                cls.classifications->reserve(tot_events);
+                class_cols.push_back(cls.classifications);
             }
-            var->dataset = this;
-            variables.push_back(std::move(var));
         }
 
         while (std::getline(in, line))
@@ -446,7 +388,7 @@ bool DataSet::read_fcs(const std::string &filename)
                         {
                         }
                     }
-                    std::get<std::vector<bool>>(variables[start_idx + i]->data).push_back(val);
+                    bool_cols[i]->push_back(val);
                 }
                 else
                 {
@@ -461,7 +403,7 @@ bool DataSet::read_fcs(const std::string &filename)
                         {
                         }
                     }
-                    std::get<std::vector<unsigned short>>(variables[start_idx + i]->data).push_back(val);
+                    class_cols[i]->push_back(val);
                 }
             }
         }
@@ -534,87 +476,7 @@ bool DataSet::read(const std::string &filename, const std::vector<std::string> &
     return false;
 }
 
-DataSet::DataSet(DataSet&& other) noexcept : variables(std::move(other.variables))
-{
-    for (auto& var : variables) var->dataset = this;
-}
-
-DataSet& DataSet::operator=(DataSet&& other) noexcept
-{
-    if (this != &other) {
-        variables = std::move(other.variables);
-        for (auto& var : variables) var->dataset = this;
-    }
-    return *this;
-}
-
-DataSet::~DataSet() = default;
-
-Variable &DataSet::operator[](size_t i)
-{
-    return *variables[i];
-}
-
-const Variable &DataSet::operator[](size_t i) const
-{
-    return *variables[i];
-}
-
-Variable &DataSet::operator[](const std::string &name)
-{
-    auto it = variables_by_name.find(name);
-    if (it != variables_by_name.end())
-        return *it->second;
-    throw std::runtime_error("Variable not found: " + name);
-}
-
-const Variable &DataSet::operator[](const std::string &name) const
-{
-    auto it = variables_by_name.find(name);
-    if (it != variables_by_name.end())
-        return *it->second;
-    throw std::runtime_error("Variable not found: " + name);
-}
-
-Variable *DataSet::get(const std::string &name) noexcept
-{
-    auto it = variables_by_name.find(name);
-    if (it != variables_by_name.end())
-        return it->second.get();
-    return nullptr;
-}
-
-const Variable *DataSet::get(const std::string &name) const noexcept
-{
-    auto it = variables_by_name.find(name);
-    if (it != variables_by_name.end())
-        return it->second.get();
-    return nullptr;
-}
-
 size_t DataSet::size() const
 {
-    return variables.size();
-}
-
-IDataSet::~IDataSet() = default;
-
-Projection::Projection(std::vector<size_t> indices, DataSet &base)
-    : variable_indices(std::move(indices)), base_dataset(base) {}
-
-Projection::~Projection() = default;
-
-Variable &Projection::operator[](size_t i)
-{
-    return base_dataset[variable_indices[i]];
-}
-
-const Variable &Projection::operator[](size_t i) const
-{
-    return base_dataset[variable_indices[i]];
-}
-
-size_t Projection::size() const
-{
-    return variable_indices.size();
+    return _size;
 }

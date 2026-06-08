@@ -25,7 +25,7 @@ void Gate::apply(std::vector<bool> &membership)
 
 RectangleGate::~RectangleGate() = default;
 
-void RectangleGate::evaluate(std::vector<bool> &membership) const
+void RectangleGate::evaluate(std::vector<bool> &membership)
 {
     std::cout << "Applying RectangleGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, min/max)
@@ -33,7 +33,7 @@ void RectangleGate::evaluate(std::vector<bool> &membership) const
 
 PolygonGate::~PolygonGate() = default;
 
-void PolygonGate::evaluate(std::vector<bool> &membership) const
+void PolygonGate::evaluate(std::vector<bool> &membership)
 {
     std::cout << "Applying PolygonGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, vertices)
@@ -41,7 +41,7 @@ void PolygonGate::evaluate(std::vector<bool> &membership) const
 
 BooleanGate::~BooleanGate() = default;
 
-void BooleanGate::evaluate(std::vector<bool> &membership) const
+void BooleanGate::evaluate(std::vector<bool> &membership)
 {
     std::cout << "Applying BooleanGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (logic operations: and, or, not)
@@ -49,7 +49,7 @@ void BooleanGate::evaluate(std::vector<bool> &membership) const
 
 EllipsoidGate::~EllipsoidGate() = default;
 
-void EllipsoidGate::evaluate(std::vector<bool> &membership) const
+void EllipsoidGate::evaluate(std::vector<bool> &membership)
 {
     std::cout << "Applying EllipsoidGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, focus, distance, etc.)
@@ -57,7 +57,7 @@ void EllipsoidGate::evaluate(std::vector<bool> &membership) const
 
 QuadrantGate::~QuadrantGate() = default;
 
-void QuadrantGate::evaluate(std::vector<bool> &membership) const
+void QuadrantGate::evaluate(std::vector<bool> &membership)
 {
     std::cout << "Applying QuadrantGate: " << id << std::endl;
     // TODO: Parse and process relevant parameters (dimensions, dividers)
@@ -143,7 +143,8 @@ int main(int argc, char **argv)
                 xmlFree(idAttr);
             }
 
-            if (id.empty()) continue;
+            if (id.empty())
+                continue;
 
             auto get_double = [](xmlNodePtr n, const char *attr_name, double def)
             {
@@ -151,7 +152,13 @@ int main(int argc, char **argv)
                 if (attr)
                 {
                     double val = def;
-                    try { val = std::stod((char *)attr); } catch (...) {}
+                    try
+                    {
+                        val = std::stod((char *)attr);
+                    }
+                    catch (...)
+                    {
+                    }
                     xmlFree(attr);
                     return val;
                 }
@@ -162,26 +169,34 @@ int main(int argc, char **argv)
             std::shared_ptr<Transform> transform;
             try
             {
-                if (name.find("logicle") != std::string::npos) {
+                if (name.find("logicle") != std::string::npos)
+                {
                     transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
                 }
-                else if (name.find("hyperlog") != std::string::npos) {
+                else if (name.find("hyperlog") != std::string::npos)
+                {
                     transform = std::make_shared<Hyperlog>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
                 }
-                else if (name.find("lin") != std::string::npos) {
+                else if (name.find("lin") != std::string::npos)
+                {
                     transform = std::make_shared<Linear>(get_double(node, "T", 262144.0), get_double(node, "A", 0.0));
                 }
-                else if (name.find("log") != std::string::npos) {
+                else if (name.find("log") != std::string::npos)
+                {
                     transform = std::make_shared<Logarithmic>(get_double(node, "T", 262144.0), get_double(node, "M", 4.5));
                 }
-                else if (name.find("fasinh") != std::string::npos) {
+                else if (name.find("fasinh") != std::string::npos)
+                {
                     transform = std::make_shared<Arcsinh>(get_double(node, "T", 262144.0), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
                 }
-                else if (name.find("biexp") != std::string::npos) {
+                else if (name.find("biexp") != std::string::npos)
+                {
                     transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
                 }
             }
-            catch (...) {}
+            catch (...)
+            {
+            }
 
             if (transform)
             {
@@ -281,7 +296,8 @@ int main(int argc, char **argv)
                         {
                             dim.scale = (char *)sAttr;
                             auto it = transforms.find(dim.scale);
-                            if (it != transforms.end()) {
+                            if (it != transforms.end())
+                            {
                                 dim.transform = it->second;
                             }
                             xmlFree(sAttr);

@@ -5,6 +5,7 @@
 #include <functional>
 #include <variant>
 #include <map>
+
 #include "Gating.hpp"
 #include "Transforms.hpp"
 
@@ -51,21 +52,16 @@ using Parameters = std::variant<std::monostate, LinearParams, LogParams, BiexpPa
 class Variable
 {
 public:
-    std::string name;
     Scale scale;
     Parameters params;
-
-    // Using a variant of vectors (Structure of Arrays) is much more efficient and type-safe.
-    // It avoids padding overhead per element and provides great cache locality.
-    std::variant<std::vector<float>, std::vector<unsigned short>, std::vector<bool>> data;
-    bool evaluated = true;
-    DataSet *dataset = nullptr;
     std::shared_ptr<Transform> transform = nullptr;
+    std::vector<float> unmixing;
+    std::shared_ptr<std::vector<float>> data;
 
-    Variable(std::string n);
+    Variable();
 
     // Construct with specific parameters and automatically deduce the Scale enum
-    Variable(std::string n, Parameters p);
+    // Variable(std::string n, Parameters p);
 
     virtual ~Variable();
 
@@ -73,72 +69,41 @@ public:
 
     double transform_value(double value) const;
     double inverse_transform(double value) const;
-
-    // Template helper to safely get data of a specific type
-    template <typename T>
-    std::vector<T> &get_data()
-    {
-        if (!evaluated)
-        {
-            evaluated = true;
-            evaluate();
-        }
-        return std::get<std::vector<T>>(data);
-    }
-
-    template <typename T>
-    const std::vector<T> &get_data() const
-    {
-        if (!evaluated)
-        {
-            const_cast<Variable *>(this)->evaluated = true;
-            const_cast<Variable *>(this)->evaluate();
-        }
-        return std::get<std::vector<T>>(data);
-    }
 };
 
-class LazyVariable : public Variable
+class Subset
 {
+public:
+    std::shared_ptr<std::vector<bool>> membership;
     std::shared_ptr<Gate> gate;
-
-public:
-    LazyVariable(std::string n, std::shared_ptr<Gate> g);
-    ~LazyVariable() override;
-    void evaluate() override;
 };
 
-// Base interface for polymorphism
-class IDataSet
+class Classification
 {
 public:
-    virtual ~IDataSet();
-    virtual Variable &operator[](size_t i) = 0;
-    virtual const Variable &operator[](size_t i) const = 0;
-    virtual size_t size() const = 0;
+    std::shared_ptr<std::vector<unsigned short>> classifications;
 };
 
-class DataSet : public IDataSet
+class DataSet
 {
-    std::vector<std::unique_ptr<Variable>> variables;
-    std::unordered_map<std::string, std::shared_ptr<Variable>> variables_by_name;
-
+    size_t _size = 0;
 
 public:
+    std::unordered_map<std::string, Variable> variable;
+    std::vector<Variable *> variables;
+    std::unordered_map<std::string, Subset> subset;
+    std::unordered_map<std::string, Classification> classification;
+
     DataSet() = default;
-    DataSet(const DataSet&) = delete;
-    DataSet& operator=(const DataSet&) = delete;
-    DataSet(DataSet&& other) noexcept;
-    DataSet& operator=(DataSet&& other) noexcept;
+    DataSet(const DataSet &) = delete;
+    DataSet &operator=(const DataSet &) = delete;
+    DataSet(DataSet &&other) noexcept = default;
+    DataSet &operator=(DataSet &&other) noexcept = default;
 
-    ~DataSet() override;
-    void add_variable(const std::string &name);
-    void add_classification(const std::string &name);
-    void add_gate(const std::string &name, const std::shared_ptr<Gate> &gate);
-    void add_data(const std::vector<float> &datum);
+    ~DataSet() = default;
 
-    void for_each_class(const Variable &classification, std::function<void(unsigned short)> func);
-    void for_each_member(const Variable &membership, std::function<void(bool)> func);
+    void for_each_class(const Classification &cls, std::function<void(unsigned short)> func);
+    void for_each_member(const Subset &sub, std::function<void(bool)> func);
 
     // --- Data Input Reading Logic ---
     void setup_float_variables(const std::vector<std::string> &headers);
@@ -148,26 +113,5 @@ public:
     bool read_binary(const std::string &filename, const std::vector<std::string> &headers);
     bool read_fcs(const std::string &filename);
     bool read(const std::string &filename, const std::vector<std::string> &headers = {});
-
-    Variable &operator[](size_t i) override;
-    const Variable &operator[](size_t i) const override;
-    Variable &operator[](const std::string &name);
-    const Variable &operator[](const std::string &name) const;
-    Variable *get(const std::string &name) noexcept;
-    const Variable *get(const std::string &name) const noexcept;
-    size_t size() const override;
-};
-
-class Projection : public IDataSet
-{
-    std::vector<size_t> variable_indices;
-    DataSet &base_dataset;
-
-public:
-    ~Projection() override;
-    Projection(std::vector<size_t> indices, DataSet &base);
-
-    Variable &operator[](size_t i) override;
-    const Variable &operator[](size_t i) const override;
-    size_t size() const override;
+    size_t size() const;
 };
