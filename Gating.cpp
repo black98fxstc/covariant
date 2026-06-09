@@ -27,26 +27,31 @@ RectangleGate::~RectangleGate() = default;
 
 void RectangleGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying RectangleGate: " << name << std::endl;
+    std::cout << "Applying RectangleGate: " << name ;
+    size_t count = 0;
     for (size_t i = 0; i < dimensions.size(); ++i)
     {
         float *bare_data = data[i].get()->data();
         float lower = dimensions[i].transform->scale(dimensions[i].min_val);
         for (size_t j = 0; j < data[i]->size(); j++)
-            if (membership[i] && bare_data[j] < lower)
-                membership[i] = false;
+            if (bare_data[j] < lower)
+                membership[j] = false;
         float upper = dimensions[i].transform->scale(dimensions[i].max_val);
         for (size_t j = 0; j < data[i]->size(); j++)
-            if (membership[i] && bare_data[j] >= upper)
-                membership[i] = false;
+            if (bare_data[j] >= upper)
+                membership[j] = false;
     }
+    for (size_t j = 0; j < data[0]->size(); j++)
+        if (membership[j])
+            ++count;
+    std::cout << " found " << count << " events." << std::endl;
 }
 
 PolygonGate::~PolygonGate() = default;
 
 void PolygonGate::evaluate(std::vector<bool> &membership)
 {
-    std::cout << "Applying PolygonGate: " << name << std::endl;
+    std::cout << "Applying PolygonGate: " << name;
     enum Orientation { horizontal, vertical, upward, downward };
     struct Edge
     {
@@ -98,6 +103,7 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
 
     float *xdata = data[0].get()->data();
     float *ydata = data[1].get()->data();
+    size_t count = 0;
     for (size_t i = 0; i < membership.size(); ++i)
     {
         if (!membership[i])
@@ -132,7 +138,10 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
         }
         if ((winding & 1) == 0)
             membership[i] = false;
+        else
+            ++count;
     }
+    std::cout << " found " << count << " events." << std::endl;
 }
 
 BooleanGate::~BooleanGate() = default;

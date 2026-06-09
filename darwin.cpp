@@ -290,10 +290,10 @@ public:
         auto x_range = matplot::linspace(0, quant_data[0].size() - 1, quant_data[0].size());
         auto y_range = matplot::linspace(0, quant_data.size() - 1, quant_data.size());
         auto [X, Y] = matplot::meshgrid(x_range, y_range);
-        image(class_data[0], class_data[1], class_data[2]);
+        auto img = ax->image(class_data[0], class_data[1], class_data[2]);
 
         // Overlay contours using the pixel-mapped X and Y ranges
-        auto c = contour(ax, X, Y, quant_data);
+        auto c = ax->contour(X, Y, quant_data);
         c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
         c->color("black");
         c->line_width(1.2);
