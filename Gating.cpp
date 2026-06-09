@@ -3,6 +3,8 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <algorithm>
+#include <cassert>
 
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
@@ -57,7 +59,7 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
     {
         float x0, y0, x1, y1, ymin, ymax, slope;
         Orientation orientation;
-        Edge(float x0, float y0, float x1, float y1) : x0(x0), y0(y0), x1(x1), y1(y1), ymin(std::min(y0,y1)), ymax(std::max(y0,y1))
+        Edge(float X0, float Y0, float X1, float Y1) : x0(X0), y0(Y0), x1(X1), y1(Y1), ymin(std::min(Y0,Y1)), ymax(std::max(Y0,Y1))
         {
             if (x0 > x1)
             {
@@ -98,7 +100,7 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
         edges.emplace_back(x0, y0, x1, y1);
 
         std::sort(edges.begin(), edges.end(), [](const Edge &a, const Edge & b) -> bool
-        { return a.x1 < b.x1; });
+        { return a.x0 < b.x0; });
     }
 
     float *xdata = data[0].get()->data();
@@ -113,27 +115,34 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
         unsigned winding = 0;
         for (const Edge &edge : edges)
         {
-            if (x < edge.x0)
-                continue; // doesn't apply to this edge
-            if (x > edge.x1)
+            if (edge.x0 > x)
                 break;  // nothing left in the list is possible
-            switch (edge.orientation)
+            if (x > edge.x1)
             {
-            case horizontal:
-                ++winding;
-                break;
-            case vertical:
                 if (y >= edge.ymin && y < edge.ymax)
                     ++winding;
-                break;
-            case upward:
-                if ((y - edge.y0) <= edge.slope * (x - edge.x0))
-                    ++winding;
-                break;
-            case downward:
-                if ((y - edge.y0) >= edge.slope * (x - edge.x0))
-                    ++winding;
-                break;
+            }
+            else
+            {
+                switch (edge.orientation)
+                {
+                case horizontal:
+                    if (y == edge.y0)
+                        ++winding;
+                    break;
+                case vertical:
+                    if (y >= edge.ymin && y < edge.ymax)
+                        ++winding;
+                    break;
+                case upward:
+                    if (y >= edge.ymin && (y - edge.y0) <= edge.slope * (x - edge.x0))
+                        ++winding;
+                    break;
+                case downward:
+                    if (y <= edge.ymax && (y - edge.y0) >= edge.slope * (x - edge.x0))
+                        ++winding;
+                    break;
+                }
             }
         }
         if ((winding & 1) == 0)

@@ -11,6 +11,11 @@ project(CovariantProject LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    # MSVC needs /bigobj for heavily templated code like Eigen
+    add_compile_options(/bigobj)
+endif()
+
 find_package(FFTW3 CONFIG REQUIRED)
 find_package(FFTW3f CONFIG REQUIRED)
 find_package(Matplot++ CONFIG REQUIRED)
