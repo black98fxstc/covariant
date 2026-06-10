@@ -750,6 +750,11 @@ Workspace parse_workspace(const std::string &filename)
             if (popObj)
                 xmlXPathFreeObject(popObj);
 
+            if (std::find(sd.populations.begin(), sd.populations.end(), "All") == sd.populations.end())
+            {
+                sd.populations.push_back("All");
+            }
+
             std::unordered_map<std::string, std::shared_ptr<Gate>> id_to_gate;
             for (auto &gate : sd.gates)
                 if (gate)
@@ -772,6 +777,12 @@ Workspace parse_workspace(const std::string &filename)
     }
     if (samplesObj)
         xmlXPathFreeObject(samplesObj);
+
+    if (std::find(ws.all_populations.begin(), ws.all_populations.end(), "All") == ws.all_populations.end())
+    {
+        ws.all_populations.push_back("All");
+    }
+
     xmlXPathFreeContext(xpathCtx);
     xmlFreeDoc(doc);
     xmlCleanupParser();
@@ -977,10 +988,12 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
     }
 
     xmlNodePtr subpopsNode = nullptr;
+    xmlNodePtr parentGraphNode = nullptr;
     for (xmlNodePtr child = parentPopNode->children; child; child = child->next) {
         if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Subpopulations") == 0) {
             subpopsNode = child;
-            break;
+        } else if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Graph") == 0) {
+            parentGraphNode = child;
         }
     }
     if (!subpopsNode) {
@@ -1007,6 +1020,11 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         xmlSetProp(popNode, (const xmlChar *)"name", (const xmlChar *)pop_name.c_str());
         xmlSetProp(popNode, (const xmlChar *)"expanded", (const xmlChar *)"1");
 
+        if (parentGraphNode) {
+            xmlAddChild(popNode, xmlNewText((const xmlChar *)"\n             "));
+            xmlAddChild(popNode, xmlCopyNode(parentGraphNode, 1));
+        }
+
         xmlNodePtr gateNode = xmlNewNode(gatingNs, (const xmlChar *)"Gate");
         std::string gateId = "LaplaceGate_" + sample_name + "_" + parent_pop_name + "_" + std::to_string(klass);
         xmlSetProp(gateNode, (const xmlChar *)"gating:id", (const xmlChar *)gateId.c_str());
@@ -1015,8 +1033,8 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         xmlSetProp(rectGateNode, (const xmlChar *)"eventsInside", (const xmlChar *)"1");
         
         xmlNodePtr dimNode = xmlNewNode(gatingNs, (const xmlChar *)"dimension");
-        std::string min_val = std::to_string(1 + 4 * klass);
-        std::string max_val = std::to_string(3 + 4 * klass);
+        std::string min_val = std::to_string(1 + 16 * klass);
+        std::string max_val = std::to_string(15 + 16 * klass);
         xmlSetProp(dimNode, (const xmlChar *)"gating:min", (const xmlChar *)min_val.c_str());
         xmlSetProp(dimNode, (const xmlChar *)"gating:max", (const xmlChar *)max_val.c_str());
 

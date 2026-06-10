@@ -267,7 +267,7 @@ public:
                 laplace.classifications = std::make_shared<std::vector<unsigned short>>(dataset.size());
             for (size_t i = 0; i < dataset.size(); ++i)
             { 
-                (*laplace.classifications)[i] /= 4;
+                (*laplace.classifications)[i] /= 16;
                 if ((*laplace.classifications)[i] > laplacian_offset)
                     laplacian_offset = (*laplace.classifications)[i];
             }
@@ -432,6 +432,8 @@ public:
 
             for (std::string &pop_name : selections.populations)
             {
+                std::cout << "Analysing population " << pop_name << std::endl;
+                Subset &subset = dataset.subset[pop_name];
                 std::vector<bool> *subpopulation = dataset.subset[pop_name].membership.get();
                 if (!subpopulation) continue;
 
@@ -481,7 +483,7 @@ public:
                     out << "Laplace\n";
                     for (auto val : *laplace.classifications)
                     {
-                        out << 2 + 4 * val << "\n";
+                        out << 8 + 16 * val << "\n";
                     }
                     out.close();
                 }
