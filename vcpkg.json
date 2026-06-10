@@ -1,15 +1,23 @@
 {
   "name": "covariant-project",
   "version-string": "0.1.0",
+  "default-features": ["x64-opts"],
+  "features": {
+    "x64-opts": {
+      "description": "AVX2 optimizations for x64 platforms",
+      "dependencies": [
+        {
+          "name": "fftw3",
+          "features": ["avx2"],
+          "platform": "x64"
+        }
+      ]
+    }
+  },
   "dependencies": [
     {
       "name": "fftw3",
       "features": ["threads"]
-    },
-    {
-      "name": "fftw3",
-      "features": ["avx2"],
-      "platform": "x64"
     },
     "cxxopts",
     "matplotplusplus",
