@@ -1,4 +1,6 @@
 #include <functional>
+#include <fstream>
+#include <filesystem>
 
 #include <Eigen/Dense>
 #include <cxxopts.hpp>
@@ -18,7 +20,7 @@ struct Params
     unsigned max_clusters = 50;
     size_t min_events = 100;
     unsigned grid_size = 256;
-    int analysis_choice = 0;
+    int analysis_choice = 1;
 };
 
 class Leonard
@@ -26,6 +28,8 @@ class Leonard
 public:
     Params params;
     SelectionState selections;
+    unsigned clusters_found = 0;
+    size_t laplacian_offset = 0;
     Workspace ws;
     std::vector<SampleData> dummy_samples;
 
@@ -72,6 +76,7 @@ public:
     void do_it(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::vector<unsigned short> &classes)
     {
         std::vector<size_t> idx;
+        idx.reserve(included.size());
         for (size_t i = 0; i < included.size(); ++i)
             if (included[i])
                 idx.push_back(i);
@@ -101,11 +106,14 @@ public:
             std::cout << "Consistency checks passed..." << std::endl;
 
         std::cout << "Performing Laplacian clustering..." << std::endl;
-        unsigned found = laplace.cluster(selections.threshold);
+        clusters_found = laplace.cluster(selections.threshold);
         std::fill(classes.begin(), classes.end(), 0);
         for (size_t i = 0; i < events.size(); ++i)
             classes[idx[i]] = laplace.classify(events[i]);
-        std::cout << "Found " << found << " clusters." << std::endl;
+        std::cout << "Found " << clusters_found << " clusters." << std::endl;
+
+        for (size_t i = 0; i < idx.size(); ++i)
+            classes[idx[i]] = laplace.classify(events[i]) + laplacian_offset;
     }
 
     int run()
@@ -246,11 +254,24 @@ public:
                 if (g)
                     gate_id_to_gate[g->id] = g;
 
+            std::cout << "Processing sample: " << s.name << " ... ";
             DataSet dataset;
             if (!dataset.read(s.name)) {
-                std::cerr << "Failed to read dataset: " << s.name << std::endl;
+                std::cerr << std::endl << "Failed to read dataset: " << s.name << std::endl;
                 continue;
             }
+            std::cout << dataset.size() << " events read" << std::endl;
+
+            Classification &laplace = dataset.classification["Laplace"];
+            if (!laplace.classifications)
+                laplace.classifications = std::make_shared<std::vector<unsigned short>>(dataset.size());
+            for (size_t i = 0; i < dataset.size(); ++i)
+            { 
+                (*laplace.classifications)[i] /= 4;
+                if ((*laplace.classifications)[i] > laplacian_offset)
+                    laplacian_offset = (*laplace.classifications)[i];
+            }
+            laplacian_offset++;
 
             // setup spectral unmixing
             std::vector<std::vector<float> *> detector_data;
@@ -329,7 +350,7 @@ public:
                 return transformed;
             };
 
-            std::cout << "Scaling and if necessary unmixing data for analysis..." << std::endl;
+            std::cout << "Scaling and unmixing data for analysis..." << std::endl;
             // generate the appropriate scaled data for analysis
             bool vars_valid = true;
             for (size_t v = 0; v < selections.variables.size(); ++v)
@@ -346,7 +367,7 @@ public:
             }
             if (!vars_valid) continue;
 
-            std::cout << "Finding all the gates and any needed data..." << std::endl;
+            std::cout << "Finding all the gates and, scaling and unmixing the needed data..." << std::endl;
             // find all the gates and any data they need
             std::vector<std::shared_ptr<Gate>> gates;
             for (size_t i = 0; i < selections.populations.size(); ++i)
@@ -401,12 +422,7 @@ public:
 
             std::vector<unsigned short> *classification = nullptr;
             if (selections.analysis_choice == 1)
-            {
-                // someplace for the data to go
-                Classification &laplace = dataset.classification["Laplace"];
-                laplace.classifications = std::make_shared<std::vector<unsigned short>>(dataset.size(), 0);
                 classification = laplace.classifications.get();
-            }
 
             // scaled data marshalled as events for analysis
             int num_vars_selected = selections.variables.size();
@@ -441,10 +457,38 @@ public:
                         // error
                         break;
                     }
+                    if (selections.analysis_choice == 1)
+                    {
+                        if (!is_datafile && !ws.filename.empty())
+                            add_laplace_gates(ws.filename, s.name, pop_name, clusters_found, laplacian_offset);
+                        laplacian_offset += clusters_found + 1;
+                    }
+
                     break;
                 default:
                     // error
                     break;
+                }
+            }
+
+            if (selections.analysis_choice == 1)
+            {
+                std::filesystem::path len_path = s.name;
+                len_path.replace_extension(".len");
+                std::ofstream out(len_path);
+                if (out.is_open())
+                {
+                    out << "Laplace\n";
+                    for (auto val : *laplace.classifications)
+                    {
+                        out << 2 + 4 * val << "\n";
+                    }
+                    out.close();
+                }
+
+                if (!is_datafile && !ws.filename.empty())
+                {
+                    add_laplace_derived_parameter(ws.filename, s.name);
                 }
             }
         };

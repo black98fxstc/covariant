@@ -65,3 +65,5 @@ struct SelectionState
 std::string find_workspace(int argc, char *argv[]);
 Workspace parse_workspace(const std::string &filename);
 SelectionState build_ftxui_interface(Workspace &ws);
+void add_laplace_derived_parameter(const std::string &filename, const std::string &sample_name);
+void add_laplace_gates(const std::string &filename, const std::string &sample_name, const std::string &parent_pop_name, unsigned int clusters_found, size_t laplacian_offset);

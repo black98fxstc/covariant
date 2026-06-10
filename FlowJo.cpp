@@ -794,6 +794,252 @@ Workspace parse_workspace(const std::string &filename)
     return ws;
 }
 
+void add_laplace_derived_parameter(const std::string &filename, const std::string &sample_name)
+{
+    xmlDocPtr doc = xmlParseFile(filename.c_str());
+    if (!doc)
+    {
+        std::cerr << "Error: Could not open workspace to add DerivedParameter: " << filename << "\n";
+        return;
+    }
+
+    xmlXPathContextPtr xpathCtx = xmlXPathNewContext(doc);
+    if (!xpathCtx)
+    {
+        xmlFreeDoc(doc);
+        return;
+    }
+
+    std::string expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
+    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression((const xmlChar *)expr.c_str(), xpathCtx);
+    if (sampleObj && sampleObj->nodesetval && sampleObj->nodesetval->nodeNr > 0)
+    {
+        xmlNodePtr sampleNode = sampleObj->nodesetval->nodeTab[0];
+
+        xmlXPathObjectPtr datasetObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./DataSet", xpathCtx);
+        std::string uri;
+        if (datasetObj && datasetObj->nodesetval && datasetObj->nodesetval->nodeNr > 0)
+        {
+            xmlChar *uriAttr = xmlGetProp(datasetObj->nodesetval->nodeTab[0], (const xmlChar *)"uri");
+            if (uriAttr)
+            {
+                uri = (char *)uriAttr;
+                xmlFree(uriAttr);
+            }
+        }
+        if (datasetObj) xmlXPathFreeObject(datasetObj);
+
+        size_t pos = uri.find(".fcs");
+        if (pos == std::string::npos) pos = uri.find(".FCS");
+        if (pos != std::string::npos)
+        {
+            uri.replace(pos, 4, ".len");
+        }
+
+        xmlXPathObjectPtr dpObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./DerivedParameters", xpathCtx);
+        xmlNodePtr dpNode = nullptr;
+        if (dpObj && dpObj->nodesetval && dpObj->nodesetval->nodeNr > 0)
+        {
+            dpNode = dpObj->nodesetval->nodeTab[0];
+        }
+        else
+        {
+            dpNode = xmlNewNode(nullptr, (const xmlChar *)"DerivedParameters");
+            xmlNodePtr keywordsNode = nullptr;
+            for (xmlNodePtr child = sampleNode->children; child; child = child->next)
+            {
+                if (child->type == XML_ELEMENT_NODE && (xmlStrcmp(child->name, (const xmlChar *)"Keywords") == 0 || xmlStrcmp(child->name, (const xmlChar *)"SampleNode") == 0))
+                {
+                    keywordsNode = child;
+                    break;
+                }
+            }
+            if (keywordsNode)
+            {
+                xmlAddPrevSibling(keywordsNode, dpNode);
+                xmlAddPrevSibling(keywordsNode, xmlNewText((const xmlChar *)"\n       "));
+            }
+            else
+            {
+                xmlAddChild(sampleNode, dpNode);
+            }
+        }
+        if (dpObj) xmlXPathFreeObject(dpObj);
+
+        xmlXPathObjectPtr pObj = xmlXPathNodeEval(dpNode, (const xmlChar *)"./DerivedParameter[@name='Laplace']", xpathCtx);
+        if (!pObj || !pObj->nodesetval || pObj->nodesetval->nodeNr == 0)
+        {
+            xmlNodePtr paramNode = xmlNewNode(nullptr, (const xmlChar *)"DerivedParameter");
+            xmlSetProp(paramNode, (const xmlChar *)"name", (const xmlChar *)"Laplace");
+            xmlSetProp(paramNode, (const xmlChar *)"type", (const xmlChar *)"importCsv");
+            xmlSetProp(paramNode, (const xmlChar *)"importFile", (const xmlChar *)uri.c_str());
+            xmlSetProp(paramNode, (const xmlChar *)"range", (const xmlChar *)"1024");
+            xmlSetProp(paramNode, (const xmlChar *)"columnIndex", (const xmlChar *)"1");
+
+            xmlNodePtr transNode = xmlNewNode(nullptr, (const xmlChar *)"Transform");
+
+            xmlNsPtr transformsNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"transforms");
+            xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
+
+            xmlNodePtr linearNode = nullptr;
+            if (transformsNs) {
+                linearNode = xmlNewNode(transformsNs, (const xmlChar *)"linear");
+                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"minRange", (const xmlChar *)"0");
+                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"maxRange", (const xmlChar *)"1024");
+            } else {
+                linearNode = xmlNewNode(nullptr, (const xmlChar *)"transforms:linear");
+                xmlSetProp(linearNode, (const xmlChar *)"transforms:minRange", (const xmlChar *)"0");
+                xmlSetProp(linearNode, (const xmlChar *)"transforms:maxRange", (const xmlChar *)"1024");
+            }
+            xmlSetProp(linearNode, (const xmlChar *)"gain", (const xmlChar *)"1");
+
+            xmlNodePtr pNode = nullptr;
+            if (datatypeNs) {
+                pNode = xmlNewNode(datatypeNs, (const xmlChar *)"parameter");
+                xmlSetNsProp(pNode, datatypeNs, (const xmlChar *)"name", (const xmlChar *)"Laplace");
+            } else {
+                pNode = xmlNewNode(nullptr, (const xmlChar *)"data-type:parameter");
+                xmlSetProp(pNode, (const xmlChar *)"data-type:name", (const xmlChar *)"Laplace");
+            }
+
+            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n               "));
+            xmlAddChild(linearNode, pNode);
+            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n             "));
+
+            xmlAddChild(transNode, xmlNewText((const xmlChar *)"\n             "));
+            xmlAddChild(transNode, linearNode);
+            xmlAddChild(transNode, xmlNewText((const xmlChar *)"\n           "));
+
+            xmlAddChild(paramNode, xmlNewText((const xmlChar *)"\n           "));
+            xmlAddChild(paramNode, transNode);
+            xmlAddChild(paramNode, xmlNewText((const xmlChar *)"\n         "));
+
+            xmlAddChild(dpNode, xmlNewText((const xmlChar *)"\n         "));
+            xmlAddChild(dpNode, paramNode);
+            xmlAddChild(dpNode, xmlNewText((const xmlChar *)"\n       "));
+
+            xmlSaveFormatFile(filename.c_str(), doc, 1);
+        }
+        if (pObj) xmlXPathFreeObject(pObj);
+    }
+    if (sampleObj) xmlXPathFreeObject(sampleObj);
+
+    xmlXPathFreeContext(xpathCtx);
+    xmlFreeDoc(doc);
+}
+
+void add_laplace_gates(const std::string &filename, const std::string &sample_name, const std::string &parent_pop_name, unsigned clusters_found, size_t laplacian_offset)
+{
+    xmlDocPtr doc = xmlParseFile(filename.c_str());
+    if (!doc) {
+        std::cerr << "Error: Could not open workspace to add gates: " << filename << "\n";
+        return;
+    }
+
+    xmlXPathContextPtr xpathCtx = xmlXPathNewContext(doc);
+    if (!xpathCtx) {
+        xmlFreeDoc(doc);
+        return;
+    }
+
+    std::string sample_expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
+    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression((const xmlChar *)sample_expr.c_str(), xpathCtx);
+    if (!sampleObj || !sampleObj->nodesetval || sampleObj->nodesetval->nodeNr == 0) {
+        if (sampleObj) xmlXPathFreeObject(sampleObj);
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+        return;
+    }
+    
+    xmlNodePtr sampleNode = sampleObj->nodesetval->nodeTab[0];
+
+    xmlNodePtr parentPopNode = nullptr;
+    if (parent_pop_name == "All") {
+        xmlXPathObjectPtr snObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./SampleNode", xpathCtx);
+        if (snObj && snObj->nodesetval && snObj->nodesetval->nodeNr > 0) {
+            parentPopNode = snObj->nodesetval->nodeTab[0];
+        }
+        if (snObj) xmlXPathFreeObject(snObj);
+    } else {
+        std::string pop_expr = ".//Population[@name='" + parent_pop_name + "']";
+        xmlXPathObjectPtr popObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)pop_expr.c_str(), xpathCtx);
+        if (popObj && popObj->nodesetval && popObj->nodesetval->nodeNr > 0) {
+            parentPopNode = popObj->nodesetval->nodeTab[0];
+        }
+        if (popObj) xmlXPathFreeObject(popObj);
+    }
+
+    if (!parentPopNode) {
+        xmlXPathFreeObject(sampleObj);
+        xmlXPathFreeContext(xpathCtx);
+        xmlFreeDoc(doc);
+        return;
+    }
+
+    xmlNodePtr subpopsNode = nullptr;
+    for (xmlNodePtr child = parentPopNode->children; child; child = child->next) {
+        if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Subpopulations") == 0) {
+            subpopsNode = child;
+            break;
+        }
+    }
+    if (!subpopsNode) {
+        subpopsNode = xmlNewNode(nullptr, (const xmlChar *)"Subpopulations");
+        xmlAddChild(parentPopNode, xmlNewText((const xmlChar *)"\n           "));
+        xmlAddChild(parentPopNode, subpopsNode);
+    }
+
+    xmlNsPtr gatingNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"gating");
+    xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
+
+    for (unsigned k = 0; k <= clusters_found; ++k) {
+        size_t klass = k + laplacian_offset;
+        
+        std::string pop_name = (k == 0) ? "Laplace.Ambiguous" : "Laplace.Cluster" + std::to_string(k);
+        
+        std::string check_expr = "./Population[@name='" + pop_name + "']";
+        xmlXPathObjectPtr pCheckObj = xmlXPathNodeEval(subpopsNode, (const xmlChar*)check_expr.c_str(), xpathCtx);
+        bool exists = (pCheckObj && pCheckObj->nodesetval && pCheckObj->nodesetval->nodeNr > 0);
+        if (pCheckObj) xmlXPathFreeObject(pCheckObj);
+        if (exists) continue;
+
+        xmlNodePtr popNode = xmlNewNode(nullptr, (const xmlChar *)"Population");
+        xmlSetProp(popNode, (const xmlChar *)"name", (const xmlChar *)pop_name.c_str());
+        xmlSetProp(popNode, (const xmlChar *)"expanded", (const xmlChar *)"1");
+
+        xmlNodePtr gateNode = xmlNewNode(gatingNs, (const xmlChar *)"Gate");
+        std::string gateId = "LaplaceGate_" + sample_name + "_" + parent_pop_name + "_" + std::to_string(klass);
+        xmlSetProp(gateNode, (const xmlChar *)"gating:id", (const xmlChar *)gateId.c_str());
+
+        xmlNodePtr rectGateNode = xmlNewNode(gatingNs, (const xmlChar *)"RectangleGate");
+        xmlSetProp(rectGateNode, (const xmlChar *)"eventsInside", (const xmlChar *)"1");
+        
+        xmlNodePtr dimNode = xmlNewNode(gatingNs, (const xmlChar *)"dimension");
+        std::string min_val = std::to_string(1 + 4 * klass);
+        std::string max_val = std::to_string(3 + 4 * klass);
+        xmlSetProp(dimNode, (const xmlChar *)"gating:min", (const xmlChar *)min_val.c_str());
+        xmlSetProp(dimNode, (const xmlChar *)"gating:max", (const xmlChar *)max_val.c_str());
+
+        xmlNodePtr fcsDimNode = xmlNewNode(datatypeNs, (const xmlChar *)"fcs-dimension");
+        xmlSetProp(fcsDimNode, (const xmlChar *)"data-type:name", (const xmlChar *)"Laplace");
+
+        xmlAddChild(dimNode, fcsDimNode);
+        xmlAddChild(rectGateNode, dimNode);
+        xmlAddChild(gateNode, rectGateNode);
+        xmlAddChild(popNode, gateNode);
+        
+        xmlAddChild(subpopsNode, xmlNewText((const xmlChar *)"\n             "));
+        xmlAddChild(subpopsNode, popNode);
+    }
+    xmlAddChild(subpopsNode, xmlNewText((const xmlChar *)"\n           "));
+
+    xmlSaveFormatFile(filename.c_str(), doc, 1);
+
+    if (sampleObj) xmlXPathFreeObject(sampleObj);
+    xmlXPathFreeContext(xpathCtx);
+    xmlFreeDoc(doc);
+}
+
 SelectionState build_ftxui_interface(Workspace &ws)
 {
     using namespace ftxui;
