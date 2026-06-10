@@ -20,6 +20,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install macOS build tools
+      if: runner.os == 'macOS'
+      run: brew install pkg-config autoconf automake libtool
+
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
