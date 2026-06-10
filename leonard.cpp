@@ -475,11 +475,11 @@ public:
 
             if (selections.analysis_choice == 1)
             {
-                std::filesystem::path len_path = s.name;
-                std::string len_filename = len_path.stem().string();
-                std::replace(len_filename.begin(), len_filename.end(), ' ', '_');
-                len_path.replace_filename(len_filename + ".len");
-                std::ofstream out(len_path);
+                std::filesystem::path csv_path = s.name;
+                std::string csv_filename = csv_path.stem().string();
+                std::replace(csv_filename.begin(), csv_filename.end(), ' ', '_');
+                csv_path.replace_filename(csv_filename + ".csv");
+                std::ofstream out(csv_path);
                 if (out.is_open())
                 {
                     out << "Laplace\n";

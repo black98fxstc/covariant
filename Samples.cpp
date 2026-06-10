@@ -420,7 +420,15 @@ bool DataSet::read_fcs(const std::string &filename)
 
     std::filesystem::path csv_path = fcs_path;
     csv_path.replace_extension(".csv");
-    if (std::filesystem::exists(csv_path))
+    std::string sanitized_filename = csv_path.stem().string();
+    std::replace(sanitized_filename.begin(), sanitized_filename.end(), ' ', '_');
+    std::filesystem::path sanitized_csv_path = csv_path;
+    sanitized_csv_path.replace_filename(sanitized_filename + ".csv");
+    if (std::filesystem::exists(sanitized_csv_path))
+    {
+        read_aux(sanitized_csv_path, false);
+    }
+    else if (std::filesystem::exists(csv_path))
     {
         read_aux(csv_path, false);
     }
@@ -430,15 +438,6 @@ bool DataSet::read_fcs(const std::string &filename)
     if (std::filesystem::exists(truth_path))
     {
         read_aux(truth_path, false);
-    }
-
-    std::filesystem::path len_path = fcs_path;
-    std::string len_filename = len_path.stem().string();
-    std::replace(len_filename.begin(), len_filename.end(), ' ', '_');
-    len_path.replace_filename(len_filename + ".len");
-    if (std::filesystem::exists(len_path))
-    {
-        read_aux(len_path, false);
     }
 
     return true;
