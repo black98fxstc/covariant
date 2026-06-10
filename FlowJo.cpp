@@ -750,10 +750,11 @@ Workspace parse_workspace(const std::string &filename)
             if (popObj)
                 xmlXPathFreeObject(popObj);
 
-            if (std::find(sd.populations.begin(), sd.populations.end(), "All") == sd.populations.end())
-            {
-                sd.populations.push_back("All");
+            auto it = std::find(sd.populations.begin(), sd.populations.end(), "All");
+            if (it != sd.populations.end()) {
+                sd.populations.erase(it);
             }
+            sd.populations.insert(sd.populations.begin(), "All");
 
             std::unordered_map<std::string, std::shared_ptr<Gate>> id_to_gate;
             for (auto &gate : sd.gates)
@@ -778,16 +779,17 @@ Workspace parse_workspace(const std::string &filename)
     if (samplesObj)
         xmlXPathFreeObject(samplesObj);
 
-    if (std::find(ws.all_populations.begin(), ws.all_populations.end(), "All") == ws.all_populations.end())
-    {
-        ws.all_populations.push_back("All");
-    }
-
     xmlXPathFreeContext(xpathCtx);
     xmlFreeDoc(doc);
     xmlCleanupParser();
 
     std::sort(ws.all_populations.begin(), ws.all_populations.end());
+    ws.all_populations.erase(std::unique(ws.all_populations.begin(), ws.all_populations.end()), ws.all_populations.end());
+    auto it = std::find(ws.all_populations.begin(), ws.all_populations.end(), "All");
+    if (it != ws.all_populations.end()) {
+        ws.all_populations.erase(it);
+    }
+    ws.all_populations.insert(ws.all_populations.begin(), "All");
 
     // Consolidate unique variables across all samples
     for (const auto &s : ws.samples)
@@ -845,6 +847,19 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         if (pos != std::string::npos)
         {
             uri.replace(pos, 4, ".len");
+        }
+        
+        size_t last_slash = uri.find_last_of('/');
+        if (last_slash != std::string::npos) {
+            std::string filename_part = uri.substr(last_slash + 1);
+            size_t p;
+            while ((p = filename_part.find("%20")) != std::string::npos) filename_part.replace(p, 3, "_");
+            while ((p = filename_part.find(" ")) != std::string::npos) filename_part.replace(p, 1, "_");
+            uri = uri.substr(0, last_slash + 1) + filename_part;
+        } else {
+            size_t p;
+            while ((p = uri.find("%20")) != std::string::npos) uri.replace(p, 3, "_");
+            while ((p = uri.find(" ")) != std::string::npos) uri.replace(p, 1, "_");
         }
 
         xmlXPathObjectPtr dpObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./DerivedParameters", xpathCtx);
@@ -1109,10 +1124,11 @@ SelectionState build_ftxui_interface(Workspace &ws)
     for (size_t i = 0; i < ws.all_populations.size(); ++i)
     {
         auto cb = Checkbox(&ws.all_populations[i], &pop_states[i]);
-        pop_container->Add(Maybe(cb, [&, i]
+        std::string pop_name = ws.all_populations[i];
+        pop_container->Add(Maybe(cb, [&, pop_name]
                                  {
             if (selected_samples.empty()) return false;
-            return std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), ws.all_populations[i]) != selected_samples.front()->populations.end(); }));
+            return std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), pop_name) != selected_samples.front()->populations.end(); }));
     }
 
     int analysis_choice = 0;

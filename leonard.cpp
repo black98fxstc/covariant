@@ -476,7 +476,9 @@ public:
             if (selections.analysis_choice == 1)
             {
                 std::filesystem::path len_path = s.name;
-                len_path.replace_extension(".len");
+                std::string len_filename = len_path.stem().string();
+                std::replace(len_filename.begin(), len_filename.end(), ' ', '_');
+                len_path.replace_filename(len_filename + ".len");
                 std::ofstream out(len_path);
                 if (out.is_open())
                 {

@@ -433,7 +433,9 @@ bool DataSet::read_fcs(const std::string &filename)
     }
 
     std::filesystem::path len_path = fcs_path;
-    len_path.replace_extension(".len");
+    std::string len_filename = len_path.stem().string();
+    std::replace(len_filename.begin(), len_filename.end(), ' ', '_');
+    len_path.replace_filename(len_filename + ".len");
     if (std::filesystem::exists(len_path))
     {
         read_aux(len_path, false);
