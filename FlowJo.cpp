@@ -1227,7 +1227,7 @@ SelectionState build_ftxui_interface(Workspace &ws)
             return std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), pop_name) != selected_samples.front()->populations.end(); }));
     }
 
-    int analysis_choice = 0;
+    int analysis_choice = 1;
     // use global analysis_choices vector
     auto choice_container = Radiobox(&analysis_choices, &analysis_choice);
     auto choice_handled = CatchEvent(choice_container, [&](ftxui::Event e)
