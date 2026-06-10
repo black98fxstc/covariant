@@ -4,7 +4,12 @@
   "dependencies": [
     {
       "name": "fftw3",
-      "features": ["avx2", "threads"]
+      "features": ["threads"]
+    },
+    {
+      "name": "fftw3",
+      "features": ["avx2"],
+      "platform": "x64"
     },
     "cxxopts",
     "matplotplusplus",
