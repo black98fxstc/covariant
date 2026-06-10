@@ -462,7 +462,10 @@ public:
                     if (selections.analysis_choice == 1)
                     {
                         if (!is_datafile && !ws.filename.empty())
-                            add_laplace_gates(ws.filename, s.name, pop_name, clusters_found, laplacian_offset);
+                        {
+                            std::vector<size_t> cluster_counts(clusters_found + 1, 0); // TODO: populate with actual counts
+                            add_laplace_gates(ws.filename, s.name, pop_name, clusters_found, laplacian_offset, cluster_counts, selections.variables);
+                        }
                         laplacian_offset += clusters_found + 1;
                     }
 
