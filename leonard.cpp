@@ -87,13 +87,13 @@ public:
             return;
         }
 
+        std::cout << "Begin Laplacian clustering on " << idx.size() << " events..." << std::endl;
         Events<Dimension> events;
         events.resize(idx.size());
         for (unsigned d = 0; d < Dimension; ++d)
             for (size_t i = 0; i < events.size(); ++i)
                 events[i][d] = (*data[d])[idx[i]];
 
-        std::cout << "Processing " << events.size() << " events..." << std::endl;
         Laplace<Dimension> laplace(selections.grid_size);
         for (const auto &e : events)
             laplace.event(e);
@@ -274,7 +274,8 @@ public:
                 if ((*laplace.classifications)[i] > laplacian_offset)
                     laplacian_offset = (*laplace.classifications)[i];
             }
-            laplacian_offset++;
+            if (laplacian_offset > 0)
+                laplacian_offset++;
 
             // setup spectral unmixing
             std::vector<std::vector<float> *> detector_data;

@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <memory>
 #include <algorithm>
+#include <cmath>
 #include <cassert>
 
 #include <libxml/parser.h>
@@ -305,7 +306,12 @@ int main(int argc, char **argv)
                 }
                 else if (name.find("biexp") != std::string::npos)
                 {
-                    transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                    double t = get_double(node, "maxRange", get_double(node, "T", 262144.0));
+                    double m = get_double(node, "pos", get_double(node, "M", 4.5));
+                    double a = get_double(node, "neg", get_double(node, "A", 0.0));
+                    double width = get_double(node, "width", 0.0);
+                    double w = (width < 0.0) ? 0.5 * std::log10(-width) : get_double(node, "W", 0.5);
+                    transform = std::make_shared<Logicle>(t, w, m, a);
                 }
             }
             catch (...)

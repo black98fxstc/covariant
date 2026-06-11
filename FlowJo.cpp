@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <map>
+#include <cmath>
 #include <cctype>
 #include <functional>
 #ifndef _WIN32
@@ -346,8 +347,12 @@ Workspace parse_workspace(const std::string &filename)
                         }
                         else if (name.find("biexp") != std::string::npos || name.find("biex") != std::string::npos)
                         {
-                            // M = pos, A = neg T = maxRange W = 1/2 log10(-width)
-                            transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
+                            double t = get_double(node, "maxRange", 262144.0);
+                            double m = get_double(node, "pos", 4.418539922);
+                            double a = get_double(node, "neg", 0.0);
+                            double width = get_double(node, "width", -100.0);
+                            double w = 0.5 * std::log10(-width);
+                            transform = std::make_shared<Logicle>(t, w, m, a);
                         }
                     }
                     catch (...)
@@ -981,7 +986,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         }
         if (transBlockObj) xmlXPathFreeObject(transBlockObj);
 
-        std::string transExpr = "./*[local-name()='linear']/*[local-name()='parameter' and (@name='Laplace' or @data-type:name='Laplace')]";
+        std::string transExpr = "./*[local-name()='linear']/*[local-name()='parameter' and (@name='Laplace' or @*[local-name()='name']='Laplace')]";
         xmlXPathObjectPtr tCheckObj = xmlXPathNodeEval(transBlockNode, (const xmlChar *)transExpr.c_str(), xpathCtx);
         if (!tCheckObj || !tCheckObj->nodesetval || tCheckObj->nodesetval->nodeNr == 0)
         {
