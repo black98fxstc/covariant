@@ -14,7 +14,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+        - os: windows-latest
+          simd_flag: "-mavx2"        # Or "/arch:AVX2" for MSVC
+          name: windows-x64
+        - os: macos-latest
+          simd_flag: "--enable-neon"  # ARM64 SIMD equivalent for FFTW
+          name: macos-arm64
+
+        # os: [macos-latest, windows-latest]
 
     steps:
     - name: Checkout code
