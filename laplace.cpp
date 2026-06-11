@@ -23,8 +23,82 @@ struct Params
     bool ascii;
 };
 
-template <unsigned Dimension>
-int do_it(const Params &params, unsigned grid_size, const Projection& proj)
+class LaplaceApp
+{
+public:
+    Params params;
+
+    int parse_args(int argc, char *argv[])
+    {
+        // Set up the command-line options parser.
+        cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
+
+        // Add the command-line options.
+        options.add_options()("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
+        ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+        ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
+        ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+        ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("h,help", "Print usage");
+
+        options.parse_positional({"file", "variables", "populations"});
+
+        auto result = options.parse(argc, argv);
+
+        if (result.count("help"))
+        {
+            std::cout << options.help() << std::endl;
+            return 0;
+        }
+
+        params.filename = result["file"].as<std::string>();
+        if (result.count("variables")) {
+            params.variables = result["variables"].as<std::vector<std::string>>();
+            params.dimension = params.variables.size();
+        } else {
+            params.dimension = result["dimension"].as<unsigned>();
+        }
+        params.smooth = result["smooth"].as<float>();
+        params.threshold = result["threshold"].as<float>();
+        params.visual = result["visual"].as<bool>();
+        params.antialias = result["antialias"].as<bool>();
+        params.verify = result["verify"].as<bool>();
+        params.grow = result["grow"].as<bool>();
+        params.verbose = result["verbose"].as<bool>();
+        params.ascii = result["ascii"].as<bool>();
+
+        if (result.count("grid"))
+            params.grid = result["grid"].as<unsigned>();
+        else
+            switch (params.dimension)
+            {
+            case 2:
+                params.grid = 256;
+                break;
+            case 3:
+                params.grid = 64;
+                break;
+            case 4:
+                params.grid = 32;
+                break;
+            default:
+                params.grid = 32;
+                break;
+            }
+
+        return -1;
+    }
+
+    template <unsigned Dimension>
+    int do_it(const Projection& proj)
 {
     std::cout << "Laplace running with" 
               << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
@@ -44,7 +118,7 @@ int do_it(const Params &params, unsigned grid_size, const Projection& proj)
     std::cout << "Loaded " << events.size() << " events." << std::endl;
 
     std::cout << "Processing " << events.size() << " events..." << std::endl;
-    Laplace<Dimension> laplace(grid_size);
+    Laplace<Dimension> laplace(params.grid);
     laplace.visualize = params.visual;
     laplace.antialias = params.antialias;
     laplace.verify = params.verify;
@@ -96,74 +170,8 @@ int do_it(const Params &params, unsigned grid_size, const Projection& proj)
     return 0;
 }
 
-int main(int argc, char *argv[])
-{
-    Params params;
-
-    // Set up the command-line options parser.
-    cxxopts::Options options("CovariantCLI", "A command-line interface for the Laplacian clustering algorithm");
-
-    // Add the command-line options.
-    options.add_options()("f,file", "File name for data", cxxopts::value<std::string>()->default_value("test_data"))
-    ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
-    ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
-    ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
-    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-    ("t,threshold", "Consistency threshold", cxxopts::value<float>()->default_value("0.001"))
-    ("visual", "Save files for visualization", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("v,verbose", "Verbose output", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("antialias", "Enable antialiasing (developer feature)", cxxopts::value<bool>()->default_value("true"))
-    ("verify", "Enable consistency verification", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-    ("grow", "Unclaimed events are assigned to the nearest cluster", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("h,help", "Print usage");
-
-    options.parse_positional({"file", "variables", "populations"});
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help"))
+    int run()
     {
-        std::cout << options.help() << std::endl;
-        return 0;
-    }
-
-    params.filename = result["file"].as<std::string>();
-    if (result.count("variables")) {
-        params.variables = result["variables"].as<std::vector<std::string>>();
-        params.dimension = params.variables.size();
-    } else {
-        params.dimension = result["dimension"].as<unsigned>();
-    }
-    params.smooth = result["smooth"].as<float>();
-    params.threshold = result["threshold"].as<float>();
-    params.visual = result["visual"].as<bool>();
-    params.antialias = result["antialias"].as<bool>();
-    params.verify = result["verify"].as<bool>();
-    params.grow = result["grow"].as<bool>();
-    params.verbose = result["verbose"].as<bool>();
-    params.ascii = result["ascii"].as<bool>();
-
-    if (result.count("grid"))
-        params.grid = result["grid"].as<unsigned>();
-    else
-        switch (params.dimension)
-        {
-        case 2:
-            params.grid = 256;
-            break;
-        case 3:
-            params.grid = 64;
-            break;
-        case 4:
-            params.grid = 32;
-            break;
-        default:
-            params.grid = 32;
-            break;
-        }
-
     DataSet dataset;
     if (!dataset.read(params.filename)) {
         std::cerr << "Error: Could not open data file: " << params.filename << std::endl;
@@ -219,13 +227,22 @@ int main(int argc, char *argv[])
     switch (params.dimension)
     {
     case 2:
-        return do_it<2>(params, params.grid, proj);
+        return do_it<2>(proj);
     case 3:
-        return do_it<3>(params, params.grid, proj);
+        return do_it<3>(proj);
     case 4:
-        return do_it<4>(params, params.grid, proj);
+        return do_it<4>(proj);
     default:
         std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;
         return 1;
     }
+    }
 };
+
+int main(int argc, char *argv[])
+{
+    LaplaceApp app;
+    int res = app.parse_args(argc, argv);
+    if (res != -1) return res;
+    return app.run();
+}

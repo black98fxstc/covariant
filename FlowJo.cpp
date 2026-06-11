@@ -346,6 +346,7 @@ Workspace parse_workspace(const std::string &filename)
                         }
                         else if (name.find("biexp") != std::string::npos || name.find("biex") != std::string::npos)
                         {
+                            // M = pos, A = neg T = maxRange W = 1/2 log10(-width)
                             transform = std::make_shared<Logicle>(get_double(node, "T", 262144.0), get_double(node, "W", 0.5), get_double(node, "M", 4.5), get_double(node, "A", 0.0));
                         }
                     }
@@ -1144,8 +1145,8 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         xmlSetProp(rectGateNode, (const xmlChar *)"eventsInside", (const xmlChar *)"1");
         
         xmlNodePtr dimNode = xmlNewNode(gatingNs, (const xmlChar *)"dimension");
-        std::string min_val = std::to_string(6 + 16 * klass);
-        std::string max_val = std::to_string(10 + 16 * klass);
+        std::string min_val = std::to_string(1 + 4 * klass);
+        std::string max_val = std::to_string(3 + 4 * klass);
         xmlSetProp(dimNode, (const xmlChar *)"gating:min", (const xmlChar *)min_val.c_str());
         xmlSetProp(dimNode, (const xmlChar *)"gating:max", (const xmlChar *)max_val.c_str());
 

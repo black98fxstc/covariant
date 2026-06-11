@@ -355,11 +355,80 @@ public:
     }
 };
 
-template <unsigned Dimension>
-int do_it(Darwin &darwin, const Projection& proj)
+class DarwinApp
 {
-    Params &params = darwin.params;
+public:
+    Params params;
 
+    int parse_args(int argc, char *argv[])
+    {
+        // Force Gnuplot to use a non-interactive terminal. 
+#ifdef _WIN32
+        _putenv_s("GNUTERM", "png");
+#else
+        setenv("GNUTERM", "png", 1);
+#endif
+
+        cxxopts::Options options("Darwin", "Hierarchical Laplacian and Riemannian analysis");
+
+        options.add_options()
+        ("f,file", "Input filename", cxxopts::value<std::string>()->default_value("test_data"))
+        ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
+        ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
+        ("d,dimension", "Dimension", cxxopts::value<unsigned>()->default_value("2"))
+        ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
+        ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
+        ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
+        ("visual", "Save visualization files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("max-clusters", "Maximum number of clusters to report", cxxopts::value<unsigned>()->default_value("10"))
+        ("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("2")->implicit_value("100"))
+        ("labels", "Comma or space separated list of labels", cxxopts::value<std::string>())
+        ("v,verbose", "Verbose", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+        ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+        ("grow", "Grow clusters", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("a,ascii", "Use ASCII data", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("style", "Path to custom XSLT stylesheet", cxxopts::value<std::string>())
+        ("h,help", "Print usage");
+
+        options.parse_positional({"file", "variables", "populations"});
+
+        auto result = options.parse(argc, argv);
+
+        if (result.count("help"))
+        {
+            std::cout << options.help() << std::endl;
+            return 0;
+        }
+
+        params.filename = result["file"].as<std::string>();
+        if (result.count("variables")) {
+            params.variables = result["variables"].as<std::vector<std::string>>();
+            params.dimension = params.variables.size();
+        } else {
+            params.dimension = result["dimension"].as<unsigned>();
+        }
+        params.smooth = result["smooth"].as<float>();
+        params.threshold = result["threshold"].as<float>();
+        params.visual = result["visual"].as<bool>();
+        params.max_clusters = result["max-clusters"].as<unsigned>();
+        params.min_events = result["min-events"].as<size_t>();
+        params.antialias = result["antialias"].as<bool>();
+        params.verify = result["verify"].as<bool>();
+        params.grow = result["grow"].as<bool>();
+        params.verbose = result["verbose"].as<bool>();
+        params.ascii = result["ascii"].as<bool>();
+        if (result.count("labels"))
+            params.labels_str = result["labels"].as<std::string>();
+        if (result.count("style"))
+            params.style = result["style"].as<std::string>();
+
+        return -1;
+    }
+
+    template <unsigned Dimension>
+    int do_it(Darwin &darwin, const Projection& proj)
+    {
     std::cout << "Darwin running with" 
               << " filename=" << params.filename << " smooth=" << params.smooth << " threshold=" << params.threshold
               << " dimension=" << params.dimension << " grid=" << params.grid << std::endl;
@@ -652,73 +721,10 @@ int do_it(Darwin &darwin, const Projection& proj)
     std::cout << "Analysis complete. Reports saved and HTML generated." << std::endl;
 
     return 0;
-}
+    }
 
-int main(int argc, char *argv[])
-{
-    Params params;
-
-    // Force Gnuplot to use a non-interactive terminal. 
-#ifdef _WIN32
-    _putenv_s("GNUTERM", "png");
-#else
-    setenv("GNUTERM", "png", 1);
-#endif
-
-    cxxopts::Options options("Darwin", "Hierarchical Laplacian and Riemannian analysis");
-
-    options.add_options()
-    ("f,file", "Input filename", cxxopts::value<std::string>()->default_value("test_data"))
-    ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
-    ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
-    ("d,dimension", "Dimension", cxxopts::value<unsigned>()->default_value("2"))
-    ("g,grid", "Grid resolution", cxxopts::value<unsigned>())
-    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-    ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
-    ("visual", "Save visualization files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("max-clusters", "Maximum number of clusters to report", cxxopts::value<unsigned>()->default_value("10"))
-    ("min-events", "Minimum number of events for a cluster to be reported", cxxopts::value<size_t>()->default_value("2")->implicit_value("100"))
-    ("labels", "Comma or space separated list of labels", cxxopts::value<std::string>())
-    ("v,verbose", "Verbose", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-    ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-    ("grow", "Grow clusters", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("a,ascii", "Use ASCII data", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("style", "Path to custom XSLT stylesheet", cxxopts::value<std::string>())
-    ("h,help", "Print usage");
-
-    options.parse_positional({"file", "variables", "populations"});
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help"))
+    int run()
     {
-        std::cout << options.help() << std::endl;
-        return 0;
-    }
-
-    params.filename = result["file"].as<std::string>();
-    if (result.count("variables")) {
-        params.variables = result["variables"].as<std::vector<std::string>>();
-        params.dimension = params.variables.size();
-    } else {
-        params.dimension = result["dimension"].as<unsigned>();
-    }
-    params.smooth = result["smooth"].as<float>();
-    params.threshold = result["threshold"].as<float>();
-    params.visual = result["visual"].as<bool>();
-    params.max_clusters = result["max-clusters"].as<unsigned>();
-    params.min_events = result["min-events"].as<size_t>();
-    params.antialias = result["antialias"].as<bool>();
-    params.verify = result["verify"].as<bool>();
-    params.grow = result["grow"].as<bool>();
-    params.verbose = result["verbose"].as<bool>();
-    params.ascii = result["ascii"].as<bool>();
-    if (result.count("labels"))
-        params.labels_str = result["labels"].as<std::string>();
-    if (result.count("style"))
-        params.style = result["style"].as<std::string>();
-
     params.out_dir = params.filename + ".darwin";
     params.img_dir = params.out_dir + "/images";
 
@@ -827,4 +833,13 @@ int main(int argc, char *argv[])
         std::cerr << "Unsupported dimension." << std::endl;
         return 1;
     }
+    }
+};
+
+int main(int argc, char *argv[])
+{
+    DarwinApp app;
+    int res = app.parse_args(argc, argv);
+    if (res != -1) return res;
+    return app.run();
 }

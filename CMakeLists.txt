@@ -45,29 +45,29 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_library(covariant_core STATIC Samples.cpp Workers.cpp Gating.cpp Transforms.cpp)
 target_link_libraries(covariant_core PUBLIC LibXml2::LibXml2 LibXslt::LibXslt Threads::Threads)
 
-# Define targets for the various tools and main programs
-add_executable(testdata testdata.cpp)
-# testdata is a generator and does not use the Weighty class's FFTW-based filtering.
-target_link_libraries(testdata PRIVATE covariant_core cxxopts::cxxopts ${MATH_LIB})
+# # Define targets for the various tools and main programs
+# add_executable(testdata testdata.cpp)
+# # testdata is a generator and does not use the Weighty class's FFTW-based filtering.
+# target_link_libraries(testdata PRIVATE covariant_core cxxopts::cxxopts ${MATH_LIB})
 
-add_executable(laplace laplace.cpp)
-target_link_libraries(laplace PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
+# add_executable(laplace laplace.cpp)
+# target_link_libraries(laplace PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
-add_executable(riemann riemann.cpp)
-target_link_libraries(riemann PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
+# add_executable(riemann riemann.cpp)
+# target_link_libraries(riemann PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
-add_executable(darwin darwin.cpp)
-target_link_libraries(darwin PRIVATE covariant_core FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts Eigen3::Eigen ${MATH_LIB})
+# add_executable(darwin darwin.cpp)
+# target_link_libraries(darwin PRIVATE covariant_core FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts Eigen3::Eigen ${MATH_LIB})
 
 add_executable(leonard leonard.cpp FlowJo.cpp)
 target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen)
 
 # Standalone gating test executable (using the main() function from Gating.cpp)
-add_executable(gating_test Gating.cpp)
-target_compile_definitions(gating_test PRIVATE BUILD_GATING_TEST)
-target_link_libraries(gating_test PRIVATE covariant_core)
+# add_executable(gating_test Gating.cpp)
+# target_compile_definitions(gating_test PRIVATE BUILD_GATING_TEST)
+# target_link_libraries(gating_test PRIVATE covariant_core)
 
 # Set output names to match your Makefile targets
-set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")
-set_target_properties(darwin PROPERTIES OUTPUT_NAME "darwin")
+# set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")
+# set_target_properties(darwin PROPERTIES OUTPUT_NAME "darwin")
 set_target_properties(leonard PROPERTIES OUTPUT_NAME "leonard")

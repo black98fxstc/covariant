@@ -20,8 +20,62 @@ struct Params
     bool ascii;
 };
 
-template <unsigned Dimension>
-int do_it(const Params &params)
+class TestDataApp
+{
+public:
+    Params params;
+
+    int parse_args(int argc, char *argv[])
+    {
+        // Set up the command-line options parser.
+        cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
+
+        // Add the command-line options.
+        options.add_options()
+        ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
+        ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
+        ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
+        ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
+        ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
+        ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
+        ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
+        ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
+        ("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))
+        ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+        ("h,help", "Print usage");
+
+        options.parse_positional({"file", "variables", "populations"});
+
+        auto result = options.parse(argc, argv);
+
+        if (result.count("help"))
+        {
+            std::cout << options.help() << std::endl;
+            return 0;
+        }
+
+        params.filename = result["file"].as<std::string>();
+        if (result.count("variables")) {
+            params.variables = result["variables"].as<std::vector<std::string>>();
+            params.dimension = params.variables.size();
+        } else {
+            params.dimension = result["dimension"].as<unsigned>();
+        }
+        if (result.count("populations")) {
+            params.populations = result["populations"].as<std::vector<std::string>>();
+        }
+        params.normal = result["normal"].as<unsigned>();
+        params.snake = result["snake"].as<unsigned>();
+        params.exponential = result["exponential"].as<unsigned>();
+        params.events = result["events"].as<size_t>();
+        params.convert = result["convert"].as<bool>();
+        params.ascii = result["ascii"].as<bool>();
+
+        return -1;
+    }
+
+    template <unsigned Dimension>
+    int do_it()
 {
     TestData<Dimension> test_data;
     if (params.convert)
@@ -111,64 +165,27 @@ int do_it(const Params &params)
     return 0;
 }
 
-int main(int argc, char *argv[])
-{
-    Params params;
-
-    // Set up the command-line options parser.
-    cxxopts::Options options("WeightyCLI", "Generate test data for the Weighty class");
-
-    // Add the command-line options.
-    options.add_options()
-    ("f,file", "File name for generated test data", cxxopts::value<std::string>()->default_value("test_data"))
-    ("variables", "List of variables", cxxopts::value<std::vector<std::string>>())
-    ("populations", "List of populations", cxxopts::value<std::vector<std::string>>())
-    ("d,dimension", "Dimension of the events", cxxopts::value<unsigned>()->default_value("2"))
-    ("n,normal", "Normal distributions", cxxopts::value<unsigned>()->default_value("3"))
-    ("exponential", "Exponential distributions", cxxopts::value<unsigned>()->default_value("0"))
-    ("snake", "Snake distributions", cxxopts::value<unsigned>()->default_value("0"))
-    ("e,events", "Number of events to generate", cxxopts::value<size_t>()->default_value("10000"))
-    ("convert", "Convert existing file between ASCII and binary", cxxopts::value<bool>()->default_value("false"))
-    ("a,ascii", "Use ASCII format for data files", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-    ("h,help", "Print usage");
-
-    options.parse_positional({"file", "variables", "populations"});
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help"))
+    int run()
     {
-        std::cout << options.help() << std::endl;
-        return 0;
-    }
-
-    params.filename = result["file"].as<std::string>();
-    if (result.count("variables")) {
-        params.variables = result["variables"].as<std::vector<std::string>>();
-        params.dimension = params.variables.size();
-    } else {
-        params.dimension = result["dimension"].as<unsigned>();
-    }
-    if (result.count("populations")) {
-        params.populations = result["populations"].as<std::vector<std::string>>();
-    }
-    params.normal = result["normal"].as<unsigned>();
-    params.snake = result["snake"].as<unsigned>();
-    params.exponential = result["exponential"].as<unsigned>();
-    params.events = result["events"].as<size_t>();
-    params.convert = result["convert"].as<bool>();
-    params.ascii = result["ascii"].as<bool>();
-
     switch (params.dimension)
     {
     case 2:
-        return do_it<2>(params);
+        return do_it<2>();
     case 3:
-        return do_it<3>(params);
+        return do_it<3>();
     case 4:
-        return do_it<4>(params);
+        return do_it<4>();
     default:
         std::cerr << "Error: Unsupported dimension: " << params.dimension << std::endl;
         return 1;
     }
+    }
+};
+
+int main(int argc, char *argv[])
+{
+    TestDataApp app;
+    int res = app.parse_args(argc, argv);
+    if (res != -1) return res;
+    return app.run();
 }

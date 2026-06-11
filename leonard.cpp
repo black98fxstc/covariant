@@ -267,7 +267,7 @@ public:
                 laplace.classifications = std::make_shared<std::vector<unsigned short>>(dataset.size());
             for (size_t i = 0; i < dataset.size(); ++i)
             { 
-                (*laplace.classifications)[i] /= 16;
+                (*laplace.classifications)[i] /= 4;
                 if ((*laplace.classifications)[i] > laplacian_offset)
                     laplacian_offset = (*laplace.classifications)[i];
             }
@@ -488,7 +488,7 @@ public:
                     out << "Laplace\n";
                     for (auto val : *laplace.classifications)
                     {
-                        out << 8 + 16 * val << "\n";
+                        out << 2 + 4 * val << "\n";
                     }
                     out.close();
                 }
