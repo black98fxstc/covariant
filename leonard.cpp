@@ -29,6 +29,7 @@ public:
     Params params;
     SelectionState selections;
     unsigned clusters_found = 0;
+    std::vector<size_t> cluster_counts;
     size_t laplacian_offset = 0;
     Workspace ws;
     std::vector<SampleData> dummy_samples;
@@ -107,13 +108,15 @@ public:
 
         std::cout << "Performing Laplacian clustering..." << std::endl;
         clusters_found = laplace.cluster(selections.threshold);
-        std::fill(classes.begin(), classes.end(), 0);
-        for (size_t i = 0; i < events.size(); ++i)
-            classes[idx[i]] = laplace.classify(events[i]);
-        std::cout << "Found " << clusters_found << " clusters." << std::endl;
-
+        cluster_counts.resize(clusters_found + 1);
+        std::fill(cluster_counts.begin(), cluster_counts.end(), 0);
         for (size_t i = 0; i < idx.size(); ++i)
-            classes[idx[i]] = laplace.classify(events[i]) + laplacian_offset;
+        {
+            unsigned short c = laplace.classify(events[i]);
+            classes[idx[i]] = c + laplacian_offset;
+            cluster_counts[c]++;
+        }
+        std::cout << "Found " << clusters_found << " clusters." << std::endl;
     }
 
     int run()
@@ -463,7 +466,6 @@ public:
                     {
                         if (!is_datafile && !ws.filename.empty())
                         {
-                            std::vector<size_t> cluster_counts(clusters_found + 1, 0); // TODO: populate with actual counts
                             add_laplace_gates(ws.filename, s.name, pop_name, clusters_found, laplacian_offset, cluster_counts, selections.variables);
                         }
                         laplacian_offset += clusters_found + 1;

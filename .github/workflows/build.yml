@@ -22,8 +22,6 @@ jobs:
           simd_flag: "--enable-neon"  # ARM64 SIMD equivalent for FFTW
           name: macos-arm64
 
-        # os: [macos-latest, windows-latest]
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -31,7 +29,6 @@ jobs:
     - name: Install macOS build tools
       if: runner.os == 'macOS'
       run: brew install autoconf automake libtool
-      # run: brew install pkg-config autoconf automake libtool
 
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11

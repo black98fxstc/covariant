@@ -302,20 +302,40 @@ bool DataSet::read_fcs(const std::string &filename)
 
     // Extract raw floats from DATA segment
     in.seekg(data_start, std::ios::beg);
-    for (size_t e = 0; e < tot_events; ++e)
+
+    for (int p = 0; p < num_params; ++p)
     {
-        for (int p = 0; p < num_params; ++p)
+        variables[p]->data->reserve(tot_events);
+    }
+
+    const size_t CHUNK_SIZE = 8192; // Number of events to read at a time
+    std::vector<float> buffer(CHUNK_SIZE * num_params);
+    size_t events_read = 0;
+
+    while (events_read < tot_events)
+    {
+        size_t events_to_read = std::min(CHUNK_SIZE, tot_events - events_read);
+        in.read(reinterpret_cast<char *>(buffer.data()), events_to_read * num_params * sizeof(float));
+
+        if (swap_bytes)
         {
-            float val = 0.0f;
-            in.read(reinterpret_cast<char *>(&val), sizeof(float));
-            if (swap_bytes)
+            for (size_t i = 0; i < events_to_read * num_params; ++i)
             {
-                char *v_bytes = reinterpret_cast<char *>(&val);
+                char *v_bytes = reinterpret_cast<char *>(&buffer[i]);
                 std::swap(v_bytes[0], v_bytes[3]);
                 std::swap(v_bytes[1], v_bytes[2]);
             }
-            variables[p]->data->push_back(val);
         }
+
+        size_t idx = 0;
+        for (size_t e = 0; e < events_to_read; ++e)
+        {
+            for (int p = 0; p < num_params; ++p)
+            {
+                variables[p]->data->push_back(buffer[idx++]);
+            }
+        }
+        events_read += events_to_read;
     }
     _size = tot_events;
 

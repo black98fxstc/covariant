@@ -97,6 +97,7 @@ class Darwin
 public:
     Params params;
     unsigned num_clusters = 0;
+                            std::vector<size_t> cluster_counts(clusters_found + 1, 0);
     std::ofstream xml_out;
     json report;
     std::vector<std::string> labels;
