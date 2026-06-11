@@ -105,13 +105,11 @@ bool DataSet::read_csv(const std::string &filename, char delimiter)
         {
             if (!std::getline(line_ss, token, delimiter))
                 break;
-            try
-            {
-                float val = std::stof(token);
+            char *end;
+            float val = std::strtof(token.c_str(), &end);
+            if (end != token.c_str()) {
                 variables[i]->data->push_back(val);
-            }
-            catch (...)
-            {
+            } else {
                 variables[i]->data->push_back(std::nanf(""));
             }
         }
@@ -202,7 +200,10 @@ bool DataSet::read_fcs(const std::string &filename)
         in.read(buf, 8);
         std::string s(buf);
         s.erase(0, s.find_first_not_of(' '));
-        return s.empty() ? 0 : std::stoull(s);
+        if (s.empty()) return 0;
+        char *end;
+        unsigned long long v = std::strtoull(s.c_str(), &end, 10);
+        return (end != s.c_str()) ? v : 0;
     };
 
     size_t text_start = read_offset();
@@ -277,12 +278,26 @@ bool DataSet::read_fcs(const std::string &filename)
 
     // Fallback checks for > 99,999,999 byte offsets in FCS 3.0+
     if (data_start == 0 && metadata.count("$BEGINDATA"))
-        data_start = std::stoull(metadata["$BEGINDATA"]);
+    {
+        char *end;
+        data_start = std::strtoull(metadata["$BEGINDATA"].c_str(), &end, 10);
+    }
     if (data_end == 0 && metadata.count("$ENDDATA"))
-        data_end = std::stoull(metadata["$ENDDATA"]);
+    {
+        char *end;
+        data_end = std::strtoull(metadata["$ENDDATA"].c_str(), &end, 10);
+    }
 
-    int num_params = metadata.count("$PAR") ? std::stoi(metadata["$PAR"]) : 0;
-    size_t tot_events = metadata.count("$TOT") ? std::stoull(metadata["$TOT"]) : 0;
+    int num_params = 0;
+    if (metadata.count("$PAR")) {
+        char *end;
+        num_params = static_cast<int>(std::strtol(metadata["$PAR"].c_str(), &end, 10));
+    }
+    size_t tot_events = 0;
+    if (metadata.count("$TOT")) {
+        char *end;
+        tot_events = std::strtoull(metadata["$TOT"].c_str(), &end, 10);
+    }
 
     std::vector<std::string> headers;
     for (int i = 1; i <= num_params; ++i)
@@ -400,13 +415,10 @@ bool DataSet::read_fcs(const std::string &filename)
                     bool val = false;
                     if (!t.empty())
                     {
-                        try
-                        {
-                            val = (std::stoi(t) != 0);
-                        }
-                        catch (...)
-                        {
-                        }
+                        char *end;
+                        long v = std::strtol(t.c_str(), &end, 10);
+                        if (end != t.c_str())
+                            val = (v != 0);
                     }
                     bool_cols[i]->push_back(val);
                 }
@@ -415,13 +427,10 @@ bool DataSet::read_fcs(const std::string &filename)
                     unsigned short val = 0;
                     if (!t.empty())
                     {
-                        try
-                        {
-                            val = static_cast<unsigned short>(std::stoul(t));
-                        }
-                        catch (...)
-                        {
-                        }
+                        char *end;
+                        unsigned long v = std::strtoul(t.c_str(), &end, 10);
+                        if (end != t.c_str())
+                            val = static_cast<unsigned short>(v);
                     }
                     class_cols[i]->push_back(val);
                 }

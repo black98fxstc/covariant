@@ -267,12 +267,10 @@ int main(int argc, char **argv)
                 if (attr)
                 {
                     double val = def;
-                    try
-                    {
-                        val = std::stod((char *)attr);
-                    }
-                    catch (...)
-                    {
+                    char *end;
+                    double v = std::strtod((char *)attr, &end);
+                    if (end != (char *)attr) {
+                        val = v;
                     }
                     xmlFree(attr);
                     return val;

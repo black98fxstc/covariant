@@ -152,12 +152,10 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
                             vAttr = xmlGetProp(cNode, (const xmlChar *)"value");
                         if (vAttr)
                         {
-                            try
-                            {
-                                val = std::stod((char *)vAttr);
-                            }
-                            catch (...)
-                            {
+                            char *end;
+                            double parsed_val = std::strtod((char *)vAttr, &end);
+                            if (end != (char *)vAttr) {
+                                val = parsed_val;
                             }
                             xmlFree(vAttr);
                         }
@@ -308,12 +306,10 @@ Workspace parse_workspace(const std::string &filename)
                         if (attr)
                         {
                             double val = def;
-                            try
-                            {
-                                val = std::stod((char *)attr);
-                            }
-                            catch (...)
-                            {
+                            char *end;
+                            double v = std::strtod((char *)attr, &end);
+                            if (end != (char *)attr) {
+                                val = v;
                             }
                             xmlFree(attr);
                             return val;
@@ -546,12 +542,10 @@ Workspace parse_workspace(const std::string &filename)
                                                                 valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
                                                             if (valAttr)
                                                             {
-                                                                try
-                                                                {
-                                                                    vertex.push_back(std::stod((char *)valAttr));
-                                                                }
-                                                                catch (...)
-                                                                {
+                                                                char *end;
+                                                                double v = std::strtod((char *)valAttr, &end);
+                                                                if (end != (char *)valAttr) {
+                                                                    vertex.push_back(v);
                                                                 }
                                                                 xmlFree(valAttr);
                                                             }
@@ -583,12 +577,10 @@ Workspace parse_workspace(const std::string &filename)
                                                         valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
                                                     if (valAttr)
                                                     {
-                                                        try
-                                                        {
-                                                            ellip->mean.push_back(std::stod((char *)valAttr));
-                                                        }
-                                                        catch (...)
-                                                        {
+                                                        char *end;
+                                                        double v = std::strtod((char *)valAttr, &end);
+                                                        if (end != (char *)valAttr) {
+                                                            ellip->mean.push_back(v);
                                                         }
                                                         xmlFree(valAttr);
                                                     }
@@ -612,12 +604,10 @@ Workspace parse_workspace(const std::string &filename)
                                                                 valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"value");
                                                             if (valAttr)
                                                             {
-                                                                try
-                                                                {
-                                                                    row.push_back(std::stod((char *)valAttr));
-                                                                }
-                                                                catch (...)
-                                                                {
+                                                                char *end;
+                                                                double v = std::strtod((char *)valAttr, &end);
+                                                                if (end != (char *)valAttr) {
+                                                                    row.push_back(v);
                                                                 }
                                                                 xmlFree(valAttr);
                                                             }
@@ -661,12 +651,10 @@ Workspace parse_workspace(const std::string &filename)
                                                         minAttr = xmlGetProp(dimNode, (const xmlChar *)"min");
                                                     if (minAttr)
                                                     {
-                                                        try
-                                                        {
-                                                            dim.min_val = std::stod((char *)minAttr);
-                                                        }
-                                                        catch (...)
-                                                        {
+                                                        char *end;
+                                                        double v = std::strtod((char *)minAttr, &end);
+                                                        if (end != (char *)minAttr) {
+                                                            dim.min_val = v;
                                                         }
                                                         xmlFree(minAttr);
                                                     }
@@ -676,12 +664,10 @@ Workspace parse_workspace(const std::string &filename)
                                                         maxAttr = xmlGetProp(dimNode, (const xmlChar *)"max");
                                                     if (maxAttr)
                                                     {
-                                                        try
-                                                        {
-                                                            dim.max_val = std::stod((char *)maxAttr);
-                                                        }
-                                                        catch (...)
-                                                        {
+                                                        char *end;
+                                                        double v = std::strtod((char *)maxAttr, &end);
+                                                        if (end != (char *)maxAttr) {
+                                                            dim.max_val = v;
                                                         }
                                                         xmlFree(maxAttr);
                                                     }
@@ -1419,38 +1405,22 @@ SelectionState build_ftxui_interface(Workspace &ws)
         }
         state.analysis_choice = analysis_choice;
 
-        try
-        {
-            state.smoothing = std::stof(state.smoothing_str);
-        }
-        catch (...)
-        {
-            state.smoothing = 0.01f;
-        }
-        try
-        {
-            state.threshold = std::stof(state.threshold_str);
-        }
-        catch (...)
-        {
-            state.threshold = 0.001f;
-        }
-        try
-        {
-            state.max_clusters = std::stoul(state.max_clusters_str);
-        }
-        catch (...)
-        {
-            state.max_clusters = 15;
-        }
-        try
-        {
-            state.min_events = std::stoull(state.min_events_str);
-        }
-        catch (...)
-        {
-            state.min_events = 100;
-        }
+        char* end;
+        float sf = std::strtof(state.smoothing_str.c_str(), &end);
+        if (end != state.smoothing_str.c_str()) state.smoothing = sf;
+        else state.smoothing = 0.01f;
+
+        float tf = std::strtof(state.threshold_str.c_str(), &end);
+        if (end != state.threshold_str.c_str()) state.threshold = tf;
+        else state.threshold = 0.001f;
+
+        unsigned long mc = std::strtoul(state.max_clusters_str.c_str(), &end, 10);
+        if (end != state.max_clusters_str.c_str()) state.max_clusters = mc;
+        else state.max_clusters = 15;
+
+        unsigned long long me = std::strtoull(state.min_events_str.c_str(), &end, 10);
+        if (end != state.min_events_str.c_str()) state.min_events = me;
+        else state.min_events = 100;
     }
 
     return state;
