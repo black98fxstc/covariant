@@ -1,6 +1,12 @@
 #include <functional>
 #include <fstream>
 #include <filesystem>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <unordered_map>
 
 #include <Eigen/Dense>
 #include <cxxopts.hpp>
@@ -327,13 +333,11 @@ public:
                 if (!var.data && !var.unmixing.empty())
                 {
                     var.data = std::make_shared<std::vector<float>>(dataset.size(), 0.0f);
-                    float *bare_data = var.data.get()->data();
+                    Eigen::Map<Eigen::ArrayXf> dest_map(var.data->data(), dataset.size());
                     for (size_t j = 0; j < detector_data.size(); ++j)
                     {
-                        float *bare_detector = detector_data[j]->data();
-                        float coefficient = var.unmixing[j];
-                        for (size_t i = 0; i < dataset.size(); ++i)
-                                bare_data[i] += bare_detector[i] * coefficient;
+                        Eigen::Map<const Eigen::ArrayXf> src_map(detector_data[j]->data(), dataset.size());
+                        dest_map += src_map * var.unmixing[j];
                     }
                 }
 

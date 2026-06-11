@@ -7,6 +7,11 @@
       "name": "fftw3",
       "features": ["threads"]
     },
+    {
+      "name": "fftw3",
+      "features": ["avx2"],
+      "platform": "x64"
+    },
     "cxxopts",
     "matplotplusplus",
     "nlohmann-json",
