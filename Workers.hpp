@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <atomic>
 
 class Work
 {
@@ -38,7 +39,7 @@ class Worker
 {
 private:
     static std::queue<Work *> work_list;
-    volatile static bool kiss_of_death;
+    static std::atomic<bool> kiss_of_death;
     std::thread th;
 
 protected:
@@ -46,10 +47,9 @@ protected:
     static std::mutex mutex;
     static std::condition_variable work_available;
 
-    void work() noexcept;
-    Work *dequeue() noexcept;
+    void work(bool blocking = true) noexcept;
+    Work *dequeue(bool blocking) noexcept;
     bool idle();
-    void wait();
 
 public:
     static void enqueue(Work *work) noexcept;

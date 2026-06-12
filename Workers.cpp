@@ -1,17 +1,19 @@
+#include <atomic>
+#include <queue>
 #include "Workers.hpp"
 
 // Explicit static member instantiations
 std::queue<Work *> Worker::work_list;
-volatile bool Worker::kiss_of_death = false;
+std::atomic<bool> Worker::kiss_of_death = false;
 std::mutex Worker::serialize;
 std::mutex Worker::mutex;
 std::condition_variable Worker::work_available;
 
 Work::~Work() = default;
 
-void Worker::work() noexcept
+void Worker::work(bool blocking) noexcept
 {
-    Work *work = dequeue();
+    Work *work = dequeue(blocking);
     if (!work) // spurious wakeup
         return;
 
@@ -24,11 +26,16 @@ void Worker::work() noexcept
     delete work;
 }
 
-Work *Worker::dequeue() noexcept
+Work *Worker::dequeue(bool blocking) noexcept
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::unique_lock<std::mutex> lock(mutex);
+    
+    if (blocking)
+        work_available.wait(lock, [] { return !work_list.empty() || kiss_of_death; });
+
     if (work_list.empty())
         return nullptr;
+
     Work *work = work_list.front();
     work_list.pop();
     return work;
@@ -38,13 +45,6 @@ bool Worker::idle()
 {
     std::lock_guard<std::mutex> lock(mutex);
     return work_list.empty();
-}
-
-void Worker::wait()
-{
-    std::unique_lock<std::mutex> lock(mutex);
-    while (work_list.empty() && !kiss_of_death)
-        work_available.wait(lock);
 }
 
 void Worker::enqueue(Work *work) noexcept
@@ -81,17 +81,15 @@ Worker::Worker(bool threaded) noexcept
     if (threaded)
     {
         th = std::thread([this]() {
-            while (!kiss_of_death)
-                if (idle())
-                    wait();
-                else
-                    work();
+            while (!kiss_of_death) {
+                work(true);
+            }
         });
     }
     else
     {
         while (!idle())
-            work();
+            work(false);
     }
 }
 

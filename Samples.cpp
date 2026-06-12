@@ -323,7 +323,7 @@ bool DataSet::read_fcs(const std::string &filename)
         variables[p]->data->reserve(tot_events);
     }
 
-    const size_t CHUNK_SIZE = 8192; // Number of events to read at a time
+    const size_t CHUNK_SIZE = 65536; // Number of events to read at a time
     std::vector<float> buffer(CHUNK_SIZE * num_params);
     size_t events_read = 0;
 
