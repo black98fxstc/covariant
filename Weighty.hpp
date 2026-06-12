@@ -13,13 +13,14 @@
 #include <fftw3.h>
 #include <cctype>
 #include <assert.h>
+#include <Eigen/Dense>
 
 #include "Dimensions.hpp"
 #include "Events.hpp"
 #include "Workers.hpp"
 #include "Gating.hpp"
 
-// Utilities for sampleing multi-dimensional data
+// Utilities for sampling multi-dimensional data
 
 template <typename Type>
 Type squared(Type x) noexcept {return x * x;}
@@ -29,24 +30,26 @@ const double pi = 3.14159265358979323846;
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>, public Events<Dimension>
 {
-    class Kernel : public std::array<std::vector<double>, Dimension>
+    class Kernel : public Function<Dimension, float>
     {
-        Dimensions<Dimension> dimensions;
+
     public:
         // The radius is specified as a fraction of full scale.
         Kernel *radius(double radius) noexcept
         {
-            for (unsigned i = 0; i < Dimension; i++)
-                for (unsigned j = 0; j < dimensions.points(i); j++)
-                    (*this)[i][j] = exp(-2.0 * squared(j * radius * pi));
+            Coordinate coord(this->dimensions);
+            for (size_t x = 0; x < this->dimensions.size(); x++)
+            {
+                double r2 = 0.0;
+                for (unsigned i = 0; i < Dimension; i++)
+                    r2 += squared(coord[i]);
+                (*this)[x] = exp(-2.0 * r2 * squared(radius * pi));
+                ++coord;
+            }
             return this;
         }
 
-        Kernel(Weighty* w) noexcept : dimensions(*w)
-        {
-            for (unsigned i = 0; i < Dimension; i++)
-                this->at(i).resize(w->points(i));
-        }
+        Kernel(Weighty* w) noexcept : Function<Dimension, float>(*w) {}
     };
 
 private:
@@ -105,20 +108,13 @@ public:
         // DCT because smoothing the even half-wave means no probability spill across the end points
         Function<Dimension, float> cosine = Function<Dimension, float>(*this);
         fftwf_execute_r2r(DCT, input.data, cosine.data);
-        for (size_t x = 0; x < size(); x++)
-        {
-            double k = 1.0;
-            for (unsigned i = 0; i < Dimension; i++)
-            {
-                unsigned j = (x / stride(i)) % points(i);
-                k *= (*kernel)[i][j];
-            }
-            cosine[x] *= k;
-        }
+        Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) *= Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
         fftwf_execute_r2r(DCT, cosine.data, output.data);
         if (normalize)
-            for (unsigned x = 0; x < size(); x++)
-                output[x] /= (float)fft_normalizer;
+        {
+            float inv_norm = 1.0f / static_cast<float>(fft_normalizer);
+            Eigen::Map<Eigen::ArrayXf>(output.data, size()) *= inv_norm;
+        }
     }
 
     void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, float radius = 0.01f, bool normalize = false)

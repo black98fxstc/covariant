@@ -151,6 +151,21 @@ public:
         return x;
     }
 
+    Coordinate &operator++()
+    {
+        for (unsigned i = 0; i < Dimension; i++)
+        {
+            if (indices[i] < dimensions->points(i) - 1)
+            {
+                indices[i]++;
+                return *this;
+            }
+            indices[i] = 0;
+        }
+        return *this;
+    }
+
+
     Coordinate(Dimensions<Dimension> &dimensions) : dimensions(&dimensions), indices{} {}
 
     // Coordinates are fixed to their specific dimension instance
