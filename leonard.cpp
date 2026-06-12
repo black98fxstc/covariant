@@ -101,11 +101,13 @@ public:
                 events[i][d] = (*data[d])[idx[i]];
 
         Laplace<Dimension> laplace(selections.grid_size);
+        size_t valid = 0;
         for (const auto &e : events)
-            laplace.event(e);
-        std::cout << "Found " << events.size() << " valid events..." << std::endl;
+            if (laplace.event(e))
+                valid++;
+        std::cout << "Found " << valid << " valid events..." << std::endl;
 
-        std::cout << "Analyzing the sample..." << std::endl;
+        std::cout << "Calculating the Laplacian of the sample..." << std::endl;
         laplace.analyze(selections.smoothing, selections.threshold);
         if (laplace.differentialError() > .0001)
             std::cout << "Differential equation solution is unusually bad " << laplace.differentialError() << std::endl;
@@ -114,11 +116,16 @@ public:
 
         std::cout << "Performing Laplacian clustering..." << std::endl;
         clusters_found = laplace.cluster(selections.threshold);
-        cluster_counts.resize(clusters_found + 1);
+        cluster_counts.resize(clusters_found + 2);
         std::fill(cluster_counts.begin(), cluster_counts.end(), 0);
+        Coordinate coord(laplace);
         for (size_t i = 0; i < idx.size(); ++i)
         {
-            unsigned short c = laplace.classify(events[i]);
+            unsigned short c;
+            if (laplace.locate(events[i], coord))
+                c = laplace.classify(coord);
+            else
+                c = clusters_found + 1;
             classes[idx[i]] = c + laplacian_offset;
             cluster_counts[c]++;
         }
@@ -474,6 +481,8 @@ public:
                             add_laplace_gates(ws.filename, s.name, pop_name, clusters_found, laplacian_offset, cluster_counts, selections.variables);
                         }
                         laplacian_offset += clusters_found + 1;
+                        if (cluster_counts[clusters_found + 1] > 0)
+                            ++laplacian_offset;
                     }
 
                     break;

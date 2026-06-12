@@ -179,13 +179,18 @@ public:
         return true;
     }
 
+    unsigned short classify(const Coordinate<Dimension> &coord)
+    {
+        size_t x = coord;
+        return cluster_id[x];
+    }
+
     unsigned short classify(const Event<Dimension> &event)
     {
         Coordinate<Dimension> coord(*this);
         if (!locate(event, coord))
             return 0;
-        size_t x = coord;
-        return (unsigned short)(cluster_id[x]);
+        return classify(coord);
     }
 
     void prepare(float smoothing = .01f)

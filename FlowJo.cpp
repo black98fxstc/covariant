@@ -1089,10 +1089,14 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
     xmlNsPtr gatingNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"gating");
     xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
 
-    for (unsigned k = 0; k <= clusters_found; ++k) {
+    for (unsigned k = 0; k <= clusters_found + 1; ++k) {
         size_t klass = k + laplacian_offset;
         
         std::string pop_name = (k == 0) ? "Laplace.Ambiguous" : "Laplace.Cluster" + std::to_string(k);
+        if (k > clusters_found && cluster_counts[k] == 0)
+            continue;
+        else
+            pop_name = "Laplace.OffScale";
         
         std::string check_expr = "./Population[@name='" + pop_name + "']";
         xmlXPathObjectPtr pCheckObj = xmlXPathNodeEval(subpopsNode, (const xmlChar*)check_expr.c_str(), xpathCtx);
