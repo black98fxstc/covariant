@@ -1093,9 +1093,7 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         size_t klass = k + laplacian_offset;
         
         std::string pop_name = (k == 0) ? "Laplace.Ambiguous" : "Laplace.Cluster" + std::to_string(k);
-        if (k > clusters_found && cluster_counts[k] == 0)
-            continue;
-        else
+        if (k > clusters_found)
             pop_name = "Laplace.OffScale";
         
         std::string check_expr = "./Population[@name='" + pop_name + "']";
