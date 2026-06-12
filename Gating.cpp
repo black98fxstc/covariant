@@ -44,7 +44,9 @@ void RectangleGate::evaluate(std::vector<bool> &membership)
             if (bare_data[j] >= upper)
                 membership[j] = false;
     }
-    count = std::count(membership.begin(), membership.begin() + data[0]->size(), true);
+    for (size_t j = 0; j < data[0]->size(); j++)
+        if (membership[j])
+            ++count;
     std::cout << " found " << count << " events." << std::endl;
 }
 
@@ -105,10 +107,9 @@ void PolygonGate::evaluate(std::vector<bool> &membership)
     float *xdata = data[0].get()->data();
     float *ydata = data[1].get()->data();
     size_t count = 0;
-    for (size_t i = 0; i < membership.size(); ++i)
+    for (auto it = std::find(membership.begin(), membership.end(), true); it != membership.end(); it = std::find(it + 1, membership.end(), true))
     {
-        if (!membership[i])
-            continue;
+        size_t i = std::distance(membership.begin(), it);
         float x = xdata[i];
         float y = ydata[i];
         unsigned winding = 0;
