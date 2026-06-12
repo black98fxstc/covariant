@@ -44,9 +44,7 @@ void RectangleGate::evaluate(std::vector<bool> &membership)
             if (bare_data[j] >= upper)
                 membership[j] = false;
     }
-    for (size_t j = 0; j < data[0]->size(); j++)
-        if (membership[j])
-            ++count;
+    count = std::count(membership.begin(), membership.end(), true);
     std::cout << " found " << count << " events." << std::endl;
 }
 
