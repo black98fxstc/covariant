@@ -23,13 +23,36 @@
 #include <libxslt/xslt.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
+#include <nlohmann/json.hpp>
+#include <fstream>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 
+using json = nlohmann::json;
+
 std::vector<std::string> analysis_choices = {"EPP", "Laplace"};
+
+std::string get_settings_path() {
+    std::string path;
+#ifdef _WIN32
+    if (const char* appdata = std::getenv("APPDATA")) {
+        path = std::string(appdata) + "\\Leonard";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        path = std::string(home) + "/.config/Leonard";
+    }
+#endif
+    if (!path.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(path, ec);
+        path += "/settings.json";
+    }
+    return path;
+}
 
 SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr xpathCtx)
 {
@@ -1182,6 +1205,34 @@ SelectionState build_ftxui_interface(Workspace &ws)
     int num_pops_selected = 0;
     std::vector<std::string> selected_pops;
 
+    state.smoothing_str = "0.01";
+    state.threshold_str = "0.001";
+    state.max_clusters_str = "12";
+    state.min_events_str = "0";
+    state.kld_norm_str = "0.04";
+    state.kld_exp_str = "0.2";
+    state.min_cluster_rel_str = "0.0";
+    state.tolerance_str = "0.01";
+
+    int analysis_choice = 1;
+    std::string settings_path = get_settings_path();
+    if (!settings_path.empty() && std::filesystem::exists(settings_path)) {
+        try {
+            std::ifstream in(settings_path);
+            json j;
+            in >> j;
+            state.smoothing_str = j.value("smoothing", "0.01");
+            state.threshold_str = j.value("threshold", "0.001");
+            state.max_clusters_str = j.value("max_clusters", "12");
+            state.min_events_str = j.value("min_events", "0");
+            state.kld_norm_str = j.value("kld_norm", "0.04");
+            state.kld_exp_str = j.value("kld_exp", "0.2");
+            state.min_cluster_rel_str = j.value("min_cluster_rel", "0.0");
+            state.tolerance_str = j.value("tolerance", "0.01");
+            analysis_choice = j.value("analysis_choice", 1);
+        } catch (...) {}
+    }
+
     auto sample_container = Container::Vertical({});
     for (size_t i = 0; i < ws.samples.size(); ++i)
     {
@@ -1221,7 +1272,6 @@ SelectionState build_ftxui_interface(Workspace &ws)
             return std::find(selected_samples.front()->populations.begin(), selected_samples.front()->populations.end(), pop_name) != selected_samples.front()->populations.end(); }));
     }
 
-    int analysis_choice = 1;
     // use global analysis_choices vector
     auto choice_container = Radiobox(&analysis_choices, &analysis_choice);
     auto choice_handled = CatchEvent(choice_container, [&](ftxui::Event e)
@@ -1233,13 +1283,27 @@ SelectionState build_ftxui_interface(Workspace &ws)
 
     auto input_smoothing = Input(&state.smoothing_str, "0.01");
     auto input_threshold = Input(&state.threshold_str, "0.001");
-    auto input_max_clusters = Input(&state.max_clusters_str, "15");
-    auto input_min_events = Input(&state.min_events_str, "100");
+    auto input_kld_norm = Input(&state.kld_norm_str, "0.04");
+    auto input_kld_exp = Input(&state.kld_exp_str, "0.2");
 
-    auto settings_container = Container::Vertical({input_smoothing,
-                                                   input_threshold,
-                                                   input_max_clusters,
-                                                   input_min_events});
+    auto real_settings_container = Container::Vertical({
+        input_smoothing,
+        input_threshold,
+        input_kld_norm,
+        input_kld_exp
+    });
+
+    auto input_max_clusters = Input(&state.max_clusters_str, "12");
+    auto input_min_events = Input(&state.min_events_str, "0");
+    auto input_min_cluster_rel = Input(&state.min_cluster_rel_str, "0.0");
+    auto input_tolerance = Input(&state.tolerance_str, "0.01");
+
+    auto count_settings_container = Container::Vertical({
+        input_max_clusters,
+        input_min_events,
+        input_min_cluster_rel,
+        input_tolerance
+    });
 
     auto main_layout = Container::Horizontal({sample_container,
                                               Maybe(var_container, [&]
@@ -1248,7 +1312,8 @@ SelectionState build_ftxui_interface(Workspace &ws)
                                                     { return num_vars_selected >= 2; })});
 
     auto bottom_container = Container::Horizontal({choice_handled,
-                                                   settings_container});
+                                                   real_settings_container,
+                                                   count_settings_container});
 
     auto top_level = Container::Vertical({main_layout,
                                           bottom_container});
@@ -1340,11 +1405,18 @@ SelectionState build_ftxui_interface(Workspace &ws)
             ? window(text(" Detectors            Stains "), combined_content | vscroll_indicator | frame)
             : emptyElement();
 
-        auto settings_win = window(text(" Settings "), vbox({
-            hbox({text("Smoothing:    "), input_smoothing->Render() | size(WIDTH, EQUAL, 10)}),
-            hbox({text("Threshold:    "), input_threshold->Render() | size(WIDTH, EQUAL, 10)}),
-            hbox({text("Max Clusters: "), input_max_clusters->Render() | size(WIDTH, EQUAL, 10)}),
-            hbox({text("Min Events:   "), input_min_events->Render() | size(WIDTH, EQUAL, 10)})
+        auto real_settings_win = window(text(" Real Parameters "), vbox({
+            hbox({text("Smoothing: "), input_smoothing->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Threshold: "), input_threshold->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("KLD Norm:  "), input_kld_norm->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("KLD Exp:   "), input_kld_exp->Render() | size(WIDTH, EQUAL, 6)})
+        }));
+
+        auto count_settings_win = window(text(" Count/EPP Params "), vbox({
+            hbox({text("Max Clusters:     "), input_max_clusters->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Min Cluster Abs:  "), input_min_events->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Min Cluster Rel:  "), input_min_cluster_rel->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Tolerance:        "), input_tolerance->Render() | size(WIDTH, EQUAL, 6)})
         }));
             
         auto pop_win = num_vars_selected >= 2 
@@ -1358,7 +1430,8 @@ SelectionState build_ftxui_interface(Workspace &ws)
             separator(),
             hbox({
                 window(text(" Analysis Method "), choice_handled->Render()) | flex,
-                settings_win
+                real_settings_win,
+                count_settings_win
             }),
             separator(),
             text(" Space: Select | Arrows: Navigate | Tab: Switch Section | Enter: Confirm | Esc: Cancel ") | hcenter
@@ -1418,11 +1491,42 @@ SelectionState build_ftxui_interface(Workspace &ws)
 
         unsigned long mc = std::strtoul(state.max_clusters_str.c_str(), &end, 10);
         if (end != state.max_clusters_str.c_str()) state.max_clusters = mc;
-        else state.max_clusters = 15;
+        else state.max_clusters = 12;
 
         unsigned long long me = std::strtoull(state.min_events_str.c_str(), &end, 10);
         if (end != state.min_events_str.c_str()) state.min_events = me;
-        else state.min_events = 100;
+        else state.min_events = 0;
+
+        float kn = std::strtof(state.kld_norm_str.c_str(), &end);
+        if (end != state.kld_norm_str.c_str()) state.kld_norm = kn;
+        else state.kld_norm = 0.04f;
+
+        float ke = std::strtof(state.kld_exp_str.c_str(), &end);
+        if (end != state.kld_exp_str.c_str()) state.kld_exp = ke;
+        else state.kld_exp = 0.2f;
+
+        float mcr = std::strtof(state.min_cluster_rel_str.c_str(), &end);
+        if (end != state.min_cluster_rel_str.c_str()) state.min_cluster_rel = mcr;
+        else state.min_cluster_rel = 0.0f;
+
+        float tol = std::strtof(state.tolerance_str.c_str(), &end);
+        if (end != state.tolerance_str.c_str()) state.tolerance = tol;
+        else state.tolerance = 0.01f;
+
+        if (!settings_path.empty()) {
+            json j;
+            j["smoothing"] = state.smoothing_str;
+            j["threshold"] = state.threshold_str;
+            j["max_clusters"] = state.max_clusters_str;
+            j["min_events"] = state.min_events_str;
+            j["kld_norm"] = state.kld_norm_str;
+            j["kld_exp"] = state.kld_exp_str;
+            j["min_cluster_rel"] = state.min_cluster_rel_str;
+            j["tolerance"] = state.tolerance_str;
+            j["analysis_choice"] = state.analysis_choice;
+            std::ofstream out(settings_path);
+            out << j.dump(4);
+        }
     }
 
     return state;

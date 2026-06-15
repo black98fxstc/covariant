@@ -55,10 +55,18 @@ struct SelectionState
     std::string threshold_str;
     std::string max_clusters_str;
     std::string min_events_str;
+    std::string kld_norm_str;
+    std::string kld_exp_str;
+    std::string min_cluster_rel_str;
+    std::string tolerance_str;
     float smoothing = 0.01f;
     float threshold = 0.001f;
-    unsigned max_clusters = 50;
-    size_t min_events = 100;
+    unsigned max_clusters = 12;
+    size_t min_events = 0;
+    float min_cluster_rel = 0.0f;
+    float kld_norm = 0.04f;
+    float kld_exp = 0.2f;
+    float tolerance = 0.01f;
     unsigned grid_size = 256;
 };
 

@@ -9,6 +9,9 @@
 #include <fftw3.h>
 
 // Functions on grids that play nice with FFTW and represent various tensors
+template <typename Type>
+Type squared(Type x) noexcept {return x * x;}
+
 template <unsigned Dimension, typename Type>
 class Function
 {
@@ -21,6 +24,9 @@ class Function
 
    template<unsigned Dimension2>
     friend class Riemann;
+
+    template <unsigned Dimension2, typename Type2>
+    friend class Kernel;
 
 private:
     Dimensions<Dimension> &dimensions;
@@ -97,9 +103,10 @@ class Function<Dimension, float>
    template<unsigned Dimension2>
     friend class Riemann;
 
+    friend class Leonard;
+
 private:
     Dimensions<Dimension> &dimensions;
-    float *data;
 
 protected:
     float &operator[](size_t x)
@@ -108,6 +115,8 @@ protected:
     }
 
 public:
+    float *data;
+
     const float &operator[](size_t x) const
     {
         return data[x];
@@ -214,4 +223,33 @@ public:
         for (unsigned i = 0; i < Dimension; i++)
             this->emplace_back(dimensions);
     }
+};
+
+template <unsigned Dimension>
+class Weighty;
+
+template <unsigned Dimension, typename Type>
+class Kernel : public Function<Dimension, Type>
+{
+    template <unsigned Dimension2>
+    friend class Weighty;
+    Dimensions<Dimension> dimensions;
+
+public:
+    // The radius is specified as a fraction of full scale.
+    Kernel *radius(Type radius) noexcept
+    {
+        Coordinates coord(this->dimensions);
+        for (size_t x = 0; x < this->dimensions.size(); x++)
+        {
+            Type r2 = 0.0;
+            for (unsigned i = 0; i < Dimension; i++)
+                r2 += squared(coord[i]);
+            (*this)[x] = exp(-2.0 * r2 * squared(radius * std::numbers::pi));
+            ++coord;
+        }
+        return this;
+    }
+
+    Kernel(Weighty<Dimension>& w) noexcept : Function<Dimension, Type>(w), dimensions(w) {}
 };

@@ -91,7 +91,7 @@ public:
         }
 
         // Lots of arcane summations
-        Coordinate<Dimension> coord(*this);
+        Coordinates<Dimension> coord(*this);
         for (size_t x = 0; x < this->size(); x++)
         {
             coord = x;

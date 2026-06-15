@@ -121,24 +121,26 @@ public:
     }
 };
 
+typedef int16_t Coordinate;
+
 template <unsigned Dimension>
-class Coordinate
+class Coordinates
 {
 private:
     Dimensions<Dimension> *dimensions;
-    std::array<unsigned, Dimension> indices;
+    std::array<Coordinate, Dimension> indices;
 
 public:
-    unsigned &operator[](size_t i) { return indices[i]; }
-    unsigned operator[](size_t i) const { return indices[i]; }
+    Coordinate &operator[](size_t i) { return indices[i]; }
+    Coordinate operator[](size_t i) const { return indices[i]; }
     auto begin() { return indices.begin(); }
     auto end() { return indices.end(); }
     auto begin() const { return indices.begin(); }
     auto end() const { return indices.end(); }
 
-    Coordinate &operator=(const size_t x)
+    Coordinates &operator=(const size_t x)
     {
-        for (unsigned i = 0; i < Dimension; i++)
+        for (Coordinate i = 0; i < Dimension; i++)
             indices[i] = (x / dimensions->stride(i)) % dimensions->points(i);
         return *this;
     }
@@ -151,9 +153,9 @@ public:
         return x;
     }
 
-    Coordinate &operator++()
+    Coordinates &operator++()
     {
-        for (unsigned i = 0; i < Dimension; i++)
+        for (Coordinate i = 0; i < Dimension; i++)
         {
             if (indices[i] < dimensions->points(i) - 1)
             {
@@ -166,9 +168,9 @@ public:
     }
 
 
-    Coordinate(Dimensions<Dimension> &dimensions) : dimensions(&dimensions), indices{} {}
+    Coordinates(Dimensions<Dimension> &dimensions) : dimensions(&dimensions), indices{} {}
 
     // Coordinates are fixed to their specific dimension instance
-    Coordinate(const Coordinate<Dimension> &) = delete;
-    Coordinate &operator=(const Coordinate<Dimension> &) = delete;
+    Coordinates(const Coordinates<Dimension> &) = delete;
+    Coordinates &operator=(const Coordinates<Dimension> &) = delete;
 };

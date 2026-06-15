@@ -144,7 +144,7 @@ public:
         status.zero();
         this->cluster_id.zero();
 
-        Coordinate coord(*this);
+        Coordinates coord(*this);
         unsigned clusters = 0;
         auto outliers = std::partition(cubes.begin(), cubes.end(), [threshold](const Hypercube &cube)
                                        { return cube.quantile() >= threshold; });

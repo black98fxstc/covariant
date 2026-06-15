@@ -16,56 +16,29 @@
 #include <Eigen/Dense>
 
 #include "Dimensions.hpp"
+#include "Function.hpp"
 #include "Events.hpp"
-#include "Workers.hpp"
 #include "Gating.hpp"
 
 // Utilities for sampling multi-dimensional data
-
-template <typename Type>
-Type squared(Type x) noexcept {return x * x;}
 
 const double pi = 3.14159265358979323846;
 
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>, public Events<Dimension>
 {
-    class Kernel : public Function<Dimension, float>
-    {
-
-    public:
-        // The radius is specified as a fraction of full scale.
-        Kernel *radius(double radius) noexcept
-        {
-            Coordinate coord(this->dimensions);
-            for (size_t x = 0; x < this->dimensions.size(); x++)
-            {
-                double r2 = 0.0;
-                for (unsigned i = 0; i < Dimension; i++)
-                    r2 += squared(coord[i]);
-                (*this)[x] = exp(-2.0 * r2 * squared(radius * pi));
-                ++coord;
-            }
-            return this;
-        }
-
-        Kernel(Weighty* w) noexcept : Function<Dimension, float>(*w) {}
-    };
-
 private:
     size_t _events = 0;
     fftw_r2r_kind kind[Dimension]; // Array of FFTW transform kinds for each dimension
     fftwf_plan DCT = nullptr;      // FFTW plan for float data
     unsigned long fft_normalizer = 1;
-    std::unique_ptr<Kernel> kernel = std::make_unique<Kernel>(this);
-    std::vector<Worker> computeBound;
-    std::vector<Worker> IOBound;
-    std::vector<Worker> memoryBound;
-    std::vector<Worker> attentionBound;
 
 protected:
 public:
+    std::unique_ptr<Kernel<Dimension, float>> kernel = std::make_unique<Kernel<Dimension, float>>(*this);
     Function<Dimension, float> weight = Function<Dimension, float>(*this);
+    Function<Dimension, float> cosine = Function<Dimension, float>(*this);
+    Function<Dimension, float> filtered = Function<Dimension, float>(*this);
     Function<Dimension, float> density = Function<Dimension, float>(*this);
     Function<Dimension, float> quantile = Function<Dimension, float>(*this);
     Function<Dimension, unsigned short> cluster_id = Function<Dimension, unsigned short>(*this);
@@ -103,10 +76,19 @@ public:
         P.zero();
     }
 
-    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, Kernel *kernel, bool normalize = false)
+    void transform (Function<Dimension, float> &input, Function<Dimension, float> &output)
+    {
+        fftwf_execute_r2r(DCT, input.data, output.data);
+    }
+
+    void apply_kernel(Function<Dimension, float> &cosine, Function<Dimension, float> &filtered, Kernel<Dimension, float> *kernel)
+    {
+        Eigen::Map<Eigen::ArrayXf>(filtered.data, size()) = Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) * Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
+    }
+
+    void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, Kernel<Dimension, float> *kernel, bool normalize = false)
     {
         // DCT because smoothing the even half-wave means no probability spill across the end points
-        Function<Dimension, float> cosine = Function<Dimension, float>(*this);
         fftwf_execute_r2r(DCT, input.data, cosine.data);
         Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) *= Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
         fftwf_execute_r2r(DCT, cosine.data, output.data);
@@ -165,7 +147,7 @@ public:
         return true;
     }
 
-    bool locate(const Event<Dimension> &event, Coordinate<Dimension> &coord)
+    bool locate(const Event<Dimension> &event, Coordinates<Dimension> &coord)
     {
         for (unsigned i = 0; i < Dimension; i++)
             if (event[i] < 0.0f || event[i] >= 1.0f)
@@ -175,7 +157,7 @@ public:
         return true;
     }
 
-    unsigned short classify(const Coordinate<Dimension> &coord)
+    unsigned short classify(const Coordinates<Dimension> &coord)
     {
         size_t x = coord;
         return cluster_id[x];
@@ -183,7 +165,7 @@ public:
 
     unsigned short classify(const Event<Dimension> &event)
     {
-        Coordinate<Dimension> coord(*this);
+        Coordinates<Dimension> coord(*this);
         if (!locate(event, coord))
             return 0;
         return classify(coord);
@@ -211,7 +193,7 @@ public:
         double sum = 0.0;
         for (size_t x = 0; x < size(); x++)
             summed[x] = sum += sorted[x];
-        Coordinate coord(*this);
+        Coordinates coord(*this);
         for (size_t x = 0; x < size(); x++)
         {
             quantile[x] = summed.at((std::lower_bound(sorted.begin(), sorted.end(), density[x]) - sorted.begin())) / sum;
@@ -247,32 +229,16 @@ public:
     Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
     {
         init_fftw();
-        for (unsigned t = 0; t < std::thread::hardware_concurrency(); t++)
-            computeBound.emplace_back(true);
-        for (unsigned t = 0; t < 4; t++)
-            IOBound.emplace_back(true);
-        memoryBound.emplace_back(true);
     }
 
     Weighty(unsigned grid, bool column_major = false) : Dimensions<Dimension>(grid, column_major)
     {
         init_fftw();
-        for (unsigned t = 0; t < std::thread::hardware_concurrency(); t++)
-            computeBound.emplace_back(true);
-        for (unsigned t = 0; t < 4; t++)
-            IOBound.emplace_back(true);
-        memoryBound.emplace_back(true);
     }
 
     virtual ~Weighty()
     {
         if (DCT) fftwf_destroy_plan((fftwf_plan)DCT);
-        for (auto &worker : computeBound)
-            worker.kiss();
-        for (auto &worker : IOBound)
-            worker.kiss();
-        for (auto &worker : memoryBound)
-            worker.kiss();
     }
 
 private:
@@ -288,7 +254,7 @@ private:
             fft_normalizer *= 2 * (points(i) - 1);
             fftw_n[i] = points(i);
         }
-        if (this->column_major) // Use 'this->' for clarity when accessing base class members
+        if (this->column_major)
             std::reverse(fftw_n, fftw_n + Dimension);
 
         DCT = fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, 0);

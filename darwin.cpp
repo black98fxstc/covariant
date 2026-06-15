@@ -482,7 +482,7 @@ public:
     for (const auto &e : events)
     {
         unsigned short c = 0;
-        Coordinate<Dimension> coord(global);
+        Coordinates<Dimension> coord(global);
         if (global.locate(e, coord))
         {
             size_t idx = (size_t)coord;
@@ -497,7 +497,7 @@ public:
     for_each_plane<Dimension>([&darwin, &params, &cluster_events, &marginal, &sample_images](unsigned i, unsigned j)
     {
         marginal.reset();
-        Coordinate<2> marginal_coord(marginal);
+        Coordinates<2> marginal_coord(marginal);
         Event<2> marginal_event;
         std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
@@ -610,7 +610,7 @@ public:
         for_each_plane<Dimension>([&darwin, &params, c, &cluster_events, &marginal, &cluster_images](unsigned i, unsigned j)
         {
             Event<2> marginal_event;
-            Coordinate<2> marginal_coord(marginal);
+            Coordinates<2> marginal_coord(marginal);
             std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
 
             marginal.reset();
