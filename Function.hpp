@@ -244,8 +244,8 @@ public:
         {
             Type r2 = 0.0;
             for (unsigned i = 0; i < Dimension; i++)
-                r2 += squared(coord[i]);
-            (*this)[x] = exp(-2.0 * r2 * squared(radius * std::numbers::pi));
+                r2 += squared(static_cast<Type>(coord[i]));
+            (*this)[x] = static_cast<Type>(exp(-2.0 * r2 * squared(radius * static_cast<Type>(std::numbers::pi))));
             ++coord;
         }
         return this;

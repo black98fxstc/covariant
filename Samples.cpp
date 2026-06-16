@@ -70,11 +70,32 @@ void DataSet::setup_float_variables(const std::vector<std::string> &headers)
     }
 }
 
+void DataSet::clear()
+{
+    _size = 0;
+    variable.clear();
+    variables.clear();
+    subset.clear();
+    classification.clear();
+}
+
 bool DataSet::read_csv(const std::string &filename, char delimiter)
 {
+    clear();
     std::ifstream in(filename);
     if (!in.is_open())
         return false;
+
+    // Skip leading whitespace
+    while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek())))
+        in.ignore();
+
+    int first = in.peek();
+    bool has_header = false;
+    if (first != EOF && !std::isdigit(static_cast<unsigned char>(first)) && first != '-' && first != '+' && first != '.')
+    {
+        has_header = true;
+    }
 
     std::string line;
     if (!std::getline(in, line))
@@ -84,11 +105,61 @@ bool DataSet::read_csv(const std::string &filename, char delimiter)
     std::vector<std::string> headers;
     std::stringstream ss(line);
     std::string token;
-    while (std::getline(ss, token, delimiter))
+    
+    if (has_header)
     {
-        token.erase(0, token.find_first_not_of(" \r\n\t"));
-        token.erase(token.find_last_not_of(" \r\n\t") + 1);
-        headers.push_back(token);
+        while (std::getline(ss, token, delimiter))
+        {
+            token.erase(0, token.find_first_not_of(" \r\n\t"));
+            token.erase(token.find_last_not_of(" \r\n\t") + 1);
+            headers.push_back(token);
+        }
+        if (headers.size() == 1 && delimiter == '\t' && line.find('\t') == std::string::npos && line.find(' ') != std::string::npos)
+        {
+            headers.clear();
+            std::stringstream ss_space(line);
+            while (ss_space >> token)
+                headers.push_back(token);
+            delimiter = ' ';
+        }
+    }
+    else
+    {
+        size_t num_cols = 0;
+        while (std::getline(ss, token, delimiter))
+        {
+            num_cols++;
+        }
+        if (num_cols <= 1 && delimiter == '\t' && line.find('\t') == std::string::npos && line.find(' ') != std::string::npos)
+        {
+            num_cols = 0;
+            std::stringstream ss_space(line);
+            while (ss_space >> token)
+                num_cols++;
+            delimiter = ' ';
+        }
+
+        if (num_cols <= 4)
+        {
+            const char* names[] = {"X", "Y", "W", "Z"};
+            for (size_t i = 0; i < num_cols; ++i)
+                headers.push_back(names[i]);
+        }
+        else if (num_cols <= 26)
+        {
+            for (size_t i = 0; i < num_cols; ++i)
+                headers.push_back(std::string(1, static_cast<char>('A' + i)));
+        }
+        else
+        {
+            for (size_t i = 0; i < num_cols; ++i)
+                headers.push_back("Col " + std::to_string(i + 1));
+        }
+
+        in.clear();
+        in.seekg(0, std::ios::beg);
+        while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek())))
+            in.ignore();
     }
 
     setup_float_variables(headers);
@@ -103,8 +174,13 @@ bool DataSet::read_csv(const std::string &filename, char delimiter)
         std::stringstream line_ss(line);
         for (size_t i = 0; i < num_cols; ++i)
         {
-            if (!std::getline(line_ss, token, delimiter))
-                break;
+            if (delimiter == ' ') {
+                if (!(line_ss >> token))
+                    break;
+            } else {
+                if (!std::getline(line_ss, token, delimiter))
+                    break;
+            }
             char *end;
             float val = std::strtof(token.c_str(), &end);
             if (end != token.c_str()) {
@@ -120,6 +196,7 @@ bool DataSet::read_csv(const std::string &filename, char delimiter)
 
 bool DataSet::read_xml_xslt(const std::string &xml_file, const std::string &xsl_file, char delimiter)
 {
+    clear();
     xmlDocPtr xml_doc = xmlParseFile(xml_file.c_str());
     if (!xml_doc)
         return false;
@@ -157,23 +234,54 @@ bool DataSet::read_xml_xslt(const std::string &xml_file, const std::string &xsl_
 
 bool DataSet::read_binary(const std::string &filename, const std::vector<std::string> &headers)
 {
+    clear();
     std::ifstream in(filename, std::ios::binary | std::ios::ate);
     if (!in.is_open())
-        return false;
-
-    setup_float_variables(headers);
-    size_t num_cols = headers.size();
-    if (num_cols == 0)
         return false;
 
     size_t file_size = in.tellg();
     in.seekg(0, std::ios::beg);
 
-    size_t num_floats = file_size / sizeof(float);
-    size_t num_rows = num_floats / num_cols;
+    size_t count = 0;
+    if (file_size >= sizeof(size_t)) {
+        in.read(reinterpret_cast<char *>(&count), sizeof(size_t));
+    } else {
+        return false;
+    }
+
+    std::vector<std::string> actual_headers = headers;
+    size_t num_cols = actual_headers.size();
+
+    if (num_cols == 0 && count > 0)
+    {
+        size_t num_floats = (file_size - sizeof(size_t)) / sizeof(float);
+        num_cols = num_floats / count;
+
+        if (num_cols <= 4)
+        {
+            const char* names[] = {"X", "Y", "W", "Z"};
+            for (size_t i = 0; i < num_cols; ++i)
+                actual_headers.push_back(names[i]);
+        }
+        else if (num_cols <= 26)
+        {
+            for (size_t i = 0; i < num_cols; ++i)
+                actual_headers.push_back(std::string(1, static_cast<char>('A' + i)));
+        }
+        else
+        {
+            for (size_t i = 0; i < num_cols; ++i)
+                actual_headers.push_back("Col " + std::to_string(i + 1));
+        }
+    }
+
+    setup_float_variables(actual_headers);
+    num_cols = actual_headers.size();
+    if (num_cols == 0)
+        return false;
 
     std::vector<float> row(num_cols);
-    for (size_t r = 0; r < num_rows; ++r)
+    for (size_t r = 0; r < count; ++r)
     {
         in.read(reinterpret_cast<char *>(row.data()), num_cols * sizeof(float));
         for (size_t c = 0; c < num_cols; ++c)
@@ -181,12 +289,13 @@ bool DataSet::read_binary(const std::string &filename, const std::vector<std::st
             variables[c]->data->push_back(row[c]);
         }
     }
-    _size = num_rows;
+    _size = count;
     return in.good();
 }
 
 bool DataSet::read_fcs(const std::string &filename)
 {
+    clear();
     std::ifstream in(filename, std::ios::binary);
     if (!in.is_open())
         return false;

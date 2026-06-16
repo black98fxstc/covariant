@@ -78,10 +78,11 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
     Projection_Results candidate(X,Y);
     Weighty<2> weighty(256);
     Event<2> event;
-    for (auto it = std::find(included.begin(), included.end(), true); it != included.end(); it = std::find(++it, included.end(), true))
+    for (auto it = std::find(included.begin(), included.end(), true); it != included.end(); it = std::find(it + 1, included.end(), true))
     {
-        event[0] = (*data[candidate.X])[it - included.begin()];
-        event[1] = (*data[candidate.Y])[it - included.begin()];
+        size_t x = it - included.begin();
+        event[0] = (*data[0])[x];
+        event[1] = (*data[1])[x];
         weighty.event(event);
     }
 
@@ -100,7 +101,8 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
             }
             // last density becomes this variance estimator
             std::swap(weighty.kernel, var_kernel);
-            weighty.kernel->radius(selections.smoothing * std::pow(std::numbers::sqrt2, ++candidate.pass));
+            weighty.kernel->radius(selections.smoothing * std::pow(std::numbers::sqrt2, ++candidate.pass) / std::numbers::sqrt2);
+            weighty.kernel->write("kernel.bin");
             // apply kernel to cosine transform
             weighty.transform(weighty.weight, weighty.cosine);
             weighty.apply_kernel(weighty.cosine, weighty.filtered, weighty.kernel.get());
@@ -108,6 +110,8 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
             // gives a smoothed density estimator
             weighty.transform(weighty.filtered, weighty.density);
             // modal clustering
+            weighty.weight.write("weight.bin");
+            weighty.density.write("density.bin");
             candidate.clusters = modal.findClusters(weighty.density.data, candidate.pass, selections);
         } while (candidate.clusters > 12);
         if (candidate.clusters < 2)
@@ -129,11 +133,11 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
     Function<2, float> variance(weighty);
     if (candidate.pass == 1)
     { // otherwise it was swapped in above
-        var_kernel->radius(selections.smoothing);
+        var_kernel->radius(selections.smoothing / std::numbers::sqrt2);
         weighty.apply_kernel(weighty.cosine, weighty.filtered, var_kernel.get());
         weighty.transform(weighty.filtered, variance);
     }
-    thread_local struct cluster_merge
+    struct cluster_merge
     {
         float edge_max, edge_var;
         BitPosition i;
@@ -388,29 +392,29 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
 
     // create in/out subsets
     auto subset_map = subset_boundary.getMap();
-    candidate.in.set.resize(weighty.size());
-    candidate.out.set.resize(weighty.size());
+    candidate.in.set.resize(included.size());
+    candidate.out.set.resize(included.size());
     std::fill(candidate.in.set.begin(), candidate.in.set.end(), false);
     std::fill(candidate.out.set.begin(), candidate.out.set.end(), false);
 
     for (auto it = std::find(included.begin(), included.end(), true); it != included.end(); it = std::find(++it, included.end(), true))
+    {
+        size_t z = it - included.begin();
+        
+        double x = (*data[0])[z];
+        double y = (*data[1])[z];
+        bool member = subset_map->colorAt(x, y);
+        if (member)
         {
-            size_t event = it - included.begin();
-            
-            double x = (*data[candidate.X])[event];
-            double y = (*data[candidate.Y])[event];
-            bool member = subset_map->colorAt(x, y);
-            if (member)
-            {
-                ++candidate.in.count;
-                candidate.in.set[event] = true;
-            }
-            else
-            {
-                ++candidate.out.count;
-                candidate.out.set[event] = true;
-            }
+            ++candidate.in.count;
+            candidate.in.set[z] = true;
         }
+        else
+        {
+            ++candidate.out.count;
+            candidate.out.set[z] = true;
+        }
+    }
     // and the check is in the mail
     candidate.outcome = Projection_Results::Status::EPP_success;
     candidate.score = best.score;

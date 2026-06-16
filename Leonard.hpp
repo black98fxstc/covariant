@@ -141,7 +141,7 @@ public:
     std::atomic<unsigned> EPP_id_counter = 0;
     Workspace ws;
     std::vector<SampleData> dummy_samples;
-    ThreadPool compute_plane{std::thread::hardware_concurrency()};
+    ThreadPool compute_plane{1};//std::thread::hardware_concurrency()};
     ThreadPool control_plane{4};
 
     int parse_args(int argc, char *argv[]);

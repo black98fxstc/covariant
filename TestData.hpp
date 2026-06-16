@@ -8,17 +8,24 @@
 #include <cmath>
 #include <iostream>
 
-#include "Dimensions.hpp"
-#include "Events.hpp"
+// #include "Dimensions.hpp"
+// #include "Events.hpp"
 
 template <unsigned Dimension>
 class Weighty;
 
-template <unsigned Dimension>
-class TestData : public Events<Dimension>
+class TestData : public std::vector<std::vector<float>>
 {
+public:
+    const unsigned dimension;
+
+    TestData(unsigned dimension) : dimension(dimension) {};
+
     class RandomEvent
     {
+    public:
+        const unsigned dimension;
+
     protected:
         static std::mt19937 &rng()
         {
@@ -34,13 +41,14 @@ class TestData : public Events<Dimension>
         typename std::uniform_real_distribution<float>::param_type lambda_param{0.25f, 2.5f};
         typename std::normal_distribution<float>::param_type halfish_param{0.5f, 0.125f};
 
-        typename std::uniform_int_distribution<unsigned> dimension_distribution{0, Dimension - 1};
+        typename std::uniform_int_distribution<unsigned> dimension_distribution{0, dimension - 1};
         typename std::uniform_real_distribution<float> uniform_distribution{0.0f, 1.0f};
         typename std::normal_distribution<float> normal_distribution{0.0f, 1.0f};
         typename std::exponential_distribution<float> exponential_distribution{1.0f};
 
     public:
-        virtual unsigned short sample(Event<Dimension> &event) = 0;
+        virtual unsigned short sample(std::vector<float> &event) = 0;
+        RandomEvent(unsigned dimension) : dimension(dimension) {};
         virtual ~RandomEvent() = default;
     };
 
@@ -50,20 +58,21 @@ public:
     class Normal : public RandomEvent
     {
     public:
-        Event<Dimension> mean;
+        std::vector<float> mean;
         float stddev;
 
-        unsigned short sample(Event<Dimension> &event)
+        unsigned short sample(std::vector<float> &event) override
         {
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
             return 0;
         };
 
-        Normal()
+        Normal(unsigned dimension) : RandomEvent(dimension)
         {
+            mean.resize(dimension);
             stddev = this->uniform_distribution(this->rng(), this->stddev_param);
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 mean[i] = this->uniform_distribution(this->rng(), typename std::uniform_real_distribution<float>::param_type{2.0f * stddev, 1.0f - 2.0f * stddev});
         }
     };
@@ -73,12 +82,12 @@ public:
     public:
         const double pi = 3.14159265358979323846;
         const float half_pi = (float)(pi / 2);
-        Event<Dimension> mean;
+        std::vector<float> mean;
         unsigned X, Y;
         float stddev;
         double s, c;
 
-        unsigned short sample(Event<Dimension> &event)
+        unsigned short sample(std::vector<float> &event) override
         {
             // two quarter arcs of the circle, one flipped
             double delta_x, delta_y;
@@ -88,7 +97,7 @@ public:
             else
                 delta_x = -.5 + .5 * std::cos(theta);
             delta_y = .5 * std::sin(theta);
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 if (i == X)
                     event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_x + s * delta_y), stddev});
                 else if (i == Y)
@@ -98,8 +107,9 @@ public:
             return 0;
         };
 
-        Snake()
+        Snake(unsigned dimension) : RandomEvent(dimension)
         {
+            mean.resize(dimension);
             // random and different dimensions
             X = this->dimension_distribution(this->rng());
             do
@@ -107,7 +117,7 @@ public:
                 Y = this->dimension_distribution(this->rng());
             } while (X == Y);
 
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 mean[i] = this->uniform_distribution(this->rng(), this->mean_param);
             // random orientation and size
             double theta = this->uniform_distribution(this->rng(), this->angle_param);
@@ -123,13 +133,13 @@ public:
     {
         unsigned X;
         float lambda;
-        Event<Dimension> mean;
+        std::vector<float> mean;
         float stddev;
 
     public:
-        unsigned short sample(Event<Dimension> &event)
+        unsigned short sample(std::vector<float> &event) override
         {
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 if (i == X)
                     event[i] = this->exponential_distribution(this->rng(), typename std::exponential_distribution<float>::param_type{lambda});
                 else
@@ -137,11 +147,12 @@ public:
             return 0;
         };
 
-        Exponential()
+        Exponential(unsigned dimension) : RandomEvent(dimension)
         {
+            mean.resize(dimension);
             X = this->dimension_distribution(this->rng());
             lambda = this->uniform_distribution(this->rng(), this->lambda_param);
-            for (unsigned i = 0; i < Dimension; i++)
+            for (unsigned i = 0; i < dimension; i++)
                 mean[i] = this->uniform_distribution(this->rng(), this->mean_param);
             stddev = this->uniform_distribution(this->rng(), this->stddev_param);
         }
@@ -184,13 +195,15 @@ public:
                 fractions.insert(fractions.begin() + n, fractions[n - 1] + max * this->normal_distribution(this->rng(), this->halfish_param));
         }
 
-        unsigned short sample(Event<Dimension> &event)
+        unsigned short sample(std::vector<float> &event) override
         {
             // pick a random population with appropriate frequency and then sample it
             int p = std::upper_bound(fractions.begin(), fractions.end(), this->uniform_distribution(this->rng(), this->fraction_param)) - fractions.begin();
             population[p]->sample(event);
             return p;
         }
+
+        RandomSample(unsigned dimension) : RandomEvent(dimension) {};
 
         virtual ~RandomSample()
         {
@@ -204,7 +217,99 @@ public:
         this->resize(num_events);
         _truth.resize(num_events);
         for (size_t i = 0; i < num_events; i++)
+        {
+            (*this)[i].resize(dimension);
             _truth[i] = test_sample.sample((*this)[i]);
+        }
+    }
+
+    bool write(const std::string &filename, bool ascii = false) const
+    {
+        if (ascii)
+        {
+            std::ofstream out(filename);
+            if (!out)
+                return false;
+
+            for (const auto &event : *this)
+            {
+                for (unsigned i = 0; i < dimension; ++i)
+                    out << (i == 0 ? "" : " ") << event[i];
+                out << "\n";
+            }
+            return out.good();
+        }
+        else
+        {
+            std::ofstream out(filename, std::ios::binary | std::ios::trunc);
+            if (!out)
+                return false;
+
+            size_t count = this->size();
+            out.write(reinterpret_cast<const char *>(&count), sizeof(count));
+            if (count > 0)
+            {
+                for (size_t i = 0; i < count; ++i)
+                    out.write(reinterpret_cast<const char *>((*this)[i].data()), dimension * sizeof(float));
+            }
+            return out.good();
+        }
+    }
+
+    bool read(const std::string &filename, bool ascii = false)
+    {
+        if (ascii)
+        {
+            std::ifstream in(filename);
+            if (!in)
+                return false;
+
+            this->clear();
+
+            // Skip leading whitespace and check if the first line looks like a header
+            while (in.peek() != EOF && std::isspace(static_cast<unsigned char>(in.peek())))
+                in.ignore();
+            int first = in.peek();
+            if (first != EOF && !std::isdigit(static_cast<unsigned char>(first)) && first != '-' && first != '+' && first != '.')
+            {
+                // Does not start with a digit or sign; likely a header line.
+                std::string dummy;
+                std::getline(in, dummy);
+            }
+
+            std::vector<float> event;
+            while (in >> event[0])
+            {
+                for (unsigned i = 1; i < dimension; ++i)
+                {
+                    if (!(in >> event[i]))
+                        return false; // Incomplete event record
+                }
+                this->push_back(event);
+            }
+            return true;
+        }
+        else
+        {
+            std::ifstream in(filename, std::ios::binary);
+            if (!in)
+                return false;
+
+            size_t count = 0;
+            in.read(reinterpret_cast<char *>(&count), sizeof(count));
+            if (!in)
+                return false;
+
+            this->resize(count);
+            if (count > 0)
+            {
+                for (size_t i = 0; i < count; ++i) {
+                    (*this)[i].resize(dimension);
+                    in.read(reinterpret_cast<char *>((*this)[i].data()), dimension * sizeof(float));
+                }
+            }
+            return in.good();
+        }
     }
 
     bool writeTruth(const std::string &filename, bool ascii = false) const

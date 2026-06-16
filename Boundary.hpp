@@ -347,23 +347,31 @@ public:
     explicit ColoredMap(std::vector<ColoredSegment> bounds) noexcept
     {
         segments = bounds.size();
-        boundary = new ColoredSegment[segments];
-        std::copy(bounds.begin(), bounds.end(), boundary);
-        ColoredSegment *segment = boundary;
-        Color outside;
-        if (segment->j == 0) // figure out the color < Point(0,0);
-        {
-            if (segment->slope == ColoredHorizontal)
-                outside = segment->clockwise;
-            else
-                outside = segment->widdershins;
+        if (segments > 0) {
+            boundary = new ColoredSegment[segments];
+            std::copy(bounds.begin(), bounds.end(), boundary);
+        } else {
+            boundary = nullptr;
         }
-        else
+
+        ColoredSegment *segment = boundary;
+        Color outside = 0;
+        if (segments > 0)
         {
-            if (segment->slope == ColoredLeft)
-                outside = segment->widdershins;
+            if (segment->j == 0) // figure out the color < Point(0,0);
+            {
+                if (segment->slope == ColoredHorizontal)
+                    outside = segment->clockwise;
+                else
+                    outside = segment->widdershins;
+            }
             else
-                outside = segment->clockwise;
+            {
+                if (segment->slope == ColoredLeft)
+                    outside = segment->widdershins;
+                else
+                    outside = segment->clockwise;
+            }
         }
         for (int i = 0; i < N; ++i) // for each i value find the color < Point(i,0)
         {                           // and the first segment with that coordinate if any
@@ -393,6 +401,9 @@ public:
         index[N] = boundary + segments; // data value 1.0 treated as boundary if it occurs
         edge_color[N] = (Color)0;
     };
+
+    ColoredMap(const ColoredMap &) = delete;
+    ColoredMap &operator=(const ColoredMap &) = delete;
 
     ~ColoredMap()
     {

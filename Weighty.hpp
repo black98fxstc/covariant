@@ -9,10 +9,15 @@
 #include <algorithm>
 #include <functional>
 #include <thread>
+#include <mutex>
 #include <memory>
-#include <fftw3.h>
 #include <cctype>
+#include <map>
+#include <fftw3.h>
 #include <assert.h>
+#include <filesystem>
+#include <cstdlib>
+
 #include <Eigen/Dense>
 
 #include "Dimensions.hpp"
@@ -24,14 +29,21 @@
 
 const double pi = 3.14159265358979323846;
 
+inline std::mutex& get_fftw_mutex() {
+    static std::mutex mtx;
+    return mtx;
+}
+
 template <unsigned Dimension>
 class Weighty : public Dimensions<Dimension>, public Events<Dimension>
 {
 private:
     size_t _events = 0;
     fftw_r2r_kind kind[Dimension]; // Array of FFTW transform kinds for each dimension
-    fftwf_plan DCT = nullptr;      // FFTW plan for float data
     unsigned long fft_normalizer = 1;
+    std::shared_ptr<void> DCT;     // FFTW plan for float data
+    inline static std::map<std::pair<std::array<unsigned, Dimension>, bool>, std::shared_ptr<void>> plans;
+
 
 protected:
 public:
@@ -78,7 +90,7 @@ public:
 
     void transform (Function<Dimension, float> &input, Function<Dimension, float> &output)
     {
-        fftwf_execute_r2r(DCT, input.data, output.data);
+        fftwf_execute_r2r((fftwf_plan)DCT.get(), input.data, output.data);
     }
 
     void apply_kernel(Function<Dimension, float> &cosine, Function<Dimension, float> &filtered, Kernel<Dimension, float> *kernel)
@@ -89,9 +101,9 @@ public:
     void filter(Function<Dimension, float> &input, Function<Dimension, float> &output, Kernel<Dimension, float> *kernel, bool normalize = false)
     {
         // DCT because smoothing the even half-wave means no probability spill across the end points
-        fftwf_execute_r2r(DCT, input.data, cosine.data);
+        fftwf_execute_r2r((fftwf_plan)DCT.get(), input.data, cosine.data);
         Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) *= Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
-        fftwf_execute_r2r(DCT, cosine.data, output.data);
+        fftwf_execute_r2r((fftwf_plan)DCT.get(), cosine.data, output.data);
         if (normalize)
         {
             float inv_norm = 1.0f / static_cast<float>(fft_normalizer);
@@ -236,28 +248,38 @@ public:
         init_fftw();
     }
 
-    virtual ~Weighty()
-    {
-        if (DCT) fftwf_destroy_plan((fftwf_plan)DCT);
-    }
+    virtual ~Weighty() = default;
 
 private:
     void init_fftw()
     {
-        if (fftwf_init_threads())
-            fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));
+        std::lock_guard<std::mutex> lock(get_fftw_mutex());
 
         int fftw_n[Dimension];
+        std::array<unsigned, Dimension> pts;
         for (unsigned i = 0; i < Dimension; i++)
         {
             kind[i] = FFTW_REDFT00;
             fft_normalizer *= 2 * (points(i) - 1);
             fftw_n[i] = points(i);
+            pts[i] = points(i);
         }
         if (this->column_major)
             std::reverse(fftw_n, fftw_n + Dimension);
 
-        DCT = fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, 0);
-        assert(DCT);
+        auto key = std::make_pair(pts, this->column_major);
+        auto it = plans.find(key);
+        if (it != plans.end())
+        {
+            DCT = it->second;
+            return;
+        }
+
+        fftwf_plan raw_plan = fftwf_plan_r2r(Dimension, fftw_n, weight.data, density.data, kind, FFTW_MEASURE);
+        assert(raw_plan);
+        DCT = std::shared_ptr<void>(raw_plan, [](void *p) {
+            if (p) fftwf_destroy_plan((fftwf_plan)p);
+        });
+        plans.insert({key, DCT});
     }
 };

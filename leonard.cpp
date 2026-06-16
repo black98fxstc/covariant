@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -14,18 +15,20 @@
 #include <cmath>
 
 #include <Eigen/Dense>
+#include <fftw3.h>
 #include <cxxopts.hpp>
 
 #include "Leonard.hpp"
+#include "Reports.hpp"
 
 int Leonard::parse_args(int argc, char *argv[])
 {
     cxxopts::Options options("Leonard", "Laplacian and Riemannian analysis from FlowJo workspaces");
 
     options.add_options()
-    ("f,files", "List of file names", cxxopts::value<std::vector<std::string>>())
-    ("v,variables", "List of variables", cxxopts::value<std::vector<std::string>>())
-    ("p,populations", "List of populations", cxxopts::value<std::vector<std::string>>())
+    ("f,file", "File name", cxxopts::value<std::string>())
+    ("v,variables", "List of variables", cxxopts::value<std::string>())
+    ("p,populations", "List of populations", cxxopts::value<std::string>())
     ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
     ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
     ("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))
@@ -38,7 +41,7 @@ int Leonard::parse_args(int argc, char *argv[])
     ("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage");
 
-    options.parse_positional({"files", "variables", "populations"});
+    options.parse_positional({"file", "variables", "populations"});
 
     auto result = options.parse(argc, argv);
 
@@ -48,9 +51,19 @@ int Leonard::parse_args(int argc, char *argv[])
         return 0;
     }
 
-    if (result.count("files")) params.files = result["files"].as<std::vector<std::string>>();
-    if (result.count("variables")) params.variables = result["variables"].as<std::vector<std::string>>();
-    if (result.count("populations")) params.populations = result["populations"].as<std::vector<std::string>>();
+    if (result.count("file")) params.files.push_back(result["file"].as<std::string>());
+    if (result.count("variables")) {
+        std::stringstream ss(result["variables"].as<std::string>());
+        std::string item;
+        while (std::getline(ss, item, ','))
+            params.variables.push_back(item);
+    }
+    if (result.count("populations")) {
+        std::stringstream ss(result["populations"].as<std::string>());
+        std::string item;
+        while (std::getline(ss, item, ','))
+            params.populations.push_back(item);
+    }
     params.smoothing = result["smooth"].as<float>();
     params.threshold = result["threshold"].as<float>();
     params.max_clusters = result["max-clusters"].as<unsigned>();
@@ -67,6 +80,33 @@ int Leonard::parse_args(int argc, char *argv[])
 
 int Leonard::run()
 {
+    std::string wisdom_path;
+#ifdef _WIN32
+    if (const char* appdata = std::getenv("APPDATA")) {
+        wisdom_path = std::string(appdata) + "\\Leonard";
+    }
+#else
+    if (const char* home = std::getenv("HOME")) {
+        wisdom_path = std::string(home) + "/.config/Leonard";
+    }
+#endif
+    if (!wisdom_path.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(wisdom_path, ec);
+        wisdom_path += "/wisdom.fftwf";
+        if (std::filesystem::exists(wisdom_path)) {
+            fftwf_import_wisdom_from_filename(wisdom_path.c_str());
+        }
+    }
+
+    if (fftwf_init_threads())
+        fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));
+
+    struct WisdomSaver {
+        std::string path;
+        ~WisdomSaver() { if (!path.empty()) { std::lock_guard<std::mutex> lock(get_fftw_mutex()); fftwf_export_wisdom_to_filename(path.c_str()); } }
+    } saver{wisdom_path};
+
     bool is_datafile = false;
     if (!params.files.empty() && params.files[0].find(".wsp") == std::string::npos)
         is_datafile = true;
@@ -207,6 +247,11 @@ int Leonard::run()
     std::cout << "\nAnalysis Method:\n"
                 << analysis_choices[selections.analysis_choice] << "\n\n";
 
+    std::string report_dir;
+    std::filesystem::path p(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
+    report_dir = p.stem().string() + ".len";
+    std::vector<Reports::ReportLink> report_links;
+
     for (const auto *s_ptr : selections.samples)
     {
         const auto &s = *s_ptr;
@@ -215,10 +260,10 @@ int Leonard::run()
             if (g)
                 gate_id_to_gate[g->id] = g;
 
-        std::cout << "Processing sample: " << s.name << " ... ";
+        std::cout << "Processing sample: " << s.name << " ... " << std::endl;
         DataSet dataset;
         if (!dataset.read(s.name)) {
-            std::cerr << std::endl << "Failed to read dataset: " << s.name << std::endl;
+            std::cerr << "Failed to read dataset: " << s.name << std::endl;
             continue;
         }
         std::cout << dataset.size() << " events read" << std::endl;
@@ -390,37 +435,43 @@ int Leonard::run()
         for (size_t i = 0; i < num_vars_selected; ++i)
             data[i] = dataset.variable[selections.variables[i]].data.get();
 
-        std::vector<std::future<Pursuit_Results>> epp_results;
-        std::vector<std::future<Laplace_Results>> laplace_results;
+        std::vector<std::pair<std::string, std::future<Pursuit_Results>>> epp_results;
+        std::vector<std::pair<std::string, std::future<Laplace_Results>>> laplace_results;
 
         for (std::string &pop_name : selections.populations)
         {   
             std::cout << "Enqueuing population " << pop_name << std::endl;
-            std::vector<bool> *subpopulation = dataset.subset[pop_name].membership.get();
-            if (!subpopulation) continue;
+            std::vector<bool> subpopulation = *(dataset.subset[pop_name].membership.get());
 
             if (selections.analysis_choice == 0) {
-                epp_results.push_back(control_plane.enqueue([this, data, subpopulation, pop_name]() {
-                    return do_Pursuit(data, *subpopulation, pop_name);
-                }));
+                for (unsigned i = 0; i < num_vars_selected; i++)
+                    for (auto it = std::find(subpopulation.begin(), subpopulation.end(), true); it != subpopulation.end(); it = std::find(it + 1, subpopulation.end(), true))
+                        if ((*data[i])[it - subpopulation.begin()] < 0.0f || (*data[i])[it - subpopulation.begin()] > 1.0f)
+                            subpopulation[it - subpopulation.begin()] = false;
+                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpopulation, pop_name]() {
+                    return do_Pursuit(data, subpopulation, pop_name);
+                })});
             } else if (selections.analysis_choice == 1) {
                 switch (num_vars_selected)
                 {
-                case 2: laplace_results.push_back(compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<2>(data, *subpopulation, pop_name); })); break;
-                case 3: laplace_results.push_back(compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<3>(data, *subpopulation, pop_name); })); break;
-                case 4: laplace_results.push_back(compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<4>(data, *subpopulation, pop_name); })); break;
+                case 2: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<2>(data, subpopulation, pop_name); })}); break;
+                case 3: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<3>(data, subpopulation, pop_name); })}); break;
+                case 4: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<4>(data, subpopulation, pop_name); })}); break;
                 }
             }
         }
 
-        for (auto & result : epp_results)
+        for (auto & result_pair : epp_results)
         {
-            Pursuit_Results res = result.get();
+            Pursuit_Results res = result_pair.second.get();
             res.wait();
+
+            std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, selections.variables);
+            report_links.push_back({s.name + " - " + result_pair.first + " (EPP)", filename, "EPP tree analysis"});
         }
-        for (auto & result : laplace_results)
+        for (auto & result_pair : laplace_results)
         {
-            Laplace_Results res = result.get();
+            Laplace_Results res = result_pair.second.get();
             if (res.idx.empty()) continue;
             
             // Merge local classes into the global classification tracking synchronously
@@ -432,6 +483,9 @@ int Leonard::run()
             {
                 add_laplace_gates(ws.filename, s.name, res.parent_name, res.clusters_found, laplacian_offset, res.cluster_counts, selections.variables);
             }
+
+            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, res, selections.variables);
+            report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
 
             laplacian_offset += res.clusters_found + 1;
             if (res.cluster_counts[res.clusters_found + 1] > 0)
@@ -461,6 +515,10 @@ int Leonard::run()
             }
         }
     };
+
+    if (!report_links.empty()) {
+        Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
+    }
 
     return 0;
 }

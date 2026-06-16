@@ -75,6 +75,9 @@ public:
         }
     }
 
+    Dimensions() : dimension(0), _size(1), column_major(false) {};
+
+
     // Do things that must complete before Weighty construction
     Dimensions(const unsigned *p, bool column_major = false) : _size(1), column_major(column_major)
     {
@@ -102,7 +105,7 @@ public:
     {
         if (column_major)
         {
-            for (unsigned i = Dimension; i-- > 0;)
+            for (unsigned i = Dimension - 1; i >= 0; i--)
             {
                 _stride[i] = _size;
                 _points[i] = grid + 1;
@@ -145,6 +148,8 @@ public:
         return *this;
     }
 
+    bool operator==(const Coordinates &that) const = default;
+
     operator size_t() const
     {
         size_t x = 0;
@@ -155,15 +160,26 @@ public:
 
     Coordinates &operator++()
     {
-        for (Coordinate i = 0; i < Dimension; i++)
-        {
-            if (indices[i] < dimensions->points(i) - 1)
+        if (dimensions->column_major)
+            for (Coordinate i = Dimension - 1; i >= 0; i--)
             {
-                indices[i]++;
-                return *this;
+                if (indices[i] < dimensions->points(i) - 1)
+                {
+                    indices[i]++;
+                    return *this;
+                }
+                indices[i] = 0;
             }
-            indices[i] = 0;
-        }
+        else
+            for (Coordinate i = 0; i < Dimension; i++)
+            {
+                if (indices[i] < dimensions->points(i) - 1)
+                {
+                    indices[i]++;
+                    return *this;
+                }
+                indices[i] = 0;
+            }
         return *this;
     }
 

@@ -104,7 +104,7 @@ unsigned int ModalClustering::findClusters(const float *density, int pass, const
     std::sort(vertex, vertex + (N + 1) * (N + 1));
 
     // choose the threshold
-    double width = 2 * std::pow(std::numbers::sqrt2, selections.smoothing * pass) * N;
+    double width = 2 * selections.smoothing * std::pow(std::numbers::sqrt2, pass) / std::numbers::sqrt2 * N;
     int A = (int)(pi * width * width + .5); // spot radius 2 std dev
     if (A < 8)
         A = 8;

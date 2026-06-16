@@ -102,6 +102,8 @@ public:
 
     ~DataSet() = default;
 
+    void clear();
+
     void for_each_class(const Classification &cls, std::function<void(unsigned short)> func);
     void for_each_member(const Subset &sub, std::function<void(bool)> func);
 
