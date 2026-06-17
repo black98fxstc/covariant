@@ -85,8 +85,80 @@ std::string Reports::generate_laplace_report(const std::string& report_dir, cons
     xml_out << "  <Clusters>\n";
         
     for (size_t i = 1; i <= res.clusters_found; ++i) {
-        xml_out << "    <Cluster id=\"" << i << "\" events=\"" << (i < res.cluster_counts.size() ? res.cluster_counts[i] : 0) << "\"/>\n";
+        xml_out << "    <Cluster id=\"" << i << "\" events=\"" << (i < res.cluster_events[i].size() ? res.cluster_events[i].size() : 0) << "\"/>\n";
     }
+    // darwin.report["total_events"] = events.size();
+    // darwin.report["num_clusters"] = darwin.num_clusters;
+
+    // // Analysis of the whole sample
+    // std::vector<std::vector<Event<Dimension>>> cluster_events(params.max_clusters + 1);
+    // for (const auto &e : events)
+    // {
+    //     unsigned short c = 0;
+    //     Coordinates<Dimension> coord(global);
+    //     if (global.locate(e, coord))
+    //     {
+    //         size_t idx = (size_t)coord;
+    //         c = static_cast<const Function<Dimension, unsigned short> &>(global.cluster_id)[idx];
+    //     }
+    //     if (c < params.max_clusters + 1)
+    //         cluster_events[c].push_back(e);
+    //     else
+    //         cluster_events[0].push_back(e);
+    // }
+    // std::vector<std::string> sample_images;
+    // for_each_plane<Dimension>([&darwin, &params, &cluster_events, &marginal, &sample_images](unsigned i, unsigned j)
+    // {
+    //     marginal.reset();
+    //     Coordinates<2> marginal_coord(marginal);
+    //     Event<2> marginal_event;
+    //     std::vector<unsigned short> marginal_klass(params.points * params.points, 0);
+
+    //     for (unsigned short c = 0; c <= darwin.num_clusters; ++c)
+    //     {
+    //         for (auto &e : cluster_events[c])
+    //         {
+    //             marginal_event[0] = e[i];
+    //             marginal_event[1] = e[j];
+    //             marginal.event(marginal_event);
+    //             if (c == 0) continue;
+
+    //             if (marginal.locate(marginal_event, marginal_coord))
+    //             {
+    //                 size_t idx = (size_t)marginal_coord;
+    //                 unsigned short d = marginal_klass[idx];
+    //                 if (d == 0) marginal_klass[idx] = c;
+    //                 else marginal_klass[idx] = std::min(c, d);
+    //             }
+    //         }
+    //     }
+    //     marginal.prepare(params.smooth);
+
+    //     if (params.visual) 
+    //     {
+    //         using namespace matplot;
+
+    //         std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(params.points, std::vector<double>(params.points)));
+    //         std::vector<std::vector<double>> quant_data(params.points, std::vector<double>(params.points));
+    //         for (unsigned y = 0; y < params.points; ++y) {
+    //             for (unsigned x = 0; x < params.points; ++x) {
+    //                 size_t idx = x + y * params.points;
+    //                 for (unsigned i = 0; i < 3; ++i)
+    //                     if (marginal_klass[idx] == 0)
+    //                         class_data[i][y][x] = 255;
+    //                     else
+    //                     {
+    //                         unsigned hue = (255 * marginal_klass[idx] / (std::min(darwin.num_clusters, params.max_clusters)));
+    //                         class_data[i][y][x] = 255 * darwin.colors[hue][i];
+    //                     }
+    //                 quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
+    //             }
+    //         }
+
+    //         std::string path = params.img_dir + "/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
+    //         darwin.dispatch_plot(path, class_data, quant_data);
+    //         sample_images.push_back("images/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png");
+    // } });
     
     xml_out << "  </Clusters>\n";
     xml_out << "</LaplaceReport>\n";

@@ -1046,7 +1046,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
     xmlFreeDoc(doc);
 }
 
-void add_laplace_gates(const std::string &filename, const std::string &sample_name, const std::string &parent_pop_name, unsigned clusters_found, size_t laplacian_offset, const std::vector<size_t>& cluster_counts, const std::vector<std::string>& selected_vars)
+void add_laplace_gates(const std::string &filename, const std::string &sample_name, const std::string &parent_pop_name, unsigned clusters_found, size_t laplacian_offset, const std::vector<std::vector<unsigned>>& cluster_events, const std::vector<std::string>& selected_vars)
 {
     xmlDocPtr doc = xmlParseFile(filename.c_str());
     if (!doc) {
@@ -1118,6 +1118,8 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         std::string pop_name = (k == 0) ? "Laplace.Ambiguous" : "Laplace.Cluster" + std::to_string(k);
         if (k > clusters_found)
             pop_name = "Laplace.OffScale";
+        else if (cluster_events[k].size() == 0)
+            continue;
         
         std::string check_expr = "./Population[@name='" + pop_name + "']";
         xmlXPathObjectPtr pCheckObj = xmlXPathNodeEval(subpopsNode, (const xmlChar*)check_expr.c_str(), xpathCtx);
@@ -1128,7 +1130,7 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         xmlNodePtr popNode = xmlNewNode(nullptr, (const xmlChar *)"Population");
         xmlSetProp(popNode, (const xmlChar *)"name", (const xmlChar *)pop_name.c_str());
         xmlSetProp(popNode, (const xmlChar *)"expanded", (const xmlChar *)"1");
-        std::string count_str = k < cluster_counts.size() ? std::to_string(cluster_counts[k]) : "0";
+        std::string count_str = k < cluster_events.size() ? std::to_string(cluster_events[k].size()) : "0";
         xmlSetProp(popNode, (const xmlChar *)"count", (const xmlChar *)count_str.c_str());
 
         if (parentGraphNode) {

@@ -37,6 +37,8 @@ int Leonard::parse_args(int argc, char *argv[])
     ("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))
     ("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))
     ("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))
+    ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+    ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
     ("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))
     ("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))
     ("h,help", "Print usage");
@@ -73,6 +75,8 @@ int Leonard::parse_args(int argc, char *argv[])
     params.kld_exponential = result["kld-exp"].as<float>();
     params.tolerance = result["tolerance"].as<float>();
     params.grid_size = result["grid"].as<unsigned>();
+    params.antialias = result["antialias"].as<bool>();
+    params.verify = result["verify"].as<bool>();
     params.analysis_choice = result["analysis"].as<int>();
 
     return -1;
@@ -472,6 +476,7 @@ int Leonard::run()
         for (auto & result_pair : laplace_results)
         {
             Laplace_Results res = result_pair.second.get();
+            res.wait();
             if (res.idx.empty()) continue;
             
             // Merge local classes into the global classification tracking synchronously
@@ -481,14 +486,14 @@ int Leonard::run()
 
             if (!is_datafile && !ws.filename.empty())
             {
-                add_laplace_gates(ws.filename, s.name, res.parent_name, res.clusters_found, laplacian_offset, res.cluster_counts, selections.variables);
+                add_laplace_gates(ws.filename, s.name, res.parent_name, res.clusters_found, laplacian_offset, res.cluster_events, selections.variables);
             }
 
             std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, res, selections.variables);
             report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
 
             laplacian_offset += res.clusters_found + 1;
-            if (res.cluster_counts[res.clusters_found + 1] > 0)
+            if (res.cluster_events[res.valid_clusters + 1].size() > 0)
                 ++laplacian_offset;
         }
 

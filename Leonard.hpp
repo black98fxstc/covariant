@@ -37,11 +37,14 @@ struct Params
     float kld_exponential = 0.2f;
     float tolerance = 0.01f;
     unsigned grid_size = 256;
+    bool antialias = true;
+    bool verify = true;
     int analysis_choice = 1;
 };
 
 typedef uint16_t Measurement;
 typedef uint32_t Count;
+typedef uint32_t Ordinal;
 
 struct Point
 {
@@ -121,14 +124,44 @@ public:
     void wait() noexcept;
 };
 
+template <unsigned Dimension>
+void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func)
+{
+    for (unsigned i = 0; i < Dimension - 1; i++)
+        for (unsigned j = i + 1; j < Dimension; j++)
+            func(i, j);
+};
+
+class Marginal_Results
+{
+public:
+    std::vector<std::vector<std::vector<double>>> class_data;
+    std::vector<std::vector<double>> quant_data;
+    std::string x_label, y_label;
+    unsigned clusters;
+};
+
 class Laplace_Results
 {
 public:
     std::string parent_name;
-    size_t clusters_found;
+    unsigned clusters_found;
+    unsigned valid_clusters;
+    std::vector<std::vector<unsigned>> cluster_events;
+    std::ofstream xml_out;
+    json report;
     std::vector<size_t> idx;
     std::vector<unsigned short> classification;
-    std::vector<size_t> cluster_counts;
+    std::vector<std::vector<float>> means;
+    std::vector<std::vector<std::vector<float>>> covariances;
+    std::vector<std::future<Marginal_Results>> future_marginals;
+    std::vector<Marginal_Results> marginals;
+
+    void wait() noexcept
+    {
+        for (auto &f : future_marginals)
+            marginals.push_back(f.get());
+    }
 };
 
 class Leonard
@@ -149,6 +182,12 @@ public:
     Qualify_Results do_Qualify(const std::vector<float> *data, const Measurement X, const std::vector<bool> &included, std::string pop_name);
 
     Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name);
+
+    Marginal_Results do_Marginal(const std::vector<std::vector<float> *> &data, const std::string pop_name) noexcept
+    {
+        Marginal_Results results;
+        return results;
+    }
 
     Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name);
 
@@ -175,6 +214,9 @@ public:
                 events[i][d] = (*data[d])[results.idx[i]];
 
         Laplace<Dimension> laplace(selections.grid_size);
+        laplace.verify = params.verify;
+        laplace.antialias = params.antialias;
+
         size_t valid = 0;
         for (const auto &e : events)
             if (laplace.event(e))
@@ -190,21 +232,73 @@ public:
 
         std::cout << "Performing Laplacian clustering..." << std::endl;
         results.clusters_found = laplace.cluster(selections.threshold);
-        results.cluster_counts.resize(results.clusters_found + 2);
-        std::fill(results.cluster_counts.begin(), results.cluster_counts.end(), 0);
+        results.valid_clusters = std::min(selections.max_clusters, results.clusters_found);
+        results.cluster_events.resize(results.valid_clusters + 2);
+        results.means.resize(results.valid_clusters + 1);
+        results.covariances.resize(results.valid_clusters + 1);
+        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+        {
+            results.means[c].resize(Dimension);
+            results.covariances[c].resize(Dimension);
+            for (unsigned i = 0; i < Dimension; i++)
+                    results.covariances[c][i].resize(Dimension);
+        }
+        
         Coordinates coord(laplace);
         for (size_t i = 0; i < results.idx.size(); ++i)
         {
             unsigned short c;
             if (laplace.locate(events[i], coord))
+            {
                 c = laplace.classify(coord);
+                if (c > results.valid_clusters)
+                    c = 0;
+            }
             else
-                c = results.clusters_found + 1;
-            results.cluster_counts[c]++;
+                c = results.valid_clusters + 1;
+            results.cluster_events[c].push_back(i);
         }
-        std::cout << "Found " << results.clusters_found << " clusters." << std::endl;
+        for (unsigned c = 0; c < results.cluster_events.size(); ++c)
+        {
+            if (results.cluster_events.size() < selections.min_events)
+            {
+                for (unsigned i : results.cluster_events[c])
+                    results.cluster_events[0].push_back(i);
+                results.cluster_events[c].clear();
+                results.valid_clusters--;
+            }
+        }
+
+        for_each_plane<Dimension>([this, &results, &data, &pop_name](unsigned i, unsigned j)
+        {
+            results.future_marginals.push_back(compute_plane.enqueue([this, data, pop_name]() { return do_Marginal(data, pop_name); }));
+        });
+        
+        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+            if (results.cluster_events[c].size() > 0)
+                for (unsigned i = 0; i < Dimension; i++)
+                    for (unsigned e : results.cluster_events[c])
+                        results.means[c][i] += events[e][i];
+        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+            if (results.cluster_events[c].size() > 0)
+                for (unsigned i = 0; i < Dimension; i++)
+                    results.means[c][i] /= results.cluster_events[c].size();
+        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+            if (results.cluster_events[c].size() > 1)
+                for (unsigned i = 0; i < Dimension; i++)
+                    for (unsigned j = 0; j < Dimension; j++)
+                        for (unsigned e : results.cluster_events[c])
+                            results.covariances[c][i][j] += (events[e][i] - results.means[c][i]) * (events[e][j] - results.means[c][j]);
+        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+            if (results.cluster_events[c].size() > 1)
+                for (unsigned i = 0; i < Dimension; i++)
+                    for (unsigned j = 0; j < Dimension; j++)
+                        results.covariances[c][i][j] /= results.cluster_events.size() - 1;
+
+
+        std::cout << "Found " << results.valid_clusters << " valid clusters." << std::endl;
         return results;
     }
-
+    
     int run();
 };
