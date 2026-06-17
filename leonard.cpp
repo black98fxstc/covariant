@@ -111,6 +111,14 @@ int Leonard::run()
         ~WisdomSaver() { if (!path.empty()) { std::lock_guard<std::mutex> lock(get_fftw_mutex()); fftwf_export_wisdom_to_filename(path.c_str()); } }
     } saver{wisdom_path};
 
+    // create color map
+    colors.reserve(256);
+    for (size_t i = 0; i < 256; ++i) 
+    {
+        double h = 0.6666 * (1.0 - static_cast<double>(i) / 256);
+        colors.push_back(hsv_to_rgb(h, 1.0, 0.75));
+    }
+
     bool is_datafile = false;
     if (!params.files.empty() && params.files[0].find(".wsp") == std::string::npos)
         is_datafile = true;
@@ -440,7 +448,7 @@ int Leonard::run()
             data[i] = dataset.variable[selections.variables[i]].data.get();
 
         std::vector<std::pair<std::string, std::future<Pursuit_Results>>> epp_results;
-        std::vector<std::pair<std::string, std::future<Laplace_Results>>> laplace_results;
+        std::vector<std::pair<std::string, std::future<std::shared_ptr<Laplace_Results>>>> laplace_results;
 
         for (std::string &pop_name : selections.populations)
         {   
@@ -475,25 +483,25 @@ int Leonard::run()
         }
         for (auto & result_pair : laplace_results)
         {
-            Laplace_Results res = result_pair.second.get();
-            res.wait();
-            if (res.idx.empty()) continue;
+            std::shared_ptr<Laplace_Results> res = result_pair.second.get();
+            res->wait();
+            if (res->idx.empty()) continue;
             
             // Merge local classes into the global classification tracking synchronously
-            for (size_t i = 0; i < res.idx.size(); ++i) {
-                (*laplace.classifications)[res.idx[i]] = res.classification[i] + laplacian_offset;
+            for (size_t i = 0; i < res->idx.size(); ++i) {
+                (*laplace.classifications)[res->idx[i]] = res->classification[i] + laplacian_offset;
             }
 
             if (!is_datafile && !ws.filename.empty())
             {
-                add_laplace_gates(ws.filename, s.name, res.parent_name, res.clusters_found, laplacian_offset, res.cluster_events, selections.variables);
+                add_laplace_gates(ws.filename, s.name, res->parent_name, res->clusters_found, laplacian_offset, res->cluster_events, selections.variables);
             }
 
-            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, res, selections.variables);
+            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables);
             report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
 
-            laplacian_offset += res.clusters_found + 1;
-            if (res.cluster_events[res.valid_clusters + 1].size() > 0)
+            laplacian_offset += res->clusters_found + 1;
+            if (res->cluster_events[res->valid_clusters + 1].size() > 0)
                 ++laplacian_offset;
         }
 

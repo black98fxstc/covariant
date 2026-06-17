@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdint>
 
+#include <matplot/matplot.h>
 #include <nlohmann/json.hpp>
 
 // #include "Pursuit.hpp"
@@ -87,6 +88,14 @@ public:
     Qualify_Results(const Measurement X) noexcept : X(X) {};
 };
 
+class EPP_Node_Results
+{
+public:
+    std::vector<std::vector<float>> quant_data;
+
+    EPP_Node_Results(Weighty<2> &parent) : quant_data(parent.points(0), std::vector<float>(parent.points(1))) {};
+};
+
 class Projection_Results
 {
 public:
@@ -120,6 +129,8 @@ public:
     std::unique_ptr<Projection_Results> best_split;
     std::vector<std::future<Pursuit_Results>> future_children;
     std::vector<Pursuit_Results> children;
+    std::future<EPP_Node_Results> future_node;
+    std::unique_ptr<EPP_Node_Results> EPP_node;
 
     void wait() noexcept;
 };
@@ -132,13 +143,18 @@ void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func
             func(i, j);
 };
 
+class Laplace_Results;
+
 class Marginal_Results
 {
 public:
+    std::weak_ptr<Laplace_Results> laplace;
     std::vector<std::vector<std::vector<double>>> class_data;
     std::vector<std::vector<double>> quant_data;
     std::string x_label, y_label;
     unsigned clusters;
+
+    Marginal_Results(std::shared_ptr<Laplace_Results> laplace) noexcept : laplace(laplace) {};
 };
 
 class Laplace_Results
@@ -174,54 +190,183 @@ public:
     std::atomic<unsigned> EPP_id_counter = 0;
     Workspace ws;
     std::vector<SampleData> dummy_samples;
+    std::vector<std::vector<double>> colors;
     ThreadPool compute_plane{1};//std::thread::hardware_concurrency()};
     ThreadPool control_plane{4};
 
     int parse_args(int argc, char *argv[]);
+    /**
+     * @brief Simple HSV to RGB conversion helper.
+     * 
+     * @param h Hue [0, 1]
+     * @param s Saturation [0, 1]
+     * @param v Value [0, 1]
+     * @return std::vector<double> RGB components
+     */
+
+     static std::vector<double> hsv_to_rgb(double h, double s, double v) {
+        double r = 0, g = 0, b = 0;
+        if (s == 0) {
+            r = g = b = v;
+        } else {
+            double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
+            int i = static_cast<int>(std::floor(h_pos));
+            double f = h_pos - i;
+            double p = v * (1.0 - s);
+            double q = v * (1.0 - (s * f));
+            double t = v * (1.0 - (s * (1.0 - f)));
+            switch (i) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+        }
+        return {r, g, b};
+    }
 
     Qualify_Results do_Qualify(const std::vector<float> *data, const Measurement X, const std::vector<bool> &included, std::string pop_name);
 
     Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name);
 
-    Marginal_Results do_Marginal(const std::vector<std::vector<float> *> &data, const std::string pop_name) noexcept
-    {
-        Marginal_Results results;
-        return results;
-    }
+    EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, std::string pop_name);
 
     Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name);
 
-    template <unsigned Dimension>
-    Laplace_Results do_Laplace(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name)
+    Marginal_Results do_Marginal(std::shared_ptr<Laplace_Results> laplace, const std::vector<std::vector<float> *> &data, const Measurement i, const Measurement j, std::string pop_name) noexcept
     {
-        Laplace_Results results;
-        results.parent_name = pop_name;
-        results.idx.reserve(included.size());
-        for (size_t i = 0; i < included.size(); ++i)
-            if (included[i])
-                results.idx.push_back(i);
+        Marginal_Results results(laplace);
 
-        if (results.idx.empty()) {
-            std::cout << "No valid events found." << std::endl;
-            return results;
+        Weighty<2> marginal(256);
+        marginal.visualize = false; // We will save files manually into the dir
+        marginal.antialias = params.antialias;
+        marginal.verify = params.verify;
+
+        Coordinates<2> marginal_coord(marginal);
+        Event<2> marginal_event;
+        std::vector<unsigned short> marginal_klass(marginal.points(0) * marginal.points(1), 0);
+        std::fill(marginal_klass.begin(), marginal_klass.end(), 0);
+
+        for (unsigned short c = 0; c <= laplace->valid_clusters; ++c)
+        {
+            for (unsigned e : laplace->cluster_events[c])
+            {
+                marginal_event[0] = (*data[i])[laplace->idx[e]];
+                marginal_event[1] = (*data[j])[laplace->idx[e]];
+                marginal.event(marginal_event);
+                if (c == 0) continue;
+
+                size_t idx = (size_t)marginal_coord;
+                unsigned short d = marginal_klass[idx];
+                if (d == 0) marginal_klass[idx] = c;
+                else marginal_klass[idx] = std::min(c, d);
+            }
+        }
+        marginal.prepare(params.smoothing);
+
+        using namespace matplot;
+
+        std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(marginal.points(0), std::vector<double>(marginal.points(1))));
+        std::vector<std::vector<double>> quant_data(marginal.points(0), std::vector<double>(marginal.points(1)));
+        for (unsigned y = 0; y < marginal.points(1); ++y) {
+            for (unsigned x = 0; x < marginal.points(0); ++x) {
+                size_t idx = x + y * marginal.points(0);
+                for (unsigned i = 0; i < 3; ++i)
+                    if (marginal_klass[idx] == 0)
+                        class_data[i][y][x] = 255;
+                    else
+                    {
+                        unsigned hue = (255 * marginal_klass[idx] / (laplace->valid_clusters + 1));
+                        class_data[i][y][x] = 255 * colors[hue][i];
+                    }
+                quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
+            }
         }
 
-        std::cout << "Begin Laplacian clustering on " << results.idx.size() << " events..." << std::endl;
+        // dispatch plot
+
+        for (unsigned c = 0; c <= laplace->valid_clusters; ++c)
+        {
+            std::vector<unsigned short> marginal_klass(marginal.size(), 0);
+
+            marginal.reset();
+            for (auto &e : laplace->cluster_events[c])
+            {
+                marginal_event[0] = (*data[i])[laplace->idx[e]];
+                marginal_event[1] = (*data[j])[laplace->idx[e]];
+                marginal.event(marginal_event);
+                if (c == 0) continue;
+
+                size_t idx = (size_t)marginal_coord;
+                marginal_klass[idx] = c;
+            }
+            marginal.prepare(selections.smoothing);
+
+            // make cluster marginal plot
+            std::vector<std::vector<std::vector<double>>> class_data(3, std::vector<std::vector<double>>(marginal.points(0), std::vector<double>(marginal.points(1))));
+            std::vector<std::vector<double>> quant_data(marginal.points(0), std::vector<double>(marginal.points(1)));
+
+            for (unsigned y = 0; y < marginal.points(1); ++y) {
+                for (unsigned x = 0; x < marginal.points(0); ++x) {
+                    size_t idx = x + y * marginal.points(1);
+                    for (unsigned i = 0; i < 3; ++i)
+                        if (marginal_klass[idx] == 0)
+                            class_data[i][y][x] = 255;
+                        else
+                        {
+                            unsigned hue = (255 * marginal_klass[idx] / (laplace->valid_clusters + 1));
+                            class_data[i][y][x] = 255 * colors[hue][i];
+                        }
+                    quant_data[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
+                }
+            }
+
+            // dispatch plot
+
+            // auto class_data = std::make_tuple(std::move(class_r), std::move(class_g), std::move(class_b));
+            // std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
+            // darwin.dispatch_plot(path, class_data, quant_data);
+            // cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png");
+        }
+        // std::string path = params.img_dir + "/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png";
+        // darwin.dispatch_plot(path, class_data, quant_data);
+        // sample_images.push_back("images/sample_" + darwin.labels[i] + "_" + darwin.labels[j] + ".png");
+
+        return results;
+    }
+
+    template <unsigned Dimension>
+    std::shared_ptr<Laplace_Results> do_Laplace(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name)
+    {
+        auto results = std::make_shared<Laplace_Results>();
+        results->parent_name = pop_name;
+        size_t included_events = std::count(included.begin(), included.end(), true);
+        if (!included_events)
+            return results;
+
+        results->idx.reserve(included_events);
+        for (size_t i = 0; i < included.size(); ++i)
+            if (included[i])
+                results->idx.push_back(i);
+
+        std::cout << "Begin Laplacian clustering on " << results->idx.size() << " events..." << std::endl;
         Events<Dimension> events;
-        events.resize(results.idx.size());
+        events.resize(results->idx.size());
         for (unsigned d = 0; d < Dimension; ++d)
             for (size_t i = 0; i < events.size(); ++i)
-                events[i][d] = (*data[d])[results.idx[i]];
+                events[i][d] = (*data[d])[results->idx[i]];
 
         Laplace<Dimension> laplace(selections.grid_size);
         laplace.verify = params.verify;
         laplace.antialias = params.antialias;
 
-        size_t valid = 0;
+        size_t valid_events = 0;
         for (const auto &e : events)
             if (laplace.event(e))
-                valid++;
-        std::cout << "Found " << valid << " valid events..." << std::endl;
+                valid_events++;
+        std::cout << "Found " << valid_events << " valid events..." << std::endl;
 
         std::cout << "Calculating the Laplacian of the sample..." << std::endl;
         laplace.analyze(selections.smoothing, selections.threshold);
@@ -231,72 +376,72 @@ public:
             std::cout << "Consistency checks passed..." << std::endl;
 
         std::cout << "Performing Laplacian clustering..." << std::endl;
-        results.clusters_found = laplace.cluster(selections.threshold);
-        results.valid_clusters = std::min(selections.max_clusters, results.clusters_found);
-        results.cluster_events.resize(results.valid_clusters + 2);
-        results.means.resize(results.valid_clusters + 1);
-        results.covariances.resize(results.valid_clusters + 1);
-        for (unsigned c = 0; c <= results.valid_clusters; ++c)
+        results->clusters_found = laplace.cluster(selections.threshold);
+        results->valid_clusters = std::min(selections.max_clusters, results->clusters_found);
+        results->cluster_events.resize(results->valid_clusters + 2);
+        results->means.resize(results->valid_clusters + 1);
+        results->covariances.resize(results->valid_clusters + 1);
+        for (unsigned c = 0; c <= results->valid_clusters; ++c)
         {
-            results.means[c].resize(Dimension);
-            results.covariances[c].resize(Dimension);
+            results->means[c].resize(Dimension);
+            results->covariances[c].resize(Dimension);
             for (unsigned i = 0; i < Dimension; i++)
-                    results.covariances[c][i].resize(Dimension);
+                    results->covariances[c][i].resize(Dimension);
         }
         
         Coordinates coord(laplace);
-        for (size_t i = 0; i < results.idx.size(); ++i)
+        for (size_t i = 0; i < results->idx.size(); ++i)
         {
             unsigned short c;
             if (laplace.locate(events[i], coord))
             {
                 c = laplace.classify(coord);
-                if (c > results.valid_clusters)
+                if (c > results->valid_clusters)
                     c = 0;
             }
             else
-                c = results.valid_clusters + 1;
-            results.cluster_events[c].push_back(i);
+                c = results->valid_clusters + 1;
+            results->cluster_events[c].push_back(i);
         }
-        for (unsigned c = 0; c < results.cluster_events.size(); ++c)
+        for (unsigned c = 0; c < results->cluster_events.size(); ++c)
         {
-            if (results.cluster_events.size() < selections.min_events)
+            if (results->cluster_events.size() < selections.min_events)
             {
-                for (unsigned i : results.cluster_events[c])
-                    results.cluster_events[0].push_back(i);
-                results.cluster_events[c].clear();
-                results.valid_clusters--;
+                for (unsigned i : results->cluster_events[c])
+                    results->cluster_events[0].push_back(i);
+                results->cluster_events[c].clear();
+                results->valid_clusters--;
             }
         }
 
-        for_each_plane<Dimension>([this, &results, &data, &pop_name](unsigned i, unsigned j)
+        for_each_plane<Dimension>([this, results, data, pop_name](unsigned i, unsigned j)
         {
-            results.future_marginals.push_back(compute_plane.enqueue([this, data, pop_name]() { return do_Marginal(data, pop_name); }));
+            results->future_marginals.push_back(compute_plane.enqueue([this, results, data, pop_name, i, j]() { return do_Marginal(results, data, i, j, pop_name); }));
         });
-        
-        for (unsigned c = 0; c <= results.valid_clusters; ++c)
-            if (results.cluster_events[c].size() > 0)
+
+        for (unsigned c = 0; c <= results->valid_clusters; ++c)
+            if (results->cluster_events[c].size() > 0)
                 for (unsigned i = 0; i < Dimension; i++)
-                    for (unsigned e : results.cluster_events[c])
-                        results.means[c][i] += events[e][i];
-        for (unsigned c = 0; c <= results.valid_clusters; ++c)
-            if (results.cluster_events[c].size() > 0)
+                    for (unsigned e : results->cluster_events[c])
+                        results->means[c][i] += events[e][i];
+        for (unsigned c = 0; c <= results->valid_clusters; ++c)
+            if (results->cluster_events[c].size() > 0)
                 for (unsigned i = 0; i < Dimension; i++)
-                    results.means[c][i] /= results.cluster_events[c].size();
-        for (unsigned c = 0; c <= results.valid_clusters; ++c)
-            if (results.cluster_events[c].size() > 1)
+                    results->means[c][i] /= results->cluster_events[c].size();
+        for (unsigned c = 0; c <= results->valid_clusters; ++c)
+            if (results->cluster_events[c].size() > 1)
                 for (unsigned i = 0; i < Dimension; i++)
                     for (unsigned j = 0; j < Dimension; j++)
-                        for (unsigned e : results.cluster_events[c])
-                            results.covariances[c][i][j] += (events[e][i] - results.means[c][i]) * (events[e][j] - results.means[c][j]);
-        for (unsigned c = 0; c <= results.valid_clusters; ++c)
-            if (results.cluster_events[c].size() > 1)
+                        for (unsigned e : results->cluster_events[c])
+                            results->covariances[c][i][j] += (events[e][i] - results->means[c][i]) * (events[e][j] - results->means[c][j]);
+        for (unsigned c = 0; c <= results->valid_clusters; ++c)
+            if (results->cluster_events[c].size() > 1)
                 for (unsigned i = 0; i < Dimension; i++)
                     for (unsigned j = 0; j < Dimension; j++)
-                        results.covariances[c][i][j] /= results.cluster_events.size() - 1;
+                        results->covariances[c][i][j] /= results->cluster_events[c].size() - 1;
 
 
-        std::cout << "Found " << results.valid_clusters << " valid clusters." << std::endl;
+        std::cout << "Found " << results->valid_clusters << " valid clusters." << std::endl;
         return results;
     }
     

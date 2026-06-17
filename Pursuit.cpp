@@ -478,6 +478,10 @@ Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &dat
             if (results.best_split->out.count >= min_count)
                 results.future_children.push_back(control_plane.enqueue([this, data, out_set = results.best_split->out.set, pop_name]() {
                     return do_Pursuit(data, out_set, pop_name); }));
+            
+            std::vector<std::vector<float>*> node_data = { data[results.best_split->X], data[results.best_split->Y] };
+            results.future_node = compute_plane.enqueue([this, node_data, included, pop_name]() { 
+                return do_EPP_Node(node_data, included, pop_name); });
         }
     }    
 
@@ -490,4 +494,33 @@ void Pursuit_Results::wait() noexcept
         children.push_back(child.get());
     for (auto &child : children)
         child.wait();
-}    
+    if (future_node.valid())
+        EPP_node = std::make_unique<EPP_Node_Results>(future_node.get());
+}
+
+EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, std::string pop_name)
+{
+    Weighty<2> parent(256);
+    EPP_Node_Results results(parent);
+
+    Coordinates<2> coord(parent);
+    Event<2> event;
+    for (auto it = std::find(included.begin(), included.end(), true); it != included.end(); it = std::find(it + 1, included.end(), true))
+    {
+        size_t x = it - included.begin();
+        event[0] = (*data[0])[x];
+        event[1] = (*data[1])[x];   
+        parent.event(event);
+    }
+    parent.prepare(params.smoothing);
+    for (unsigned y = 0; y < parent.points(1); ++y) {
+        for (unsigned x = 0; x < parent.points(0); ++x) {
+            size_t idx = x + y * parent.points(0);
+            results.quant_data[y][x] = (double)static_cast<const Function<2, float>&>(parent.quantile)[idx];
+        }
+    }
+
+    // dispatch plot for in and out
+
+    return results;
+}

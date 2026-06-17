@@ -11,6 +11,83 @@
 
 namespace fs = std::filesystem;
 
+void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
+{
+    using namespace matplot;
+
+    auto fig = figure(true);
+    fig->add_axes();
+    fig->size(400, 400);
+    auto ax = fig->current_axes();
+    ax->hold(on);
+    // Generate coordinate matrices mapped to the image pixel grid (0 to N-1).
+    auto x_range = matplot::linspace(0, quant_data[0].size() - 1, quant_data[0].size());
+    auto y_range = matplot::linspace(0, quant_data.size() - 1, quant_data.size());
+    auto [X, Y] = matplot::meshgrid(x_range, y_range);
+    auto img = ax->image(class_data[0], class_data[1], class_data[2]);
+
+    // Overlay contours using the pixel-mapped X and Y ranges
+    auto c = ax->contour(X, Y, quant_data);
+    c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
+    c->color("black");
+    c->line_width(1.2);
+    ax->grid(true);
+
+    // Update limits to fit the data grid
+    ax->xlim({0, (double)quant_data[0].size() - 1});
+    ax->ylim({0, (double)quant_data.size() - 1});
+
+    ax->xticks({0, .2 * (double)quant_data[0].size(), .4 * (double)quant_data[0].size(), .6 * (double)quant_data[0].size(), .8 * (double)quant_data[0].size(), (double)quant_data[0].size() - 1});
+    ax->xticklabels({"0", ".2", ".4", ".6", ".8", "1"});
+    
+    ax->yticks({0, .2 * (double)quant_data.size(), .4 * (double)quant_data.size(), .6 * (double)quant_data.size(), .8 * (double)quant_data.size(), (double)quant_data.size() - 1});
+    ax->yticklabels({"1", ".8", ".6", ".4", ".2", "0"});
+    
+    fig->save(path);
+}
+
+void make_gating_plot(const std::string &path, const std::vector<std::vector<float>> &quant_data, const Polygon &polygon)
+{
+    using namespace matplot;
+
+    auto fig = figure(true);
+    fig->add_axes();
+    fig->size(400, 400);
+    auto ax = fig->current_axes();
+    ax->hold(on);
+
+    // Generate coordinate matrices mapped to [0, 1]
+    auto x_range = matplot::linspace(0.0, 1.0, quant_data[0].size());
+    auto y_range = matplot::linspace(0.0, 1.0, quant_data.size());
+    auto [X, Y] = matplot::meshgrid(x_range, y_range);
+
+    // Overlay contours
+    auto c = ax->contour(X, Y, quant_data);
+    c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
+    c->color("black");
+    c->line_width(1.2);
+
+    // Extract and draw the EPP separatrix
+    std::vector<double> px, py;
+    for (const auto& pt : polygon) {
+        px.push_back(pt.x());
+        py.push_back(pt.y());
+    }
+    if (!px.empty()) {
+        auto p = ax->plot(px, py);
+        p->color("red");
+        p->line_width(2.0);
+    }
+
+    ax->grid(true);
+
+    // Update limits to exactly fit the [0, 1] scaled domain
+    ax->xlim({0.0, 1.0});
+    ax->ylim({0.0, 1.0});
+    
+    fig->save(path);
+}
+
 static void apply_stylesheet(const std::string& xml_path, const std::string& xsl_path, const std::string& out_path) {
     xmlDocPtr xml_doc = xmlParseFile(xml_path.c_str());
     if (!xml_doc) {
