@@ -15,7 +15,9 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
 {
     using namespace matplot;
 
-    auto fig = figure(true);
+    auto backend = std::make_shared<matplot::backend::gnuplot>();
+    auto fig = std::make_shared<matplot::figure_type>(true);
+    fig->backend(backend);
     fig->add_axes();
     fig->size(400, 400);
     auto ax = fig->current_axes();
@@ -46,11 +48,13 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
     fig->save(path);
 }
 
-void make_gating_plot(const std::string &path, const std::vector<std::vector<float>> &quant_data, const Polygon &polygon)
+void make_gating_plot(const std::string &path, const std::vector<std::vector<double>> &quant_data, const Measurement H, const Measurement V, const Polygon &polygon)
 {
     using namespace matplot;
 
-    auto fig = figure(true);
+    auto backend = std::make_shared<matplot::backend::gnuplot>();
+    auto fig = std::make_shared<matplot::figure_type>(true);
+    fig->backend(backend);
     fig->add_axes();
     fig->size(400, 400);
     auto ax = fig->current_axes();

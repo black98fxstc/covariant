@@ -460,8 +460,8 @@ int Leonard::run()
                     for (auto it = std::find(subpopulation.begin(), subpopulation.end(), true); it != subpopulation.end(); it = std::find(it + 1, subpopulation.end(), true))
                         if ((*data[i])[it - subpopulation.begin()] < 0.0f || (*data[i])[it - subpopulation.begin()] > 1.0f)
                             subpopulation[it - subpopulation.begin()] = false;
-                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpopulation, pop_name]() {
-                    return do_Pursuit(data, subpopulation, pop_name);
+                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name]() mutable {
+                    return do_Pursuit(data, std::move(subpop), pop_name);
                 })});
             } else if (selections.analysis_choice == 1) {
                 switch (num_vars_selected)
@@ -476,15 +476,17 @@ int Leonard::run()
         for (auto & result_pair : epp_results)
         {
             Pursuit_Results res = result_pair.second.get();
-            res.wait();
+            res.wait_for_results();
 
             std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, selections.variables);
             report_links.push_back({s.name + " - " + result_pair.first + " (EPP)", filename, "EPP tree analysis"});
+
+            res.wait_for_plots();
         }
         for (auto & result_pair : laplace_results)
         {
             std::shared_ptr<Laplace_Results> res = result_pair.second.get();
-            res->wait();
+            res->wait_for_results();
             if (res->idx.empty()) continue;
             
             // Merge local classes into the global classification tracking synchronously
@@ -503,6 +505,8 @@ int Leonard::run()
             laplacian_offset += res->clusters_found + 1;
             if (res->cluster_events[res->valid_clusters + 1].size() > 0)
                 ++laplacian_offset;
+
+            res->wait_for_plots();
         }
 
         if (selections.analysis_choice == 1)
