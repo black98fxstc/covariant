@@ -82,9 +82,9 @@ public:
     {
         _events = 0;
         weight.zero();
-        density.zero();
-        quantile.zero();
-        cluster_id.zero();
+        // density.zero();
+        // quantile.zero();
+        // cluster_id.zero();
         P.zero();
     }
 
@@ -102,8 +102,11 @@ public:
     {
         // DCT because smoothing the even half-wave means no probability spill across the end points
         fftwf_execute_r2r((fftwf_plan)DCT.get(), input.data, cosine.data);
-        Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) *= Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
-        fftwf_execute_r2r((fftwf_plan)DCT.get(), cosine.data, output.data);
+        kernel->write("kernel.bin");
+        Eigen::Map<Eigen::ArrayXf>(filtered.data, size()) = Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) * Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
+        fftwf_execute_r2r((fftwf_plan)DCT.get(), filtered.data, output.data);
+        // Eigen::Map<Eigen::ArrayXf>(cosine.data, size()) *= Eigen::Map<const Eigen::ArrayXf>(kernel->data, size());
+        // fftwf_execute_r2r((fftwf_plan)DCT.get(), cosine.data, output.data);
         if (normalize)
         {
             float inv_norm = 1.0f / static_cast<float>(fft_normalizer);
@@ -241,11 +244,13 @@ public:
     Weighty(const unsigned *points, bool column_major = false) : Dimensions<Dimension>(points, column_major)
     {
         init_fftw();
+        weight.zero();
     }
 
     Weighty(unsigned grid, bool column_major = false) : Dimensions<Dimension>(grid, column_major)
     {
         init_fftw();
+        weight.zero();
     }
 
     virtual ~Weighty() = default;

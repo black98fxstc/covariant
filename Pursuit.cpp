@@ -520,6 +520,8 @@ EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float>*> dat
         parent.event(event);
     }
     parent.prepare(params.smoothing);
+    parent.weight.write("weight.bin");
+    parent.density.write("density.bin");
 
     auto quant_data = std::make_shared<std::vector<std::vector<double>>>(parent.points(0), std::vector<double>(parent.points(1)));
 

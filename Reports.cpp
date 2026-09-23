@@ -168,6 +168,7 @@ std::string Reports::generate_laplace_report(const std::string& report_dir, cons
     for (size_t i = 1; i <= res.clusters_found; ++i) {
         xml_out << "    <Cluster id=\"" << i << "\" events=\"" << (i < res.cluster_events[i].size() ? res.cluster_events[i].size() : 0) << "\"/>\n";
     }
+    
     // darwin.report["total_events"] = events.size();
     // darwin.report["num_clusters"] = darwin.num_clusters;
 
