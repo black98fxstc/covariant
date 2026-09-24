@@ -1,8 +1,11 @@
 #include "Reports.hpp"
+#include "Leonard.hpp"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
 
 #include <libxml/parser.h>
 #include <libxslt/xslt.h>
@@ -10,6 +13,22 @@
 #include <libxslt/xsltutils.h>
 
 namespace fs = std::filesystem;
+
+static std::string escape_xml(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+    for (char c : input) {
+        switch (c) {
+            case '&':  output += "&amp;"; break;
+            case '<':  output += "&lt;"; break;
+            case '>':  output += "&gt;"; break;
+            case '\"': output += "&quot;"; break;
+            case '\'': output += "&apos;"; break;
+            default:   output += c; break;
+        }
+    }
+    return output;
+}
 
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
 {
@@ -161,7 +180,7 @@ std::string Reports::generate_laplace_report(const std::string& report_dir, cons
     std::ofstream xml_out(xml_path);
     xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     xml_out << "<?xml-stylesheet type=\"text/xsl\" href=\"laplace_report.xsl\"?>\n";
-    xml_out << "<LaplaceReport sample=\"" << sample_name << "\" population=\"" << pop_name << "\">\n";
+    xml_out << "<LaplaceReport sample=\"" << escape_xml(sample_name) << "\" population=\"" << escape_xml(pop_name) << "\">\n";
     xml_out << "  <Summary clustersFound=\"" << res.clusters_found << "\"/>\n";
     xml_out << "  <Clusters>\n";
         
@@ -298,108 +317,206 @@ std::string Reports::generate_epp_report(const std::string& report_dir, const st
     std::ofstream xml_out(xml_path);
     xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
     xml_out << "<?xml-stylesheet type=\"text/xsl\" href=\"epp_report.xsl\"?>\n";
-    xml_out << "<EPPReport sample=\"" << sample_name << "\" population=\"" << pop_name << "\">\n";
-    render_epp_node(xml_out, res, selected_vars, 0, 0);
+    xml_out << "<EPPReport sample=\"" << escape_xml(sample_name) << "\" population=\"" << escape_xml(pop_name) << "\">\n";
+    xml_out << "  <AllEvents events=\"" << res.event_count << "\">\n";
+    if (!res.means.empty()) {
+        xml_out << "    <Means>\n";
+        for (size_t i = 0; i < selected_vars.size() && i < res.means.size(); ++i) {
+            std::ostringstream ss, ss_pct;
+            ss << std::fixed << std::setprecision(4) << res.means[i];
+            double pct = std::max(0.0, std::min(100.0, res.means[i] * 100.0));
+            ss_pct << std::fixed << std::setprecision(1) << pct;
+            xml_out << "      <Variable name=\"" << escape_xml(selected_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
+        }
+        xml_out << "    </Means>\n";
+    }
+    for (const auto& child : res.children) {
+        render_epp_node(xml_out, child, selected_vars, 2);
+    }
+    xml_out << "  </AllEvents>\n";
     xml_out << "</EPPReport>\n";
     xml_out.close();
 
-    if (!fs::exists(xsl_path)) {
-        std::ofstream xsl_out(xsl_path);
-        xsl_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                << "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">\n"
-                << "  <xsl:output method=\"html\" indent=\"yes\"/>\n"
-                << "  <xsl:template match=\"/EPPReport\">\n"
-                << "    <html>\n"
-                << "      <head>\n"
-                << "        <title>EPP Report: <xsl:value-of select=\"@population\"/></title>\n"
-                << "        <style>\n"
-                << "          body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }\n"
-                << "          .container { width: 100%; min-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; overflow-x: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
-                << "          .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; padding-left: 0; }\n"
-                << "          .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }\n"
-                << "          .tree li::before, .tree li::after{ content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #ccc; width: 50%; height: 20px; }\n"
-                << "          .tree li::after{ right: auto; left: 50%; border-left: 2px solid #ccc; }\n"
-                << "          .tree li:only-child::after, .tree li:only-child::before { display: none; }\n"
-                << "          .tree li:only-child{ padding-top: 0; }\n"
-                << "          .tree li:first-child::before, .tree li:last-child::after{ border: 0 none; }\n"
-                << "          .tree li:last-child::before{ border-right: 2px solid #ccc; border-radius: 0 5px 0 0; }\n"
-                << "          .tree li:first-child::after{ border-radius: 5px 0 0 0; }\n"
-                << "          .tree ul ul::before{ content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #ccc; width: 0; height: 20px; }\n"
-                << "          .tree li div.node { border: 1px solid #ccc; padding: 10px; text-decoration: none; color: #333; font-size: 12px; display: inline-block; border-radius: 5px; background-color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
-                << "          .tree li div.node h4 { margin: 0 0 5px 0; color: #007bff; }\n"
-                << "          .tree li div.node p { margin: 2px 0; }\n"
-                << "          .tree li div.node img { max-width: 150px; display: block; margin: 5px auto; border: 1px solid #ddd; }\n"
-                << "        </style>\n"
-                << "      </head>\n"
-                << "      <body>\n"
-                << "        <div class=\"container\">\n"
-                << "          <h2>EPP Analysis: <xsl:value-of select=\"@sample\"/> / <xsl:value-of select=\"@population\"/></h2>\n"
-                << "          <div class=\"tree\">\n"
-                << "            <ul>\n"
-                << "              <xsl:apply-templates select=\"Node\"/>\n"
-                << "            </ul>\n"
-                << "          </div>\n"
-                << "        </div>\n"
-                << "      </body>\n"
-                << "    </html>\n"
-                << "  </xsl:template>\n"
-                << "  <xsl:template match=\"Node\">\n"
-                << "    <li>\n"
-                << "      <div class=\"node\">\n"
-                << "        <xsl:choose>\n"
-                << "          <xsl:when test=\"Split\">\n"
-                << "            <h4><xsl:value-of select=\"Split/@x\"/> vs <xsl:value-of select=\"Split/@y\"/></h4>\n"
-                << "            <p>Score: <xsl:value-of select=\"Split/@score\"/></p>\n"
-                << "            <p>In: <xsl:value-of select=\"Split/@in\"/> | Out: <xsl:value-of select=\"Split/@out\"/></p>\n"
-                << "          </xsl:when>\n"
-                << "          <xsl:otherwise>\n"
-                << "            <h4>Leaf Node</h4>\n"
-                << "            <p>Terminated</p>\n"
-                << "          </xsl:otherwise>\n"
-                << "        </xsl:choose>\n"
-                << "      </div>\n"
-                << "      <xsl:if test=\"Node\">\n"
-                << "        <ul>\n"
-                << "          <xsl:apply-templates select=\"Node\"/>\n"
-                << "        </ul>\n"
-                << "      </xsl:if>\n"
-                << "    </li>\n"
-                << "  </xsl:template>\n"
-                << "</xsl:stylesheet>\n";
-        xsl_out.close();
-    }
+    std::ofstream xsl_out(xsl_path);
+    xsl_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            << "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\">\n"
+            << "  <xsl:output method=\"html\" indent=\"yes\"/>\n"
+            << "  <xsl:template match=\"/EPPReport\">\n"
+            << "    <html>\n"
+            << "      <head>\n"
+            << "        <title>EPP Report: <xsl:value-of select=\"@population\"/></title>\n"
+            << "        <style>\n"
+            << "          body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; margin: 20px; background: #f8fafc; color: #1e293b; }\n"
+            << "          .container { width: 100%; min-width: 800px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); box-sizing: border-box; }\n"
+            << "          h2 { margin-top: 0; color: #0f172a; font-size: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }\n"
+            << "          .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; padding-left: 0; }\n"
+            << "          .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 8px 0 8px; }\n"
+            << "          .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid #cbd5e1; width: 50%; height: 20px; }\n"
+            << "          .tree li::after { right: auto; left: 50%; border-left: 2px solid #cbd5e1; }\n"
+            << "          .tree li:only-child::after, .tree li:only-child::before { display: none; }\n"
+            << "          .tree li:only-child { padding-top: 0; }\n"
+            << "          .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }\n"
+            << "          .tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 6px 0 0; }\n"
+            << "          .tree li:first-child::after { border-radius: 6px 0 0 0; }\n"
+            << "          .tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #cbd5e1; width: 0; height: 20px; }\n"
+            << "          .tree li div.node { border: 1px solid #cbd5e1; padding: 12px; text-decoration: none; color: #1e293b; font-size: 12px; display: inline-block; border-radius: 6px; background-color: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.06); min-width: 170px; max-width: 220px; vertical-align: top; box-sizing: border-box; }\n"
+            << "          .tree li div.node-root { background-color: #f0f7ff; border: 2px solid #3b82f6; }\n"
+            << "          .tree li div.node h4 { margin: 2px 0 6px 0; color: #1d4ed8; font-size: 13px; font-weight: 700; word-break: break-word; }\n"
+            << "          .tree li div.node p { margin: 3px 0; color: #475569; }\n"
+            << "          .tree li div.node img { max-width: 160px; width: 100%; height: auto; display: block; margin: 6px auto; border: 1px solid #e2e8f0; border-radius: 4px; background: #fff; }\n"
+            << "          .badge { display: inline-block; padding: 2px 6px; font-size: 10px; font-weight: 700; border-radius: 4px; margin-bottom: 6px; margin-right: 3px; letter-spacing: 0.3px; }\n"
+            << "          .badge-in { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }\n"
+            << "          .badge-out { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }\n"
+            << "          .badge-leaf { background-color: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }\n"
+            << "          .plot-box { text-align: center; font-size: 10px; color: #64748b; margin: 6px 0; }\n"
+            << "          .means-panel { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0; text-align: left; }\n"
+            << "          .means-title { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; text-align: center; }\n"
+            << "          .means-bars { display: flex; flex-direction: column; gap: 4px; }\n"
+            << "          .bar-row { display: flex; align-items: center; font-size: 10px; line-height: 1.2; }\n"
+            << "          .bar-label { width: 58px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px; }\n"
+            << "          .bar-track { flex: 1; height: 8px; background-color: #e2e8f0; border-radius: 4px; position: relative; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.08); }\n"
+            << "          .bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%); border-radius: 4px; }\n"
+            << "          .bar-val { width: 38px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 9.5px; color: #475569; text-align: right; padding-left: 4px; }\n"
+            << "        </style>\n"
+            << "      </head>\n"
+            << "      <body>\n"
+            << "        <div class=\"container\">\n"
+            << "          <h2>EPP Analysis: <xsl:value-of select=\"@sample\"/> / <xsl:value-of select=\"@population\"/></h2>\n"
+            << "          <div class=\"tree\">\n"
+            << "            <ul>\n"
+            << "              <xsl:apply-templates select=\"AllEvents\"/>\n"
+            << "            </ul>\n"
+            << "          </div>\n"
+            << "        </div>\n"
+            << "      </body>\n"
+            << "    </html>\n"
+            << "  </xsl:template>\n"
+            << "  <xsl:template match=\"AllEvents\">\n"
+            << "    <li>\n"
+            << "      <div class=\"node node-root\">\n"
+            << "        <h4>All Events</h4>\n"
+            << "        <p><strong>Total Events:</strong> <xsl:value-of select=\"@events\"/></p>\n"
+            << "        <xsl:if test=\"not(Node) and Means/Variable\">\n"
+            << "          <div class=\"means-panel\">\n"
+            << "            <div class=\"means-title\">Expression Levels</div>\n"
+            << "            <div class=\"means-bars\">\n"
+            << "              <xsl:for-each select=\"Means/Variable\">\n"
+            << "                <div class=\"bar-row\">\n"
+            << "                  <span class=\"bar-label\" title=\"{@name}\"><xsl:value-of select=\"@name\"/></span>\n"
+            << "                  <div class=\"bar-track\" title=\"Mean: {@mean} ({@pct}%)\">\n"
+            << "                    <div class=\"bar-fill\" style=\"width: {@pct}%;\"></div>\n"
+            << "                  </div>\n"
+            << "                  <span class=\"bar-val\"><xsl:value-of select=\"format-number(@mean, '#.##')\"/></span>\n"
+            << "                </div>\n"
+            << "              </xsl:for-each>\n"
+            << "            </div>\n"
+            << "          </div>\n"
+            << "        </xsl:if>\n"
+            << "      </div>\n"
+            << "      <xsl:if test=\"Node\">\n"
+            << "        <ul>\n"
+            << "          <xsl:apply-templates select=\"Node\"/>\n"
+            << "        </ul>\n"
+            << "      </xsl:if>\n"
+            << "    </li>\n"
+            << "  </xsl:template>\n"
+            << "  <xsl:template match=\"Node\">\n"
+            << "    <li>\n"
+            << "      <div class=\"node\">\n"
+            << "        <xsl:if test=\"@branch = 'in'\">\n"
+            << "          <span class=\"badge badge-in\">IN</span>\n"
+            << "        </xsl:if>\n"
+            << "        <xsl:if test=\"@branch = 'out'\">\n"
+            << "          <span class=\"badge badge-out\">OUT</span>\n"
+            << "        </xsl:if>\n"
+            << "        <xsl:if test=\"@isLeaf = 'true' or not(Node)\">\n"
+            << "          <span class=\"badge badge-leaf\">LEAF</span>\n"
+            << "        </xsl:if>\n"
+            << "        <h4>\n"
+            << "          <xsl:choose>\n"
+            << "            <xsl:when test=\"@gateX and @gateY\">\n"
+            << "              <xsl:value-of select=\"@gateX\"/> vs <xsl:value-of select=\"@gateY\"/>\n"
+            << "            </xsl:when>\n"
+            << "            <xsl:otherwise>\n"
+            << "              Subset <xsl:value-of select=\"@id\"/>\n"
+            << "            </xsl:otherwise>\n"
+            << "          </xsl:choose>\n"
+            << "        </h4>\n"
+            << "        <p><strong>Events:</strong> <xsl:value-of select=\"@events\"/></p>\n"
+            << "        <xsl:if test=\"@image\">\n"
+            << "          <div class=\"plot-box\">\n"
+            << "            <a href=\"{@image}\" target=\"_blank\">\n"
+            << "              <img src=\"{@image}\" alt=\"Gate\" title=\"Click to enlarge\"/>\n"
+            << "            </a>\n"
+            << "          </div>\n"
+            << "        </xsl:if>\n"
+            << "        <xsl:if test=\"(@isLeaf = 'true' or not(Node)) and Means/Variable\">\n"
+            << "          <div class=\"means-panel\">\n"
+            << "            <div class=\"means-title\">Expression Levels</div>\n"
+            << "            <div class=\"means-bars\">\n"
+            << "              <xsl:for-each select=\"Means/Variable\">\n"
+            << "                <div class=\"bar-row\">\n"
+            << "                  <span class=\"bar-label\" title=\"{@name}\"><xsl:value-of select=\"@name\"/></span>\n"
+            << "                  <div class=\"bar-track\" title=\"Mean: {@mean} ({@pct}%)\">\n"
+            << "                    <div class=\"bar-fill\" style=\"width: {@pct}%;\"></div>\n"
+            << "                  </div>\n"
+            << "                  <span class=\"bar-val\"><xsl:value-of select=\"format-number(@mean, '#.##')\"/></span>\n"
+            << "                </div>\n"
+            << "              </xsl:for-each>\n"
+            << "            </div>\n"
+            << "          </div>\n"
+            << "        </xsl:if>\n"
+            << "      </div>\n"
+            << "      <xsl:if test=\"Node\">\n"
+            << "        <ul>\n"
+            << "          <xsl:apply-templates select=\"Node\"/>\n"
+            << "        </ul>\n"
+            << "      </xsl:if>\n"
+            << "    </li>\n"
+            << "  </xsl:template>\n"
+            << "</xsl:stylesheet>\n";
+    xsl_out.close();
 
     apply_stylesheet(xml_path, xsl_path, html_path);
 
     return stem + ".html";
 }
 
-void Reports::render_epp_node(std::ostream& out, const Pursuit_Results& node, const std::vector<std::string>& selected_vars, int depth, int id) {
-    std::string indent(depth * 2 + 2, ' ');
-    out << indent << "<Node id=\"" << id << "\">\n";
+void Reports::render_epp_node(std::ostream& out, const Pursuit_Results& node, const std::vector<std::string>& selected_vars, int depth) {
+    std::string indent(depth * 2, ' ');
+    std::string x_name = (node.has_gate && node.gate_x < selected_vars.size()) ? selected_vars[node.gate_x] : "X";
+    std::string y_name = (node.has_gate && node.gate_y < selected_vars.size()) ? selected_vars[node.gate_y] : "Y";
 
-    if (node.best_split && node.best_split->outcome == Projection_Results::Status::EPP_success) {
-        auto& split = *node.best_split;
-        std::string x_name = split.X < selected_vars.size() ? selected_vars[split.X] : "X";
-        std::string y_name = split.Y < selected_vars.size() ? selected_vars[split.Y] : "Y";
-        out << indent << "  <Split x=\"" << x_name << "\" y=\"" << y_name 
-            << "\" score=\"" << split.score 
-            << "\" in=\"" << split.in.count 
-            << "\" out=\"" << split.out.count << "\">\n";
-        out << indent << "    <Polygon>\n";
-        for (const auto& point : split.separatrix) {
-            out << indent << "      <Vertex x=\"" << point.x() << "\" y=\"" << point.y() << "\"/>\n";
-        }
-        out << indent << "    </Polygon>\n";
-        out << indent << "  </Split>\n";
+    out << indent << "<Node id=\"" << escape_xml(node.node_id) 
+        << "\" branch=\"" << escape_xml(node.branch) 
+        << "\" events=\"" << node.event_count 
+        << "\" isLeaf=\"" << (node.is_leaf ? "true" : "false") << "\"";
+
+    if (node.has_gate) {
+        out << " gateX=\"" << escape_xml(x_name) << "\" gateY=\"" << escape_xml(y_name) << "\"";
     }
-    
+    if (!node.polygon_image.empty()) {
+        out << " image=\"" << escape_xml(node.polygon_image) << "\"";
+    }
+    out << ">\n";
+
+    if (!node.means.empty()) {
+        out << indent << "  <Means>\n";
+        for (size_t i = 0; i < selected_vars.size() && i < node.means.size(); ++i) {
+            std::ostringstream ss, ss_pct;
+            ss << std::fixed << std::setprecision(4) << node.means[i];
+            double pct = std::max(0.0, std::min(100.0, node.means[i] * 100.0));
+            ss_pct << std::fixed << std::setprecision(1) << pct;
+            out << indent << "    <Variable name=\"" << escape_xml(selected_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
+        }
+        out << indent << "  </Means>\n";
+    }
+
     if (!node.children.empty()) {
-        int child_id = 0;
         for (const auto& child : node.children) {
-            render_epp_node(out, child, selected_vars, depth + 1, (id * 10) + child_id++);
+            render_epp_node(out, child, selected_vars, depth + 1);
         }
     }
-    
+
     out << indent << "</Node>\n";
 }

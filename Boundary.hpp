@@ -9,6 +9,7 @@
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <limits>
 
 #include "Leonard.hpp"
 
@@ -169,7 +170,7 @@ public:
         Color clockwise,
         Color widdershins,
         float weight) noexcept
-        : weight(weight > 0 ? weight : std::numeric_limits<float>::min()), i(i), j(j),
+        : weight(weight > 0 ? weight : (std::numeric_limits<float>::min)()), i(i), j(j),
             clockwise(clockwise), widdershins(widdershins), slope(slope){};
 
     ColoredSegment(
@@ -178,7 +179,7 @@ public:
         Coordinate j,
         Color clockwise,
         Color widdershins) noexcept
-        : weight(std::numeric_limits<float>::min()), i(i), j(j),
+        : weight((std::numeric_limits<float>::min)()), i(i), j(j),
             clockwise(clockwise), widdershins(widdershins), slope(slope){};
 
     ColoredSegment() = default;

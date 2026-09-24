@@ -420,9 +420,31 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
     return candidate;
 }
 
-Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name)
+Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, std::string node_id, std::string branch)
 {
     Pursuit_Results results;
+    results.total_events = total_events;
+    results.node_id = node_id;
+    results.branch = branch;
+
+    results.means.assign(data.size(), 0.0);
+    size_t count = 0;
+    for (size_t i = 0; i < included.size(); ++i)
+    {
+        if (included[i])
+        {
+            ++count;
+            for (size_t v = 0; v < data.size(); ++v)
+                results.means[v] += (*data[v])[i];
+        }
+    }
+    results.event_count = count;
+    if (count > 0)
+    {
+        for (size_t v = 0; v < data.size(); ++v)
+            results.means[v] /= (double)count;
+    }
+
     std::vector<std::unique_ptr<Qualify_Results>> qualifications;
     std::vector<std::future<Qualify_Results>> future_qualify;
     qualifications.reserve(data.size());
@@ -470,15 +492,26 @@ Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &dat
         if (results.best_split->outcome == Projection_Results::Status::EPP_success)
         {
             if (results.best_split->in.count >= min_count)
-                results.future_children.push_back(control_plane.enqueue([this, data, in_set = std::move(results.best_split->in.set), pop_name]() mutable {
-                                return do_Pursuit(data, std::move(in_set), pop_name); }));
+                results.future_children.push_back(control_plane.enqueue([this, data, in_set = std::move(results.best_split->in.set), pop_name, total_events = results.total_events, child_id = node_id + ".1"]() mutable {
+                    return do_Pursuit(data, std::move(in_set), pop_name, total_events, child_id, "in"); }));
             if (results.best_split->out.count >= min_count)
-                results.future_children.push_back(control_plane.enqueue([this, data, out_set = std::move(results.best_split->out.set), pop_name]() mutable {
-                    return do_Pursuit(data, std::move(out_set), pop_name); }));
+                results.future_children.push_back(control_plane.enqueue([this, data, out_set = std::move(results.best_split->out.set), pop_name, total_events = results.total_events, child_id = node_id + ".2"]() mutable {
+                    return do_Pursuit(data, std::move(out_set), pop_name, total_events, child_id, "out"); }));
+
+            if (selections.tolerance > 0.0)
+                    results.best_split->separatrix = results.best_split->separatrix.simplify(selections.tolerance);
+            results.best_split->in.polygon.reserve(results.best_split->separatrix.size() + 4);
+            for (auto &point : results.best_split->separatrix)
+                results.best_split->in.polygon.push_back(point);
+            Polygon::close_clockwise(results.best_split->in.polygon);
+            results.best_split->out.polygon.reserve(results.best_split->separatrix.size() + 4);
+            for (auto it = results.best_split->separatrix.rbegin(); it != results.best_split->separatrix.rend(); ++it)
+                results.best_split->out.polygon.push_back(*it);
+            Polygon::close_clockwise(results.best_split->out.polygon);
             
             std::vector<std::vector<float>*> node_data = { data[results.best_split->X], data[results.best_split->Y] };
-            results.future_node = compute_plane.enqueue([this, node_data, inc = std::move(included), X = results.best_split->X, Y = results.best_split->Y, in_poly = results.best_split->in.polygon, out_poly = results.best_split->out.polygon, pop_name]() { 
-                return do_EPP_Node(node_data, inc, X, Y, in_poly, out_poly, pop_name); });
+            results.future_node = compute_plane.enqueue([this, node_data, inc = std::move(included), X = results.best_split->X, Y = results.best_split->Y, in_poly = results.best_split->in.polygon, out_poly = results.best_split->out.polygon, pop_name, node_id]() { 
+                return do_EPP_Node(node_data, inc, X, Y, in_poly, out_poly, pop_name, node_id); });
         }
     }    
 
@@ -493,19 +526,40 @@ void Pursuit_Results::wait_for_results() noexcept
         child.wait_for_results();
     if (future_node.valid())
         EPP_node = std::make_unique<EPP_Node_Results>(future_node.get());
+
+    if (!children.empty() && best_split && EPP_node)
+    {
+        is_leaf = false;
+        for (auto &child : children)
+        {
+            child.has_gate = true;
+            child.gate_x = best_split->X;
+            child.gate_y = best_split->Y;
+            if (child.branch == "in")
+                child.polygon_image = EPP_node->image_in;
+            else if (child.branch == "out")
+                child.polygon_image = EPP_node->image_out;
+                child.pct_parent = (double)child.event_count / (double)event_count;
+                child.pct_total = (double)child.event_count / (double)total_events;
+        }
+    }
+    else
+    {
+        is_leaf = true;
+    }
 }
 
-void Pursuit_Results::wait_for_plots() noexcept
+void Pursuit_Results::wait_for_plots()
 {
     if (EPP_node)
         EPP_node->wait_for_plots();
     for (auto &f : future_plots)
-        if (f.valid()) f.wait();
+        if (f.valid()) f.get();
     for (auto &child : children)
         child.wait_for_plots();
 }
 
-EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon& in_poly, const Polygon& out_poly, std::string pop_name)
+EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon& in_poly, const Polygon& out_poly, std::string pop_name, std::string node_id)
 {
     EPP_Node_Results results;
     Weighty<2> parent(256);
@@ -532,17 +586,25 @@ EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float>*> dat
         }
     }
 
-    std::string path_in = params.img_dir + "/gating_" + pop_name + "_in_" + selections.variables[X] + "_" + selections.variables[Y] + ".png";
-    std::string path_out = params.img_dir + "/gating_" + pop_name + "_out_" + selections.variables[X] + "_" + selections.variables[Y] + ".png";
+    std::string safe_pop = pop_name;
+    std::replace(safe_pop.begin(), safe_pop.end(), ' ', '_');
+
+    std::string rel_in = "images/gating_" + safe_pop + "_" + node_id + "_in.png";
+    std::string rel_out = "images/gating_" + safe_pop + "_" + node_id + "_out.png";
+    std::string path_in = params.img_dir + "/gating_" + safe_pop + "_" + node_id + "_in.png";
+    std::string path_out = params.img_dir + "/gating_" + safe_pop + "_" + node_id + "_out.png";
+
+    results.image_in = rel_in;
+    results.image_out = rel_out;
+
     results.future_plots.push_back(plot_plane.enqueue([path_in, quant_data, X, Y, polygon = in_poly](){ make_gating_plot(path_in, *quant_data, X, Y, polygon); }));
     results.future_plots.push_back(plot_plane.enqueue([path_out, quant_data, X, Y, polygon = out_poly](){ make_gating_plot(path_out, *quant_data, X, Y, polygon); }));
-    // laplace->sample_images.push_back("images/sample_" + selections.variables[i] + "_" + selections.variables[j]  + ".png");
 
     return results;
 }
 
-void EPP_Node_Results::wait_for_plots() noexcept
+void EPP_Node_Results::wait_for_plots()
 {
     for (auto &f : future_plots)
-        if (f.valid()) f.wait();
+    if (f.valid()) f.get();
 }

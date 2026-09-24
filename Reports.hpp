@@ -19,5 +19,5 @@ public:
     static std::string generate_epp_report(const std::string& report_dir, const std::string& sample_name, const std::string& pop_name, const Pursuit_Results& res, const std::vector<std::string>& selected_vars);
 
 private:
-    static void render_epp_node(std::ostream& out, const Pursuit_Results& node, const std::vector<std::string>& selected_vars, int depth, int id);
+    static void render_epp_node(std::ostream& out, const Pursuit_Results& node, const std::vector<std::string>& selected_vars, int depth);
 };

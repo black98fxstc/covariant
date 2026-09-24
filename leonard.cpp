@@ -262,6 +262,10 @@ int Leonard::run()
     std::string report_dir;
     std::filesystem::path p(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
     report_dir = p.stem().string() + ".len";
+    params.img_dir = std::filesystem::absolute(std::filesystem::path(report_dir) / "images")
+                         .lexically_normal()
+                         .generic_string();
+    std::filesystem::create_directories(params.img_dir);
     std::vector<Reports::ReportLink> report_links;
 
     for (const auto *s_ptr : selections.samples)
@@ -460,8 +464,9 @@ int Leonard::run()
                     for (auto it = std::find(subpopulation.begin(), subpopulation.end(), true); it != subpopulation.end(); it = std::find(it + 1, subpopulation.end(), true))
                         if ((*data[i])[it - subpopulation.begin()] < 0.0f || (*data[i])[it - subpopulation.begin()] > 1.0f)
                             subpopulation[it - subpopulation.begin()] = false;
-                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name]() mutable {
-                    return do_Pursuit(data, std::move(subpop), pop_name);
+                size_t total_events = std::count(subpopulation.begin(), subpopulation.end(), true);
+                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name, total_events]() mutable {
+                    return do_Pursuit(data, std::move(subpop), pop_name, total_events);
                 })});
             } else if (selections.analysis_choice == 1) {
                 switch (num_vars_selected)

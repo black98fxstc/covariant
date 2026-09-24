@@ -1,19 +1,21 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <memory>
-#include <future>
-#include <atomic>
-#include <limits>
-#include <iostream>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <fstream>
+#include <functional>
+#include <future>
+#include <iostream>
+#include <limits>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include <matplot/matplot.h>
 #include <nlohmann/json.hpp>
 
 // #include "Pursuit.hpp"
-#include "Leonard.hpp"
 #include "FlowJo.hpp"
 #include "Workers.hpp"
 #include "Covariant.hpp"
@@ -76,6 +78,15 @@ class Polygon : public std::vector<Point>
 {
 public:
     operator json() const noexcept;
+    static void close_clockwise(Polygon &polygon)  noexcept;
+    Polygon simplify(const double tolerance) noexcept;
+
+private:
+    void simplify(
+        const double tolerance,
+        Polygon &simplified,
+        const size_t lo,
+        const size_t hi) const noexcept;
 };
 
 // Forward declare plotting functions implemented in Reports.cpp
@@ -85,20 +96,23 @@ void make_gating_plot(const std::string &path, const std::vector<std::vector<dou
 class Qualify_Results
 {
 public:
-    const Measurement X;
+    Measurement X;
     double KLDn = 0;
     double KLDe = 0;
     bool qualified = false;
 
+    Qualify_Results() = default;
     Qualify_Results(const Measurement X) noexcept : X(X) {};
 };
 
 class EPP_Node_Results
 {
 public:
+    std::string image_in;
+    std::string image_out;
     std::vector<std::future<void>> future_plots;
 
-    void wait_for_plots() noexcept;
+    void wait_for_plots();
 
     EPP_Node_Results() = default;
     EPP_Node_Results(EPP_Node_Results&&) = default;
@@ -117,7 +131,7 @@ public:
         EPP_threshold,
         EPP_error
     } outcome = EPP_error;
-    const Measurement X, Y;
+    Measurement X, Y;
     Polygon separatrix;
     double score = std::numeric_limits<double>::infinity();
     struct Gating 
@@ -128,12 +142,28 @@ public:
     } in, out;
     unsigned int pass = 0, clusters = 0, graphs = 0, merges = 0, splits = 0;
 
+    Projection_Results() = default;
     Projection_Results(Measurement X, Measurement Y) noexcept : X(X < Y ? X : Y), Y(X < Y ? Y : X) {};
+
+private:
+    void close_clockwise(Polygon &polygon) const noexcept;
 };
 
 class Pursuit_Results
 {
 public:
+    std::string node_id = "1";
+    std::string branch = "root";
+    size_t event_count = 0;
+    size_t total_events = 0;
+    std::vector<double> means;
+    bool is_leaf = true;
+    Measurement gate_x = 0;
+    Measurement gate_y = 0;
+    bool has_gate = false;
+    std::string polygon_image;
+    double pct_parent = 0, pct_total = 0;
+
     std::vector<Measurement> qualified;
     double best_score = 0;
     std::unique_ptr<Projection_Results> best_split;
@@ -144,9 +174,8 @@ public:
     std::vector<std::future<void>> future_plots;
     std::vector<std::string> sample_images;
 
-
     void wait_for_results() noexcept;
-    void wait_for_plots() noexcept;
+    void wait_for_plots();
 };
 
 template <unsigned Dimension>
@@ -168,6 +197,7 @@ public:
     std::string x_label, y_label;
     unsigned clusters;
 
+    Marginal_Results() = default;
     Marginal_Results(std::shared_ptr<Laplace_Results> laplace) noexcept : laplace(laplace) {};
 };
 
@@ -196,10 +226,10 @@ public:
             marginals.push_back(f.get());
     };
 
-    void wait_for_plots() noexcept
+    void wait_for_plots()
     {
         for (auto &f : future_plots)
-            f.get();
+            if (f.valid()) f.get();
     };
 
     Laplace_Results() = default;
@@ -210,6 +240,10 @@ public:
 class Leonard
 {
 public:
+    Leonard() = default;
+    Leonard(const Leonard&) = delete;
+    Leonard& operator=(const Leonard&) = delete;
+
     Params params;
     SelectionState selections;
     size_t laplacian_offset = 0;
@@ -218,7 +252,7 @@ public:
     Workspace ws;
     std::vector<SampleData> dummy_samples;
     std::vector<std::vector<double>> colors;
-    ThreadPool compute_plane{1};//std::thread::hardware_concurrency()};
+    ThreadPool compute_plane{std::thread::hardware_concurrency()};
     ThreadPool control_plane{4};
     ThreadPool plot_plane{std::max(1u, std::thread::hardware_concurrency())};
 
@@ -259,9 +293,9 @@ public:
 
     Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name);
 
-    EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon& in_poly, const Polygon& out_poly, std::string pop_name);
+    EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon& in_poly, const Polygon& out_poly, std::string pop_name, std::string node_id);
 
-    Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name);
+    Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, std::string node_id = "1", std::string branch = "root");
 
     Marginal_Results do_Marginal(std::shared_ptr<Laplace_Results> laplace, const std::vector<std::vector<float> *> &data, const Measurement i, const Measurement j, std::string pop_name) noexcept
     {
@@ -435,6 +469,10 @@ public:
                 results->valid_clusters--;
             }
         }
+        results->classification.assign(results->idx.size(), 0);
+        for (unsigned c = 0; c < results->cluster_events.size(); ++c)
+            for (unsigned local : results->cluster_events[c])
+                results->classification[local] = static_cast<unsigned short>(c);
 
         for_each_plane<Dimension>([this, results, data, pop_name](unsigned i, unsigned j)
         {
