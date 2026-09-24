@@ -25,6 +25,7 @@ endif()
 find_package(FFTW3 CONFIG REQUIRED)
 find_package(FFTW3f CONFIG REQUIRED)
 find_package(Matplot++ CONFIG REQUIRED)
+find_package(OpenCV CONFIG REQUIRED)
 find_package(cxxopts CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Eigen3 CONFIG REQUIRED)
@@ -62,9 +63,6 @@ target_link_libraries(testdata PRIVATE covariant_core cxxopts::cxxopts ${MATH_LI
 # add_executable(riemann riemann.cpp)
 # target_link_libraries(riemann PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
 
-# add_executable(darwin darwin.cpp)
-# target_link_libraries(darwin PRIVATE covariant_core FFTW3::fftw3f Matplot++::matplot nlohmann_json::nlohmann_json cxxopts::cxxopts Eigen3::Eigen ${MATH_LIB})
-
 add_executable(leonard
     leonard.cpp
     Leonard.hpp
@@ -77,7 +75,7 @@ add_executable(leonard
     Modal.hpp
     Reports.cpp
     Reports.hpp)
-target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot cxxopts::cxxopts nlohmann_json::nlohmann_json ${MATH_LIB})
+target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot ${OpenCV_LIBS} cxxopts::cxxopts nlohmann_json::nlohmann_json ${MATH_LIB})
 
 # Standalone gating test executable (using the main() function from Gating.cpp)
 # add_executable(gating_test Gating.cpp)

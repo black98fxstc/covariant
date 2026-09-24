@@ -11,8 +11,21 @@
 #include <libxslt/xslt.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
+#include <opencv2/imgcodecs.hpp>
 
 namespace fs = std::filesystem;
+
+void configure_noninteractive_gnuplot()
+{
+    static std::once_flag configured;
+    std::call_once(configured, [] {
+#ifdef _WIN32
+        _putenv_s("GNUTERM", "pngcairo");
+#else
+        setenv("GNUTERM", "pngcairo", 1);
+#endif
+    });
+}
 
 static std::string escape_xml(const std::string& input) {
     std::string output;
@@ -30,8 +43,32 @@ static std::string escape_xml(const std::string& input) {
     return output;
 }
 
+void write_rgb_png(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data)
+{
+    if (class_data.size() < 3 || class_data[0].empty() || class_data[0][0].empty())
+        return;
+
+    const int rows = static_cast<int>(class_data[0].size());
+    const int columns = static_cast<int>(class_data[0][0].size());
+    cv::Mat image(rows, columns, CV_8UC3);
+
+    for (int row = 0; row < rows; ++row)
+        for (int column = 0; column < columns; ++column)
+        {
+            cv::Vec3b &pixel = image.at<cv::Vec3b>(row, column);
+            pixel[0] = static_cast<unsigned char>(std::clamp(class_data[2][row][column], 0.0, 255.0));
+            pixel[1] = static_cast<unsigned char>(std::clamp(class_data[1][row][column], 0.0, 255.0));
+            pixel[2] = static_cast<unsigned char>(std::clamp(class_data[0][row][column], 0.0, 255.0));
+        }
+
+    cv::flip(image, image, 0);
+    if (!cv::imwrite(path, image))
+        std::cerr << "Error writing RGB plot: " << path << std::endl;
+}
+
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
 {
+    (void)class_data;
     using namespace matplot;
 
     auto backend = std::make_shared<matplot::backend::gnuplot>();
@@ -41,12 +78,11 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
     fig->size(400, 400);
     auto ax = fig->current_axes();
     ax->hold(on);
+
     // Generate coordinate matrices mapped to the image pixel grid (0 to N-1).
     auto x_range = matplot::linspace(0, quant_data[0].size() - 1, quant_data[0].size());
     auto y_range = matplot::linspace(0, quant_data.size() - 1, quant_data.size());
     auto [X, Y] = matplot::meshgrid(x_range, y_range);
-    auto img = ax->image(class_data[0], class_data[1], class_data[2]);
-
     // Overlay contours using the pixel-mapped X and Y ranges
     auto c = ax->contour(X, Y, quant_data);
     c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
@@ -442,9 +478,9 @@ std::string Reports::generate_epp_report(const std::string& report_dir, const st
             << "            </xsl:otherwise>\n"
             << "          </xsl:choose>\n"
             << "        </h4>\n"
-            << "        <p><strong>Events:</strong> <xsl:value-of select=\"@events\"/></p>\n"
-            << "        <p><strong>Parent:</strong> <xsl:value-of select=\"@pct_parent\"/>%</p>\n"
-            << "        <p><strong>Total:</strong> <xsl:value-of select=\"@pct_total\"/>%</p>\n"
+            << "        <p><xsl:value-of select=\"@events\"/><xsl:text> </xsl:text><strong>Events</strong></p>\n"
+            << "        <p><xsl:value-of select=\"@pct_parent\"/>% <strong>Parent</strong></p>\n"
+            << "        <p><xsl:value-of select=\"@pct_total\"/>% <strong>Total</strong></p>\n"
             << "        <xsl:if test=\"@image\">\n"
             << "          <div class=\"plot-box\">\n"
             << "            <a href=\"{@image}\" target=\"_blank\">\n"

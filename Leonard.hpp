@@ -91,6 +91,7 @@ private:
 
 // Forward declare plotting functions implemented in Reports.cpp
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data);
+void write_rgb_png(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data);
 void make_gating_plot(const std::string &path, const std::vector<std::vector<double>> &quant_data, const Measurement X, const Measurement Y, const Polygon &polygon);
 
 class Qualify_Results
@@ -254,7 +255,7 @@ public:
     std::vector<std::vector<double>> colors;
     ThreadPool compute_plane{std::thread::hardware_concurrency()};
     ThreadPool control_plane{4};
-    ThreadPool plot_plane{std::max(1u, std::thread::hardware_concurrency())};
+    ThreadPool plot_plane{1};//std::max(1u, std::thread::hardware_concurrency())};
 
     int parse_args(int argc, char *argv[]);
     /**
@@ -319,6 +320,7 @@ public:
                 marginal.event(marginal_event);
                 if (c == 0) continue;
 
+                marginal.locate(marginal_event, marginal_coord);
                 size_t idx = (size_t)marginal_coord;
                 unsigned short d = marginal_klass[idx];
                 if (d == 0) marginal_klass[idx] = c;
@@ -345,11 +347,13 @@ public:
             }
         }
 
-        std::string path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
-        laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, path]() { make_marginal_plot(path, *class_data, *quant_data); }));
+        std::string over_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
+        std::string under_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
+        write_rgb_png(under_path, *class_data);
+        laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, over_path]() { make_marginal_plot(over_path, *class_data, *quant_data); }));
         laplace->sample_images.push_back("images/sample_" + selections.variables[i] + "_" + selections.variables[j]  + ".png");
         
-        for (unsigned c = 0; c <= laplace->valid_clusters; ++c)
+        for (unsigned c = 1; c <= laplace->valid_clusters; ++c)
         {
             std::vector<unsigned short> marginal_klass(marginal.size(), 0);
 
@@ -361,6 +365,7 @@ public:
                 marginal.event(marginal_event);
                 if (c == 0) continue;
 
+                marginal.locate(marginal_event, marginal_coord);
                 size_t idx = (size_t)marginal_coord;
                 marginal_klass[idx] = c;
             }
@@ -386,6 +391,8 @@ public:
             }
 
             std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
+            std::string under_path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
+            write_rgb_png(under_path, *class_data);
             laplace->future_plots.push_back(plot_plane.enqueue([path, class_data, quant_data](){ make_marginal_plot(path, *class_data, *quant_data); }));
             laplace->cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
         }

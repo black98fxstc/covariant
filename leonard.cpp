@@ -84,6 +84,8 @@ int Leonard::parse_args(int argc, char *argv[])
 
 int Leonard::run()
 {
+    configure_noninteractive_gnuplot();
+
     std::string wisdom_path;
 #ifdef _WIN32
     if (const char* appdata = std::getenv("APPDATA")) {

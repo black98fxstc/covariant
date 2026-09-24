@@ -4,6 +4,8 @@
 #include <vector>
 #include "Leonard.hpp"
 
+void configure_noninteractive_gnuplot();
+
 class Reports {
 public:
     struct ReportLink {
