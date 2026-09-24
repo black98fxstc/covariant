@@ -443,6 +443,8 @@ std::string Reports::generate_epp_report(const std::string& report_dir, const st
             << "          </xsl:choose>\n"
             << "        </h4>\n"
             << "        <p><strong>Events:</strong> <xsl:value-of select=\"@events\"/></p>\n"
+            << "        <p><strong>Parent:</strong> <xsl:value-of select=\"@pct_parent\"/>%</p>\n"
+            << "        <p><strong>Total:</strong> <xsl:value-of select=\"@pct_total\"/>%</p>\n"
             << "        <xsl:if test=\"@image\">\n"
             << "          <div class=\"plot-box\">\n"
             << "            <a href=\"{@image}\" target=\"_blank\">\n"
@@ -490,6 +492,8 @@ void Reports::render_epp_node(std::ostream& out, const Pursuit_Results& node, co
     out << indent << "<Node id=\"" << escape_xml(node.node_id) 
         << "\" branch=\"" << escape_xml(node.branch) 
         << "\" events=\"" << node.event_count 
+        << "\" pct_parent=\"" << std::fixed << std::setprecision(1) << node.pct_parent * 100.0
+        << "\" pct_total=\"" << node.pct_total * 100.0
         << "\" isLeaf=\"" << (node.is_leaf ? "true" : "false") << "\"";
 
     if (node.has_gate) {
