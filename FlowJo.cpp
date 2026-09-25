@@ -1354,8 +1354,13 @@ SelectionState build_ftxui_interface(Workspace &ws)
     auto top_level = Container::Vertical({main_layout,
                                           bottom_container});
 
+    auto screen = ScreenInteractive::TerminalOutput();
     auto top_level_handled = CatchEvent(top_level, [&, main_layout, bottom_container](ftxui::Event e)
                                         {
+        if (e == ftxui::Event::Return) {
+            screen.ExitLoopClosure()();
+            return true;
+        }
         if (e == ftxui::Event::Tab) {
             if (main_layout->Focused()) {
                 bottom_container->TakeFocus();
@@ -1474,7 +1479,6 @@ SelectionState build_ftxui_interface(Workspace &ws)
         }) | border; });
 
     {
-        auto screen = ScreenInteractive::TerminalOutput();
         auto main_container = CatchEvent(renderer, [&](ftxui::Event event)
                                          {
             if (event == ftxui::Event::Return) {
