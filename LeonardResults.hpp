@@ -5,7 +5,9 @@
 #include <future>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -133,6 +135,19 @@ public:
     std::vector<std::future<void>> future_plots;
     std::vector<std::string> sample_images;
     std::vector<std::string> cluster_images;
+    std::shared_ptr<std::mutex> image_mutex = std::make_shared<std::mutex>();
+
+    void add_sample_image(std::string image)
+    {
+        std::lock_guard<std::mutex> lock(*image_mutex);
+        sample_images.push_back(std::move(image));
+    }
+
+    void add_cluster_image(std::string image)
+    {
+        std::lock_guard<std::mutex> lock(*image_mutex);
+        cluster_images.push_back(std::move(image));
+    }
 
     void wait_for_results() noexcept
     {

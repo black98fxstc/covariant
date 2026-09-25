@@ -170,7 +170,7 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
         ax->xticklabels({"0", ".2", ".4", ".6", ".8", "1"});
 
         ax->yticks({0, .2 * (double)quant_data.size(), .4 * (double)quant_data.size(), .6 * (double)quant_data.size(), .8 * (double)quant_data.size(), (double)quant_data.size() - 1});
-        ax->yticklabels({"1", ".8", ".6", ".4", ".2", "0"});
+        ax->yticklabels({"0", ".2", ".4", ".6", ".8", "1"});
 
         fig->save(path);
     }
@@ -319,8 +319,26 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
 
     auto write_visualizations = [&xml_out, &report_dir, &selected_vars](const std::vector<std::string> &images)
     {
+        std::vector<std::string> ordered_images = images;
+        const auto plane_rank = [&selected_vars](const std::string &image)
+        {
+            const std::string stem = fs::path(image).stem().string();
+            for (size_t x = 0; x < selected_vars.size(); ++x)
+                for (size_t y = x + 1; y < selected_vars.size(); ++y)
+                {
+                    const std::string suffix = selected_vars[x] + "_" + selected_vars[y];
+                    if (stem.size() >= suffix.size() &&
+                        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+                        return x * selected_vars.size() + y;
+                }
+            return std::numeric_limits<size_t>::max();
+        };
+        std::stable_sort(ordered_images.begin(), ordered_images.end(),
+                         [&plane_rank](const std::string &left, const std::string &right)
+                         { return plane_rank(left) < plane_rank(right); });
+
         xml_out << "      <Visualizations>\n";
-        for (const auto &image : images)
+        for (const auto &image : ordered_images)
         {
             const std::string transparent = transparent_overlay_path(image);
             const std::string source = fs::exists(report_dir + "/" + transparent)
@@ -479,10 +497,12 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
             <div class="row"><div class="info"><h2><xsl:value-of select="/LaplaceReport/@population"/></h2>
                 <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
                 <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
+                <xsl:variable name="unclassified" select="number(Summary/@totalEvents) - sum(Clusters/Cluster/@events)"/>
+                <p><xsl:value-of select="$unclassified"/> Events (<xsl:value-of select="format-number(100 * $unclassified div number(Summary/@totalEvents), '0.0')"/>%) Unclassified</p>
             </div><div class="plots"><xsl:for-each select="Sample/Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
             <xsl:for-each select="Clusters/Cluster">
                 <div class="row"><div class="info"><h2>Cluster <xsl:value-of select="@id"/></h2>
-                    <p>Events: <xsl:value-of select="@events"/> (<xsl:value-of select="@percentage"/>%)</p>
+                    <p>Events: <xsl:value-of select="@events"/> (<xsl:value-of select="format-number(@percentage, '0.0')"/>%)</p>
                     <h3>Expression Levels</h3>
                     <div class="means-panel">
                         <xsl:for-each select="Mean/Value">
