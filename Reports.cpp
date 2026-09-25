@@ -317,7 +317,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     std::string html_path = report_dir + "/" + stem + ".html";
     std::ofstream xml_out(xml_path);
 
-    auto write_visualizations = [&xml_out, &report_dir](const std::vector<std::string> &images)
+    auto write_visualizations = [&xml_out, &report_dir, &selected_vars](const std::vector<std::string> &images)
     {
         xml_out << "      <Visualizations>\n";
         for (const auto &image : images)
@@ -326,8 +326,25 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
             const std::string source = fs::exists(report_dir + "/" + transparent)
                                            ? transparent
                                            : image;
+            const std::string stem = fs::path(image).stem().string();
+            std::string x_label;
+            std::string y_label;
+            for (size_t x = 0; x < selected_vars.size() && x_label.empty(); ++x)
+                for (size_t y = x + 1; y < selected_vars.size(); ++y)
+                {
+                    const std::string suffix = selected_vars[x] + "_" + selected_vars[y];
+                    if (stem.size() >= suffix.size() &&
+                        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+                    {
+                        x_label = selected_vars[x];
+                        y_label = selected_vars[y];
+                        break;
+                    }
+                }
             xml_out << "        <Visualization src=\"" << escape_xml(source)
-                    << "\" under=\"" << escape_xml(underlay_path(image)) << "\" />\n";
+                    << "\" under=\"" << escape_xml(underlay_path(image))
+                    << "\" x=\"" << escape_xml(x_label)
+                    << "\" y=\"" << escape_xml(y_label) << "\" />\n";
         }
         xml_out << "      </Visualizations>\n";
     };
@@ -364,8 +381,11 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
             const std::string label = dimension < selected_vars.size()
                                           ? selected_vars[dimension]
                                           : "Dim" + std::to_string(dimension);
-            xml_out << "        <Value label=\"" << escape_xml(label) << "\">"
-                    << res.means[cluster][dimension] << "</Value>\n";
+            const double mean = res.means[cluster][dimension];
+            const double percentage = std::max(0.0, std::min(100.0, mean * 100.0));
+            xml_out << "        <Value label=\"" << escape_xml(label)
+                << "\" mean=\"" << mean << "\" pct=\"" << percentage << "\">"
+                << mean << "</Value>\n";
         }
         xml_out << "      </Mean>\n      <Covariance>\n";
         for (const auto &row : res.covariances[cluster])
@@ -395,6 +415,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     <xsl:template name="plot">
         <div>
             <xsl:attribute name="class">plot-stack plot-stack-<xsl:value-of select="/LaplaceReport/@dimensions"/></xsl:attribute>
+            <div class="plot-label"><xsl:value-of select="@x"/> vs <xsl:value-of select="@y"/></div>
             <img class="plot-underlay" src="{@under}"/>
             <img class="plot-overlay" src="{@src}"/>
         </div>
@@ -437,26 +458,41 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                     --underlay-scale-y: .81;
                 }
                 .plot-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
+                .plot-label { position: absolute; z-index: 2; top: 4px; left: 50%; transform: translateX(-50%); padding: 2px 5px; background: rgba(255,255,255,.8); font-weight: 600; white-space: nowrap; }
                 .plot-underlay {
                     transform: translate(var(--underlay-x), var(--underlay-y))
                                scale(var(--underlay-scale-x), var(--underlay-scale-y));
                     transform-origin: top left;
                 }
                 .plot-overlay { pointer-events: none; mix-blend-mode: multiply; }
+                .means-panel { margin-top: 10px; }
+                .means-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+                .means-label { width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .means-track { flex: 1; height: 10px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+                .means-fill { height: 100%; background: #2563eb; }
+                .means-value { width: 48px; text-align: right; font-family: monospace; }
                 table { border-collapse: collapse; margin-top: 10px; }
                 th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
             </style>
         </head><body>
             <h1>Laplace Report: <xsl:value-of select="@sample"/></h1>
-            <div class="row"><div class="info"><h2>Whole Sample</h2>
+            <div class="row"><div class="info"><h2><xsl:value-of select="/LaplaceReport/@population"/></h2>
                 <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
                 <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
             </div><div class="plots"><xsl:for-each select="Sample/Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
             <xsl:for-each select="Clusters/Cluster">
                 <div class="row"><div class="info"><h2>Cluster <xsl:value-of select="@id"/></h2>
                     <p>Events: <xsl:value-of select="@events"/> (<xsl:value-of select="@percentage"/>%)</p>
-                    <h3>Mean</h3><table><tr><xsl:for-each select="Mean/Value"><th><xsl:value-of select="@label"/></th></xsl:for-each></tr><tr><xsl:for-each select="Mean/Value"><td><xsl:value-of select="."/></td></xsl:for-each></tr></table>
-                    <h3>Covariance</h3><table><xsl:for-each select="Covariance/Row"><tr><xsl:for-each select="Cell"><td><xsl:value-of select="."/></td></xsl:for-each></tr></xsl:for-each></table>
+                    <h3>Expression Levels</h3>
+                    <div class="means-panel">
+                        <xsl:for-each select="Mean/Value">
+                            <div class="means-row">
+                                <span class="means-label" title="{@label}"><xsl:value-of select="@label"/></span>
+                                <div class="means-track"><div class="means-fill" style="width: {@pct}%;"></div></div>
+                                <span class="means-value"><xsl:value-of select="format-number(@mean, '#.##')"/></span>
+                            </div>
+                        </xsl:for-each>
+                    </div>
                 </div><div class="plots"><xsl:for-each select="Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
             </xsl:for-each>
         </body></html>
@@ -702,8 +738,8 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
             << "  <xsl:template match=\"AllEvents\">\n"
             << "    <li>\n"
             << "      <div class=\"node node-root\">\n"
-            << "        <h4>All Events</h4>\n"
-            << "        <p><strong>Total Events:</strong> <xsl:value-of select=\"@events\"/></p>\n"
+            << "        <h4><xsl:value-of select=\"/EPPReport/@population\"/></h4>\n"
+            << "        <p><xsl:value-of select=\"@events\"/><xsl:text> Events</xsl:text></p>\n"
             << "        <xsl:if test=\"not(Node) and Means/Variable\">\n"
             << "          <div class=\"means-panel\">\n"
             << "            <div class=\"means-title\">Expression Levels</div>\n"
@@ -731,15 +767,6 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
             << "  <xsl:template match=\"Node\">\n"
             << "    <li>\n"
             << "      <div class=\"node\">\n"
-            << "        <xsl:if test=\"@branch = 'in'\">\n"
-            << "          <span class=\"badge badge-in\">IN</span>\n"
-            << "        </xsl:if>\n"
-            << "        <xsl:if test=\"@branch = 'out'\">\n"
-            << "          <span class=\"badge badge-out\">OUT</span>\n"
-            << "        </xsl:if>\n"
-            << "        <xsl:if test=\"@isLeaf = 'true' or not(Node)\">\n"
-            << "          <span class=\"badge badge-leaf\">LEAF</span>\n"
-            << "        </xsl:if>\n"
             << "        <h4>\n"
             << "          <xsl:choose>\n"
             << "            <xsl:when test=\"@gateX and @gateY\">\n"
