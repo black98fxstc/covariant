@@ -12,6 +12,7 @@
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
 namespace fs = std::filesystem;
 
@@ -66,11 +67,62 @@ void write_rgb_png(const std::string &path, const std::vector<std::vector<std::v
         std::cerr << "Error writing RGB plot: " << path << std::endl;
 }
 
+void make_overlay_transparent(const std::string &path)
+{
+    cv::Mat source = cv::imread(path, cv::IMREAD_COLOR);
+    if (source.empty())
+        return;
+    cv::Mat image;
+    cv::cvtColor(source, image, cv::COLOR_BGR2BGRA);
+
+    for (int row = 0; row < image.rows; ++row)
+        for (int column = 0; column < image.cols; ++column)
+        {
+            cv::Vec4b &pixel = image.at<cv::Vec4b>(row, column);
+            pixel[3] = (pixel[0] >= 248 && pixel[1] >= 248 && pixel[2] >= 248) ? 0 : 255;
+        }
+    const std::string transparent_path = path + ".rgba.png";
+    if (!cv::imwrite(transparent_path, image))
+    {
+        std::cerr << "Error writing transparent overlay: " << transparent_path << std::endl;
+        return;
+    }
+
+}
+
+static std::vector<std::vector<double>> downsample_for_plot(
+    const std::vector<std::vector<double>> &data, size_t max_points = 512)
+{
+    if (data.empty() || data[0].empty())
+        return {};
+
+    const size_t source_rows = data.size();
+    const size_t source_columns = data[0].size();
+    const size_t output_rows = std::min(max_points, source_rows);
+    const size_t output_columns = std::min(max_points, source_columns);
+    std::vector<std::vector<double>> result(
+        output_rows, std::vector<double>(output_columns));
+
+    for (size_t row = 0; row < output_rows; ++row)
+    {
+        const size_t source_row = output_rows == 1
+            ? 0 : row * (source_rows - 1) / (output_rows - 1);
+        for (size_t column = 0; column < output_columns; ++column)
+        {
+            const size_t source_column = output_columns == 1
+                ? 0 : column * (source_columns - 1) / (output_columns - 1);
+            result[row][column] = data[source_row][source_column];
+        }
+    }
+    return result;
+}
+
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data)
 {
     (void)class_data;
     using namespace matplot;
 
+    {
     auto backend = std::make_shared<matplot::backend::gnuplot>();
     auto fig = std::make_shared<matplot::figure_type>(true);
     fig->backend(backend);
@@ -80,11 +132,12 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
     ax->hold(on);
 
     // Generate coordinate matrices mapped to the image pixel grid (0 to N-1).
-    auto x_range = matplot::linspace(0, quant_data[0].size() - 1, quant_data[0].size());
-    auto y_range = matplot::linspace(0, quant_data.size() - 1, quant_data.size());
+    const auto plot_data = downsample_for_plot(quant_data);
+    auto x_range = matplot::linspace(0, quant_data[0].size() - 1, plot_data[0].size());
+    auto y_range = matplot::linspace(0, quant_data.size() - 1, plot_data.size());
     auto [X, Y] = matplot::meshgrid(x_range, y_range);
     // Overlay contours using the pixel-mapped X and Y ranges
-    auto c = ax->contour(X, Y, quant_data);
+    auto c = ax->contour(X, Y, plot_data);
     c->levels(matplot::iota(0.1, 0.1, 0.9)); // Equivalent to 0.1:0.1:0.9
     c->color("black");
     c->line_width(1.2);
@@ -101,6 +154,7 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
     ax->yticklabels({"1", ".8", ".6", ".4", ".2", "0"});
     
     fig->save(path);
+    }
 }
 
 void make_gating_plot(const std::string &path, const std::vector<std::vector<double>> &quant_data, const Measurement H, const Measurement V, const Polygon &polygon)
@@ -204,7 +258,184 @@ void Reports::update_index(const std::string& report_dir, const std::string& tit
     out << "    </ul>\n  </div>\n</body>\n</html>\n";
 }
 
+static std::string underlay_path(const std::string &overlay)
+{
+        const std::string suffix = ".png";
+        if (overlay.size() >= suffix.size() &&
+                overlay.compare(overlay.size() - suffix.size(), suffix.size(), suffix) == 0)
+                return overlay.substr(0, overlay.size() - suffix.size()) + "_under.png";
+        return overlay + "_under.png";
+}
+
+    static std::string transparent_overlay_path(const std::string &overlay)
+    {
+        return overlay + ".rgba.png";
+    }
+
+static std::string generate_laplace_report_v2(const std::string& report_dir,
+                                                                                             const std::string& sample_name,
+                                                                                             const std::string& pop_name,
+                                                                                             const Laplace_Results& res,
+                                                                                             const std::vector<std::string>& selected_vars)
+{
+        fs::create_directories(report_dir);
+        std::string stem = "laplace_" + sample_name + "_" + pop_name;
+        std::replace(stem.begin(), stem.end(), ' ', '_');
+
+        std::string xml_path = report_dir + "/" + stem + ".xml";
+        std::string xsl_path = report_dir + "/laplace_report.xsl";
+        std::string html_path = report_dir + "/" + stem + ".html";
+        std::ofstream xml_out(xml_path);
+
+        auto write_visualizations = [&xml_out, &report_dir](const std::vector<std::string> &images)
+        {
+                xml_out << "      <Visualizations>\n";
+                for (const auto &image : images)
+            {
+                    const std::string transparent = transparent_overlay_path(image);
+                    const std::string source = fs::exists(report_dir + "/" + transparent)
+                    ? transparent : image;
+                    xml_out << "        <Visualization src=\"" << escape_xml(source)
+                                        << "\" under=\"" << escape_xml(underlay_path(image)) << "\" />\n";
+            }
+                xml_out << "      </Visualizations>\n";
+        };
+
+        xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        << "<?xml-stylesheet type=\"text/xsl\" href=\"laplace_report.xsl\"?>\n"
+                        << "<LaplaceReport sample=\"" << escape_xml(sample_name)
+                        << "\" population=\"" << escape_xml(pop_name)
+                        << "\" dimensions=\"" << selected_vars.size() << "\">\n"
+                        << "  <Summary totalEvents=\"" << res.idx.size()
+                        << "\" clustersFound=\"" << res.valid_clusters << "\" />\n"
+                        << "  <Sample>\n"
+                        << "    <Summary totalEvents=\"" << res.idx.size()
+                        << "\" clustersFound=\"" << res.valid_clusters << "\" />\n";
+        write_visualizations(res.sample_images);
+        xml_out << "  </Sample>\n  <Clusters>\n";
+
+        for (unsigned cluster = 1; cluster <= res.valid_clusters; ++cluster)
+        {
+                const size_t event_count = cluster < res.cluster_events.size()
+                        ? res.cluster_events[cluster].size() : 0;
+            if (event_count == 0)
+                continue;
+                const double percentage = res.idx.empty()
+                        ? 0.0 : 100.0 * event_count / res.idx.size();
+
+                xml_out << "    <Cluster id=\"" << cluster << "\" events=\""
+                                << event_count << "\" percentage=\"" << percentage << "\">\n"
+                                << "      <Mean>\n";
+                for (size_t dimension = 0; dimension < res.means[cluster].size(); ++dimension)
+                {
+                        const std::string label = dimension < selected_vars.size()
+                                ? selected_vars[dimension] : "Dim" + std::to_string(dimension);
+                        xml_out << "        <Value label=\"" << escape_xml(label) << "\">"
+                                        << res.means[cluster][dimension] << "</Value>\n";
+                }
+                xml_out << "      </Mean>\n      <Covariance>\n";
+                for (const auto &row : res.covariances[cluster])
+                {
+                        xml_out << "        <Row>\n";
+                        for (const auto value : row)
+                                xml_out << "          <Cell>" << value << "</Cell>\n";
+                        xml_out << "        </Row>\n";
+                }
+                xml_out << "      </Covariance>\n";
+
+                std::vector<std::string> cluster_images;
+                const std::string prefix = "images/cluster_" + std::to_string(cluster) + "_";
+                for (const auto &image : res.cluster_images)
+                        if (image.rfind(prefix, 0) == 0)
+                                cluster_images.push_back(image);
+                write_visualizations(cluster_images);
+                xml_out << "    </Cluster>\n";
+        }
+        xml_out << "  </Clusters>\n</LaplaceReport>\n";
+        xml_out.close();
+
+        std::ofstream xsl_out(xsl_path);
+        xsl_out << R"XSL(<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    <xsl:output method="html" indent="yes"/>
+    <xsl:template name="plot">
+        <div>
+            <xsl:attribute name="class">plot-stack plot-stack-<xsl:value-of select="/LaplaceReport/@dimensions"/></xsl:attribute>
+            <img class="plot-underlay" src="{@under}"/>
+            <img class="plot-overlay" src="{@src}"/>
+        </div>
+    </xsl:template>
+    <xsl:template match="/LaplaceReport">
+        <html><head>
+            <title>Laplace Report: <xsl:value-of select="@sample"/></title>
+            <style>
+                body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
+                .row { display: flex; gap: 20px; background: #fff; margin-bottom: 20px; padding: 15px; }
+                .info { flex: 0 0 350px; }
+                .plots { display: flex; flex-wrap: wrap; gap: 10px; }
+                .plot-stack {
+                    --underlay-x: 10%;
+                    --underlay-y: 10%;
+                    --underlay-scale-x: .78;
+                    --underlay-scale-y: .78;
+                    position: relative;
+                    width: 400px;
+                    height: 400px;
+                    aspect-ratio: 1 / 1;
+                    overflow: hidden;
+                }
+                .plot-stack-2 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-3 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-4 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
+                .plot-underlay {
+                    transform: translate(var(--underlay-x), var(--underlay-y))
+                               scale(var(--underlay-scale-x), var(--underlay-scale-y));
+                    transform-origin: top left;
+                }
+                .plot-overlay { pointer-events: none; mix-blend-mode: multiply; }
+                table { border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+            </style>
+        </head><body>
+            <h1>Laplace Report: <xsl:value-of select="@sample"/></h1>
+            <div class="row"><div class="info"><h2>Whole Sample</h2>
+                <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
+                <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
+            </div><div class="plots"><xsl:for-each select="Sample/Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
+            <xsl:for-each select="Clusters/Cluster">
+                <div class="row"><div class="info"><h2>Cluster <xsl:value-of select="@id"/></h2>
+                    <p>Events: <xsl:value-of select="@events"/> (<xsl:value-of select="@percentage"/>%)</p>
+                    <h3>Mean</h3><table><tr><xsl:for-each select="Mean/Value"><th><xsl:value-of select="@label"/></th></xsl:for-each></tr><tr><xsl:for-each select="Mean/Value"><td><xsl:value-of select="."/></td></xsl:for-each></tr></table>
+                    <h3>Covariance</h3><table><xsl:for-each select="Covariance/Row"><tr><xsl:for-each select="Cell"><td><xsl:value-of select="."/></td></xsl:for-each></tr></xsl:for-each></table>
+                </div><div class="plots"><xsl:for-each select="Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
+            </xsl:for-each>
+        </body></html>
+    </xsl:template>
+</xsl:stylesheet>
+)XSL";
+        xsl_out.close();
+        apply_stylesheet(xml_path, xsl_path, html_path);
+        return stem + ".html";
+}
+
 std::string Reports::generate_laplace_report(const std::string& report_dir, const std::string& sample_name, const std::string& pop_name, const Laplace_Results& res, const std::vector<std::string>& selected_vars) {
+        return generate_laplace_report_v2(report_dir, sample_name, pop_name, res, selected_vars);
     fs::create_directories(report_dir);
     std::string stem = "laplace_" + sample_name + "_" + pop_name;
     std::replace(stem.begin(), stem.end(), ' ', '_');

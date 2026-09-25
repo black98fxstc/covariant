@@ -259,7 +259,7 @@ bool DataSet::read_binary(const std::string &filename, const std::vector<std::st
 
         if (num_cols <= 4)
         {
-            const char* names[] = {"X", "Y", "W", "Z"};
+            const char* names[] = {"X", "Y", "Z", "W"};
             for (size_t i = 0; i < num_cols; ++i)
                 actual_headers.push_back(names[i]);
         }

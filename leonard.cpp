@@ -506,14 +506,24 @@ int Leonard::run()
                 add_laplace_gates(ws.filename, s.name, res->parent_name, res->clusters_found, laplacian_offset, res->cluster_events, selections.variables);
             }
 
-            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables);
-            report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
-
             laplacian_offset += res->clusters_found + 1;
             if (res->cluster_events[res->valid_clusters + 1].size() > 0)
                 ++laplacian_offset;
 
             res->wait_for_plots();
+
+            for (const auto &entry : std::filesystem::directory_iterator(params.img_dir))
+            {
+                if (!entry.is_regular_file() || entry.path().extension() != ".png")
+                    continue;
+                if (entry.path().filename().string().find("_under.png") != std::string::npos ||
+                    entry.path().filename().string().find(".rgba.png") != std::string::npos)
+                    continue;
+                make_overlay_transparent(entry.path().string());
+            }
+
+            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables);
+            report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
         }
 
         if (selections.analysis_choice == 1)

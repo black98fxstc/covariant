@@ -91,6 +91,7 @@ private:
 
 // Forward declare plotting functions implemented in Reports.cpp
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data);
+void make_overlay_transparent(const std::string &path);
 void write_rgb_png(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data);
 void make_gating_plot(const std::string &path, const std::vector<std::vector<double>> &quant_data, const Measurement X, const Measurement Y, const Polygon &polygon);
 
@@ -340,7 +341,7 @@ public:
                         (*class_data)[i][y][x] = 255;
                     else
                     {
-                        unsigned hue = (255 * marginal_klass[idx] / (laplace->valid_clusters + 1));
+                        unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
                         (*class_data)[i][y][x] = 255 * colors[hue][i];
                     }
                 (*quant_data)[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
@@ -350,11 +351,16 @@ public:
         std::string over_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
         std::string under_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
         write_rgb_png(under_path, *class_data);
-        laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, over_path]() { make_marginal_plot(over_path, *class_data, *quant_data); }));
+        laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, over_path]() {
+            make_marginal_plot(over_path, *class_data, *quant_data);
+        }));
         laplace->sample_images.push_back("images/sample_" + selections.variables[i] + "_" + selections.variables[j]  + ".png");
         
         for (unsigned c = 1; c <= laplace->valid_clusters; ++c)
         {
+            if (laplace->cluster_events[c].empty())
+                continue;
+
             std::vector<unsigned short> marginal_klass(marginal.size(), 0);
 
             marginal.reset();
@@ -383,7 +389,7 @@ public:
                             (*class_data)[i][y][x] = 255;
                         else
                         {
-                            unsigned hue = (255 * marginal_klass[idx] / (laplace->valid_clusters + 1));
+                            unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
                             (*class_data)[i][y][x] = 255 * colors[hue][i];
                         }
                     (*quant_data)[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
@@ -393,7 +399,9 @@ public:
             std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
             std::string under_path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
             write_rgb_png(under_path, *class_data);
-            laplace->future_plots.push_back(plot_plane.enqueue([path, class_data, quant_data](){ make_marginal_plot(path, *class_data, *quant_data); }));
+            laplace->future_plots.push_back(plot_plane.enqueue([path, class_data, quant_data](){
+                make_marginal_plot(path, *class_data, *quant_data);
+            }));
             laplace->cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
         }
 
