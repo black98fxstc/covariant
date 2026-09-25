@@ -45,16 +45,48 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Upload Artifact (Windows)
+    - name: Package macOS Droplet
+      if: runner.os == 'macOS'
+      run: |
+        chmod +x scripts/mac/package_mac.sh
+        ./scripts/mac/package_mac.sh build
+
+    - name: Upload Artifact (macOS Droplet)
+      if: runner.os == 'macOS'
+      uses: actions/upload-artifact@v4
+      with:
+        name: Leonard-macOS
+        path: Leonard-macOS.zip
+
+    - name: Package Windows Droplet
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Copy-Item -Path "scripts/windows/Leonard.cmd" -Destination "build/Release/" -Force
+        # Copy any dynamic DLLs from vcpkg
+        Get-ChildItem -Path "${{ github.workspace }}/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
+        # Compile Inno Setup installer if iscc is found
+        $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+        if (Test-Path $isccPath) {
+            & $isccPath "scripts/windows/installer.iss"
+        } elseif (Get-Command iscc -ErrorAction SilentlyContinue) {
+            iscc "scripts/windows/installer.iss"
+        } else {
+            Write-Host "Inno Setup not detected on runner; skipping installer compilation."
+        }
+        # Create portable zip bundle containing exe, cmd droplet launcher, and runtime DLLs
+        Compress-Archive -Path "build/Release/*" -DestinationPath "Leonard-Windows-Portable.zip" -Force
+
+    - name: Upload Artifact (Windows Portable Droplet)
       if: runner.os == 'Windows'
       uses: actions/upload-artifact@v4
       with:
-        name: leonard-windows
-        path: build/Release/leonard.exe # MSVC puts it in a Release subfolder by default
+        name: Leonard-Windows-Portable
+        path: Leonard-Windows-Portable.zip
 
-    - name: Upload Artifact (macOS/Linux)
-      if: runner.os != 'Windows'
+    - name: Upload Artifact (Windows Setup Installer)
+      if: runner.os == 'Windows' && hashFiles('dist/Leonard-Setup-x64.exe') != ''
       uses: actions/upload-artifact@v4
       with:
-        name: leonard-${{ runner.os }}
-        path: build/leonard # Unix usually outputs directly to the build folder
+        name: Leonard-Windows-Setup
+        path: dist/Leonard-Setup-x64.exe

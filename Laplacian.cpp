@@ -65,7 +65,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
     write_rgb_png(under_path, *class_data);
     laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, over_path]()
                                                        { make_marginal_plot(over_path, *class_data, *quant_data); }));
-    laplace->sample_images.push_back("images/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
+    laplace->add_sample_image("images/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
 
     for (unsigned c = 1; c <= laplace->valid_clusters; ++c)
     {
@@ -115,7 +115,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
         write_rgb_png(under_path, *class_data);
         laplace->future_plots.push_back(plot_plane.enqueue([path, class_data, quant_data]()
                                                            { make_marginal_plot(path, *class_data, *quant_data); }));
-        laplace->cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
+        laplace->add_cluster_image("images/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
     }
 
     return results;

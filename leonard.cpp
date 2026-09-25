@@ -18,6 +18,11 @@
 #include <fftw3.h>
 #include <cxxopts.hpp>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 #include "Leonard.hpp"
 #include "Reports.hpp"
 #include "Samples.hpp"
@@ -188,6 +193,16 @@ int Leonard::run()
 
     if (is_datafile)
     {
+        if (!params.files.empty())
+        {
+            std::filesystem::path df_path = std::filesystem::absolute(params.files[0]);
+            if (df_path.has_parent_path())
+            {
+                std::error_code ec;
+                std::filesystem::current_path(df_path.parent_path(), ec);
+            }
+        }
+
         if (params.variables.empty())
         {
             std::cerr << "Error: Variables parameter is required for datafiles.\n";
@@ -242,6 +257,13 @@ int Leonard::run()
 
         if (filename.empty())
             return 1;
+
+        std::filesystem::path wsp_path = std::filesystem::absolute(filename);
+        if (wsp_path.has_parent_path())
+        {
+            std::error_code ec;
+            std::filesystem::current_path(wsp_path.parent_path(), ec);
+        }
 
         ws = parse_workspace(filename);
         if (ws.samples.empty())
@@ -636,6 +658,16 @@ int Leonard::run()
     if (!report_links.empty())
     {
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
+        std::filesystem::path index_path = std::filesystem::absolute(std::filesystem::path(report_dir) / "index.html");
+#if defined(_WIN32)
+        ShellExecuteA(NULL, "open", index_path.string().c_str(), NULL, NULL, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+        std::string cmd = "open \"" + index_path.string() + "\"";
+        std::system(cmd.c_str());
+#else
+        std::string cmd = "xdg-open \"" + index_path.string() + "\"";
+        std::system(cmd.c_str());
+#endif
     }
 
     return 0;
