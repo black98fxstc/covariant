@@ -7,12 +7,11 @@
 
 #include <Dimensions.hpp>
 #include <Boundary.hpp>
+#include <Geometry.hpp>
 #include <Modal.hpp>
 
 using json = nlohmann::json;
 
-typedef uint16_t Measurement;
-typedef uint32_t Count;
 typedef uint32_t Unique;
 
 class EPP_Parameters

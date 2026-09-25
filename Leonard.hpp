@@ -1,30 +1,20 @@
 #pragma once
 
 #include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <fstream>
+#include <atomic>
+#include <cstddef>
 #include <functional>
-#include <future>
-#include <iostream>
-#include <limits>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include <matplot/matplot.h>
-#include <nlohmann/json.hpp>
-
-// #include "Pursuit.hpp"
+#include "Geometry.hpp"
+#include "LeonardResults.hpp"
 #include "FlowJo.hpp"
 #include "Workers.hpp"
 #include "Covariant.hpp"
-#include "Weighty.hpp"
 #include "Events.hpp"
-#include "Gating.hpp"
-#include "Samples.hpp"
-
-using json = nlohmann::json;
 
 struct Params
 {
@@ -46,139 +36,11 @@ struct Params
     std::string img_dir = "images";
 };
 
-typedef uint16_t Measurement;
-typedef uint32_t Count;
-typedef uint32_t Ordinal;
-
-struct Point
-{
-    Coordinate i, j;
-
-    inline double x() const noexcept { return (double)i / (double)256; };
-    inline double y() const noexcept { return (double)j / (double)256; };
-
-    inline bool operator==(const Point &other) const noexcept
-    {
-        return this->i == other.i && this->j == other.j;
-    }
-
-    inline bool operator!=(const Point &other) const noexcept
-    {
-        return !(*this == other);
-    }
-
-    Point(Coordinate i, Coordinate j) noexcept : i(i), j(j){};
-
-    Point() noexcept : i(0), j(0){};
-
-    ~Point() = default;
-};
-
-class Polygon : public std::vector<Point>
-{
-public:
-    operator json() const noexcept;
-    static void close_clockwise(Polygon &polygon)  noexcept;
-    Polygon simplify(const double tolerance) noexcept;
-
-private:
-    void simplify(
-        const double tolerance,
-        Polygon &simplified,
-        const size_t lo,
-        const size_t hi) const noexcept;
-};
-
 // Forward declare plotting functions implemented in Reports.cpp
 void make_marginal_plot(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data, const std::vector<std::vector<double>> &quant_data);
 void make_overlay_transparent(const std::string &path);
 void write_rgb_png(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data);
 void make_gating_plot(const std::string &path, const std::vector<std::vector<double>> &quant_data, const Measurement X, const Measurement Y, const Polygon &polygon);
-
-class Qualify_Results
-{
-public:
-    Measurement X;
-    double KLDn = 0;
-    double KLDe = 0;
-    bool qualified = false;
-
-    Qualify_Results() = default;
-    Qualify_Results(const Measurement X) noexcept : X(X) {};
-};
-
-class EPP_Node_Results
-{
-public:
-    std::string image_in;
-    std::string image_out;
-    std::vector<std::future<void>> future_plots;
-
-    void wait_for_plots();
-
-    EPP_Node_Results() = default;
-    EPP_Node_Results(EPP_Node_Results&&) = default;
-    EPP_Node_Results& operator=(EPP_Node_Results&&) = default;
-};
-
-class Projection_Results
-{
-public:
-    enum Status
-    {
-        EPP_success,
-        EPP_characterized,
-        EPP_no_cluster,
-        EPP_not_significant,
-        EPP_threshold,
-        EPP_error
-    } outcome = EPP_error;
-    Measurement X, Y;
-    Polygon separatrix;
-    double score = std::numeric_limits<double>::infinity();
-    struct Gating 
-    {
-        size_t count = 0;
-        std::vector<bool> set;
-        Polygon polygon;
-    } in, out;
-    unsigned int pass = 0, clusters = 0, graphs = 0, merges = 0, splits = 0;
-
-    Projection_Results() = default;
-    Projection_Results(Measurement X, Measurement Y) noexcept : X(X < Y ? X : Y), Y(X < Y ? Y : X) {};
-
-private:
-    void close_clockwise(Polygon &polygon) const noexcept;
-};
-
-class Pursuit_Results
-{
-public:
-    std::string node_id = "1";
-    std::string branch = "root";
-    size_t event_count = 0;
-    size_t total_events = 0;
-    std::vector<double> means;
-    bool is_leaf = true;
-    Measurement gate_x = 0;
-    Measurement gate_y = 0;
-    bool has_gate = false;
-    std::string polygon_image;
-    double pct_parent = 0, pct_total = 0;
-
-    std::vector<Measurement> qualified;
-    double best_score = 0;
-    std::unique_ptr<Projection_Results> best_split;
-    std::vector<std::future<Pursuit_Results>> future_children;
-    std::vector<Pursuit_Results> children;
-    std::future<EPP_Node_Results> future_node;
-    std::unique_ptr<EPP_Node_Results> EPP_node;
-    std::vector<std::future<void>> future_plots;
-    std::vector<std::string> sample_images;
-
-    void wait_for_results() noexcept;
-    void wait_for_plots();
-};
 
 template <unsigned Dimension>
 void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func)
@@ -188,63 +50,12 @@ void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func
             func(i, j);
 };
 
-class Laplace_Results;
-
-class Marginal_Results
-{
-public:
-    std::weak_ptr<Laplace_Results> laplace;
-    std::vector<std::vector<std::vector<double>>> class_data;
-    std::vector<std::vector<double>> quant_data;
-    std::string x_label, y_label;
-    unsigned clusters;
-
-    Marginal_Results() = default;
-    Marginal_Results(std::shared_ptr<Laplace_Results> laplace) noexcept : laplace(laplace) {};
-};
-
-class Laplace_Results
-{
-public:
-    std::string parent_name;
-    unsigned clusters_found;
-    unsigned valid_clusters;
-    std::vector<std::vector<unsigned>> cluster_events;
-    std::ofstream xml_out;
-    json report;
-    std::vector<size_t> idx;
-    std::vector<unsigned short> classification;
-    std::vector<std::vector<float>> means;
-    std::vector<std::vector<std::vector<float>>> covariances;
-    std::vector<std::future<Marginal_Results>> future_marginals;
-    std::vector<Marginal_Results> marginals;
-    std::vector<std::future<void>> future_plots;
-    std::vector<std::string> sample_images;
-    std::vector<std::string> cluster_images;
-
-    void wait_for_results() noexcept
-    {
-        for (auto &f : future_marginals)
-            marginals.push_back(f.get());
-    };
-
-    void wait_for_plots()
-    {
-        for (auto &f : future_plots)
-            if (f.valid()) f.get();
-    };
-
-    Laplace_Results() = default;
-    Laplace_Results(Laplace_Results&&) = default;
-    Laplace_Results& operator=(Laplace_Results&&) = default;    
-};
-
 class Leonard
 {
 public:
     Leonard() = default;
-    Leonard(const Leonard&) = delete;
-    Leonard& operator=(const Leonard&) = delete;
+    Leonard(const Leonard &) = delete;
+    Leonard &operator=(const Leonard &) = delete;
 
     Params params;
     SelectionState selections;
@@ -256,157 +67,19 @@ public:
     std::vector<std::vector<double>> colors;
     ThreadPool compute_plane{std::thread::hardware_concurrency()};
     ThreadPool control_plane{4};
-    ThreadPool plot_plane{1};//std::max(1u, std::thread::hardware_concurrency())};
+    ThreadPool plot_plane{1}; // std::max(1u, std::thread::hardware_concurrency())};
 
     int parse_args(int argc, char *argv[]);
-    /**
-     * @brief Simple HSV to RGB conversion helper.
-     * 
-     * @param h Hue [0, 1]
-     * @param s Saturation [0, 1]
-     * @param v Value [0, 1]
-     * @return std::vector<double> RGB components
-     */
-
-     static std::vector<double> hsv_to_rgb(double h, double s, double v) {
-        double r = 0, g = 0, b = 0;
-        if (s == 0) {
-            r = g = b = v;
-        } else {
-            double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
-            int i = static_cast<int>(std::floor(h_pos));
-            double f = h_pos - i;
-            double p = v * (1.0 - s);
-            double q = v * (1.0 - (s * f));
-            double t = v * (1.0 - (s * (1.0 - f)));
-            switch (i) {
-                case 0: r = v; g = t; b = p; break;
-                case 1: r = q; g = v; b = p; break;
-                case 2: r = p; g = v; b = t; break;
-                case 3: r = p; g = q; b = v; break;
-                case 4: r = t; g = p; b = v; break;
-                default: r = v; g = p; b = q; break;
-            }
-        }
-        return {r, g, b};
-    }
 
     Qualify_Results do_Qualify(const std::vector<float> *data, const Measurement X, const std::vector<bool> &included, std::string pop_name);
 
     Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name);
 
-    EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float>*> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon& in_poly, const Polygon& out_poly, std::string pop_name, std::string node_id);
+    EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float> *> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon &in_poly, const Polygon &out_poly, std::string pop_name, std::string node_id);
 
     Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, std::string node_id = "1", std::string branch = "root");
 
-    Marginal_Results do_Marginal(std::shared_ptr<Laplace_Results> laplace, const std::vector<std::vector<float> *> &data, const Measurement i, const Measurement j, std::string pop_name) noexcept
-    {
-        Marginal_Results results(laplace);
-
-        Weighty<2> marginal(256);
-        marginal.antialias = params.antialias;
-        marginal.verify = params.verify;
-
-        Coordinates<2> marginal_coord(marginal);
-        Event<2> marginal_event;
-        std::vector<unsigned short> marginal_klass(marginal.points(0) * marginal.points(1), 0);
-        std::fill(marginal_klass.begin(), marginal_klass.end(), 0);
-
-        for (unsigned short c = 0; c <= laplace->valid_clusters; ++c)
-        {
-            for (unsigned e : laplace->cluster_events[c])
-            {
-                marginal_event[0] = (*data[i])[laplace->idx[e]];
-                marginal_event[1] = (*data[j])[laplace->idx[e]];
-                marginal.event(marginal_event);
-                if (c == 0) continue;
-
-                marginal.locate(marginal_event, marginal_coord);
-                size_t idx = (size_t)marginal_coord;
-                unsigned short d = marginal_klass[idx];
-                if (d == 0) marginal_klass[idx] = c;
-                else marginal_klass[idx] = std::min(c, d);
-            }
-        }
-        marginal.prepare(params.smoothing);
-
-        auto class_data = std::make_shared<std::vector<std::vector<std::vector<double>>>>(3, std::vector<std::vector<double>>(marginal.points(0), std::vector<double>(marginal.points(1))));
-        auto quant_data = std::make_shared<std::vector<std::vector<double>>>(marginal.points(0), std::vector<double>(marginal.points(1)));
-        
-        for (unsigned y = 0; y < marginal.points(1); ++y) {
-            for (unsigned x = 0; x < marginal.points(0); ++x) {
-                size_t idx = x + y * marginal.points(0);
-                for (unsigned i = 0; i < 3; ++i)
-                    if (marginal_klass[idx] == 0)
-                        (*class_data)[i][y][x] = 255;
-                    else
-                    {
-                        unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
-                        (*class_data)[i][y][x] = 255 * colors[hue][i];
-                    }
-                (*quant_data)[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
-            }
-        }
-
-        std::string over_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
-        std::string under_path = params.img_dir + "/sample_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
-        write_rgb_png(under_path, *class_data);
-        laplace->future_plots.push_back(plot_plane.enqueue([this, class_data, quant_data, over_path]() {
-            make_marginal_plot(over_path, *class_data, *quant_data);
-        }));
-        laplace->sample_images.push_back("images/sample_" + selections.variables[i] + "_" + selections.variables[j]  + ".png");
-        
-        for (unsigned c = 1; c <= laplace->valid_clusters; ++c)
-        {
-            if (laplace->cluster_events[c].empty())
-                continue;
-
-            std::vector<unsigned short> marginal_klass(marginal.size(), 0);
-
-            marginal.reset();
-            for (auto &e : laplace->cluster_events[c])
-            {
-                marginal_event[0] = (*data[i])[laplace->idx[e]];
-                marginal_event[1] = (*data[j])[laplace->idx[e]];
-                marginal.event(marginal_event);
-                if (c == 0) continue;
-
-                marginal.locate(marginal_event, marginal_coord);
-                size_t idx = (size_t)marginal_coord;
-                marginal_klass[idx] = c;
-            }
-            marginal.prepare(selections.smoothing);
-
-            // make cluster marginal plot
-            auto class_data = std::make_shared<std::vector<std::vector<std::vector<double>>>>(3, std::vector<std::vector<double>>(marginal.points(0), std::vector<double>(marginal.points(1))));
-            auto quant_data = std::make_shared<std::vector<std::vector<double>>>(marginal.points(0), std::vector<double>(marginal.points(1)));
-
-            for (unsigned y = 0; y < marginal.points(1); ++y) {
-                for (unsigned x = 0; x < marginal.points(0); ++x) {
-                    size_t idx = x + y * marginal.points(0);
-                    for (unsigned i = 0; i < 3; ++i)
-                        if (marginal_klass[idx] == 0)
-                            (*class_data)[i][y][x] = 255;
-                        else
-                        {
-                            unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
-                            (*class_data)[i][y][x] = 255 * colors[hue][i];
-                        }
-                    (*quant_data)[y][x] = (double)static_cast<const Function<2, float>&>(marginal.quantile)[idx];
-                }
-            }
-
-            std::string path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png";
-            std::string under_path = params.img_dir + "/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + "_under.png";
-            write_rgb_png(under_path, *class_data);
-            laplace->future_plots.push_back(plot_plane.enqueue([path, class_data, quant_data](){
-                make_marginal_plot(path, *class_data, *quant_data);
-            }));
-            laplace->cluster_images.push_back("images/cluster_" + std::to_string(c) + "_" + selections.variables[i] + "_" + selections.variables[j] + ".png");
-        }
-
-        return results;
-    }
+    Marginal_Results do_Marginal(std::shared_ptr<Laplace_Results> laplace, const std::vector<std::vector<float> *> &data, const Measurement i, const Measurement j, std::string pop_name) noexcept;
 
     template <unsigned Dimension>
     std::shared_ptr<Laplace_Results> do_Laplace(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name)
@@ -457,9 +130,9 @@ public:
             results->means[c].resize(Dimension);
             results->covariances[c].resize(Dimension);
             for (unsigned i = 0; i < Dimension; i++)
-                    results->covariances[c][i].resize(Dimension);
+                results->covariances[c][i].resize(Dimension);
         }
-        
+
         Coordinates coord(laplace);
         for (size_t i = 0; i < results->idx.size(); ++i)
         {
@@ -476,7 +149,7 @@ public:
         }
         for (unsigned c = 0; c < results->cluster_events.size(); ++c)
         {
-            if (results->cluster_events.size() < selections.min_events)
+            if (results->cluster_events[c].size() < selections.min_events)
             {
                 for (unsigned i : results->cluster_events[c])
                     results->cluster_events[0].push_back(i);
@@ -490,9 +163,8 @@ public:
                 results->classification[local] = static_cast<unsigned short>(c);
 
         for_each_plane<Dimension>([this, results, data, pop_name](unsigned i, unsigned j)
-        {
-            results->future_marginals.push_back(compute_plane.enqueue([this, results, data, pop_name, i, j]() { return do_Marginal(results, data, i, j, pop_name); }));
-        });
+                                  { results->future_marginals.push_back(compute_plane.enqueue([this, results, data, pop_name, i, j]()
+                                                                                              { return do_Marginal(results, data, i, j, pop_name); })); });
 
         for (unsigned c = 0; c <= results->valid_clusters; ++c)
             if (results->cluster_events[c].size() > 0)
@@ -515,10 +187,9 @@ public:
                     for (unsigned j = 0; j < Dimension; j++)
                         results->covariances[c][i][j] /= results->cluster_events[c].size() - 1;
 
-
         std::cout << "Found " << results->valid_clusters << " valid clusters." << std::endl;
         return results;
     }
-    
+
     int run();
 };

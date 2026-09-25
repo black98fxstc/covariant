@@ -57,12 +57,6 @@ add_executable(testdata testdata.cpp)
 # testdata is a generator and does not use the Weighty class's FFTW-based filtering.
 target_link_libraries(testdata PRIVATE covariant_core cxxopts::cxxopts ${MATH_LIB})
 
-# add_executable(laplace laplace.cpp)
-# target_link_libraries(laplace PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
-
-# add_executable(riemann riemann.cpp)
-# target_link_libraries(riemann PRIVATE covariant_core FFTW3::fftw3f cxxopts::cxxopts ${MATH_LIB})
-
 add_executable(leonard
     leonard.cpp
     Leonard.hpp
@@ -70,6 +64,7 @@ add_executable(leonard
     FlowJo.hpp
     Pursuit.cpp
     Pursuit.hpp
+    Laplacian.cpp
     Polygon.cpp
     Boundary.hpp
     Modal.hpp
@@ -77,12 +72,4 @@ add_executable(leonard
     Reports.hpp)
 target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot ${OpenCV_LIBS} cxxopts::cxxopts nlohmann_json::nlohmann_json ${MATH_LIB})
 
-# Standalone gating test executable (using the main() function from Gating.cpp)
-# add_executable(gating_test Gating.cpp)
-# target_compile_definitions(gating_test PRIVATE BUILD_GATING_TEST)
-# target_link_libraries(gating_test PRIVATE covariant_core)
-
-# Set output names to match your Makefile targets
-# set_target_properties(riemann PROPERTIES OUTPUT_NAME "riemann")
-# set_target_properties(darwin PROPERTIES OUTPUT_NAME "darwin")
 set_target_properties(leonard PROPERTIES OUTPUT_NAME "leonard")

@@ -11,7 +11,7 @@
 #include <cassert>
 #include <limits>
 
-#include "Leonard.hpp"
+#include "Geometry.hpp"
 
 /*
     * Utilities for Colored Maps

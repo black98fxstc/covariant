@@ -10,7 +10,8 @@
 #include <iostream>
 #include <numbers>
 
-#include "Leonard.hpp"
+#include "FlowJo.hpp"
+#include "Geometry.hpp"
 #include "Boundary.hpp"
 
 const double sigma  = 3;

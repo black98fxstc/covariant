@@ -20,28 +20,13 @@
 
 #include "Leonard.hpp"
 #include "Reports.hpp"
+#include "Samples.hpp"
 
 int Leonard::parse_args(int argc, char *argv[])
 {
     cxxopts::Options options("Leonard", "Laplacian and Riemannian analysis from FlowJo workspaces");
 
-    options.add_options()
-    ("f,file", "File name", cxxopts::value<std::string>())
-    ("v,variables", "List of variables", cxxopts::value<std::string>())
-    ("p,populations", "List of populations", cxxopts::value<std::string>())
-    ("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))
-    ("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))
-    ("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))
-    ("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))
-    ("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))
-    ("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))
-    ("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))
-    ("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))
-    ("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-    ("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-    ("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))
-    ("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))
-    ("h,help", "Print usage");
+    options.add_options()("f,file", "File name", cxxopts::value<std::string>())("v,variables", "List of variables", cxxopts::value<std::string>())("p,populations", "List of populations", cxxopts::value<std::string>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))("h,help", "Print usage");
 
     options.parse_positional({"file", "variables", "populations"});
 
@@ -53,14 +38,17 @@ int Leonard::parse_args(int argc, char *argv[])
         return 0;
     }
 
-    if (result.count("file")) params.files.push_back(result["file"].as<std::string>());
-    if (result.count("variables")) {
+    if (result.count("file"))
+        params.files.push_back(result["file"].as<std::string>());
+    if (result.count("variables"))
+    {
         std::stringstream ss(result["variables"].as<std::string>());
         std::string item;
         while (std::getline(ss, item, ','))
             params.variables.push_back(item);
     }
-    if (result.count("populations")) {
+    if (result.count("populations"))
+    {
         std::stringstream ss(result["populations"].as<std::string>());
         std::string item;
         while (std::getline(ss, item, ','))
@@ -82,25 +70,90 @@ int Leonard::parse_args(int argc, char *argv[])
     return -1;
 };
 
+/**
+ * @brief Simple HSV to RGB conversion helper.
+ *
+ * @param h Hue [0, 1]
+ * @param s Saturation [0, 1]
+ * @param v Value [0, 1]
+ * @return std::vector<double> RGB components
+ */
+
+static std::vector<double> hsv_to_rgb(double h, double s, double v)
+{
+    double r = 0, g = 0, b = 0;
+    if (s == 0)
+    {
+        r = g = b = v;
+    }
+    else
+    {
+        double h_pos = (h == 1.0) ? 0.0 : h * 6.0;
+        int i = static_cast<int>(std::floor(h_pos));
+        double f = h_pos - i;
+        double p = v * (1.0 - s);
+        double q = v * (1.0 - (s * f));
+        double t = v * (1.0 - (s * (1.0 - f)));
+        switch (i)
+        {
+        case 0:
+            r = v;
+            g = t;
+            b = p;
+            break;
+        case 1:
+            r = q;
+            g = v;
+            b = p;
+            break;
+        case 2:
+            r = p;
+            g = v;
+            b = t;
+            break;
+        case 3:
+            r = p;
+            g = q;
+            b = v;
+            break;
+        case 4:
+            r = t;
+            g = p;
+            b = v;
+            break;
+        default:
+            r = v;
+            g = p;
+            b = q;
+            break;
+        }
+    }
+    return {r, g, b};
+}
+
 int Leonard::run()
 {
     configure_noninteractive_gnuplot();
 
     std::string wisdom_path;
 #ifdef _WIN32
-    if (const char* appdata = std::getenv("APPDATA")) {
+    if (const char *appdata = std::getenv("APPDATA"))
+    {
         wisdom_path = std::string(appdata) + "\\Leonard";
     }
 #else
-    if (const char* home = std::getenv("HOME")) {
+    if (const char *home = std::getenv("HOME"))
+    {
         wisdom_path = std::string(home) + "/.config/Leonard";
     }
 #endif
-    if (!wisdom_path.empty()) {
+    if (!wisdom_path.empty())
+    {
         std::error_code ec;
         std::filesystem::create_directories(wisdom_path, ec);
         wisdom_path += "/wisdom.fftwf";
-        if (std::filesystem::exists(wisdom_path)) {
+        if (std::filesystem::exists(wisdom_path))
+        {
             fftwf_import_wisdom_from_filename(wisdom_path.c_str());
         }
     }
@@ -108,14 +161,22 @@ int Leonard::run()
     if (fftwf_init_threads())
         fftwf_plan_with_nthreads(std::max(1u, std::thread::hardware_concurrency()));
 
-    struct WisdomSaver {
+    struct WisdomSaver
+    {
         std::string path;
-        ~WisdomSaver() { if (!path.empty()) { std::lock_guard<std::mutex> lock(get_fftw_mutex()); fftwf_export_wisdom_to_filename(path.c_str()); } }
+        ~WisdomSaver()
+        {
+            if (!path.empty())
+            {
+                std::lock_guard<std::mutex> lock(get_fftw_mutex());
+                fftwf_export_wisdom_to_filename(path.c_str());
+            }
+        }
     } saver{wisdom_path};
 
     // create color map
     colors.reserve(256);
-    for (size_t i = 0; i < 256; ++i) 
+    for (size_t i = 0; i < 256; ++i)
     {
         double h = 0.6666 * (1.0 - static_cast<double>(i) / 256);
         colors.push_back(hsv_to_rgb(h, 1.0, 0.75));
@@ -150,14 +211,14 @@ int Leonard::run()
         selections.grid_size = params.grid_size;
         selections.analysis_choice = params.analysis_choice;
 
-        for (const auto& file : params.files)
+        for (const auto &file : params.files)
         {
             SampleData sd;
             sd.name = file;
             sd.selected = true;
             dummy_samples.push_back(sd);
         }
-        for (auto& sd : dummy_samples)
+        for (auto &sd : dummy_samples)
         {
             selections.samples.push_back(&sd);
         }
@@ -211,10 +272,10 @@ int Leonard::run()
             selections.analysis_choice = params.analysis_choice;
 
             // the selected samples should be all the samples that have all the populations specified
-            for (auto& s : ws.samples)
+            for (auto &s : ws.samples)
             {
                 bool has_all = true;
-                for (const auto& p : selections.populations)
+                for (const auto &p : selections.populations)
                 {
                     if (std::find(s.populations.begin(), s.populations.end(), p) == s.populations.end())
                     {
@@ -259,7 +320,7 @@ int Leonard::run()
     std::cout << "  Grid Size: " << selections.grid_size << "\n";
 
     std::cout << "\nAnalysis Method:\n"
-                << analysis_choices[selections.analysis_choice] << "\n\n";
+              << analysis_choices[selections.analysis_choice] << "\n\n";
 
     std::string report_dir;
     std::filesystem::path p(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
@@ -280,7 +341,8 @@ int Leonard::run()
 
         std::cout << "Processing sample: " << s.name << " ... " << std::endl;
         DataSet dataset;
-        if (!dataset.read(s.name)) {
+        if (!dataset.read(s.name))
+        {
             std::cerr << "Failed to read dataset: " << s.name << std::endl;
             continue;
         }
@@ -290,7 +352,7 @@ int Leonard::run()
         if (!laplace.classifications)
             laplace.classifications = std::make_shared<std::vector<unsigned short>>(dataset.size());
         for (size_t i = 0; i < dataset.size(); ++i)
-        { 
+        {
             (*laplace.classifications)[i] /= 4;
             if ((*laplace.classifications)[i] > laplacian_offset)
                 laplacian_offset = (*laplace.classifications)[i];
@@ -305,7 +367,8 @@ int Leonard::run()
         for (const auto &pair : s.spillover_matrix.comp_infix_map)
             Variable &var = dataset.variable[pair.second];
 
-        if (!s.spillover_matrix.matrix.empty() && !s.spillover_matrix.matrix[0].empty()) {
+        if (!s.spillover_matrix.matrix.empty() && !s.spillover_matrix.matrix[0].empty())
+        {
             const std::vector<std::vector<double>> &spill = s.spillover_matrix.matrix;
             Eigen::MatrixXf spectrum(spill.size(), spill[0].size());
             for (size_t i = 0; i < spill.size(); i++)
@@ -358,14 +421,18 @@ int Leonard::run()
 
             std::shared_ptr<std::vector<float>> transformed;
             const std::shared_ptr<std::vector<float>> &orig_data = var.data;
-            if (!orig_data) {
+            if (!orig_data)
+            {
                 return nullptr;
             }
-            
+
             transformed = std::make_shared<std::vector<float>>(orig_data->size());
-            if (var.transform) {
+            if (var.transform)
+            {
                 var.transform->transform(*orig_data, *transformed);
-            } else {
+            }
+            else
+            {
                 *transformed = *orig_data;
             }
 
@@ -383,12 +450,14 @@ int Leonard::run()
             auto transformed = get_transformed(vname);
             if (transformed)
                 var.data = transformed;
-            else {
+            else
+            {
                 std::cerr << "Variable " << vname << " not found in sample " << s.name << std::endl;
                 vars_valid = false;
             }
         }
-        if (!vars_valid) continue;
+        if (!vars_valid)
+            continue;
 
         std::cout << "Finding all the gates and, scaling and unmixing the needed data..." << std::endl;
         // find all the gates and any data they need
@@ -396,12 +465,13 @@ int Leonard::run()
         for (size_t i = 0; i < selections.populations.size(); ++i)
         {
             std::string pop_name = selections.populations[i];
-            if (pop_name == "All") {
+            if (pop_name == "All")
+            {
                 Subset &subset = dataset.subset[pop_name];
                 subset.membership = std::make_shared<std::vector<bool>>(dataset.size(), true);
                 continue;
             }
-            
+
             Subset &subset = dataset.subset[pop_name];
             std::string gate_id;
             std::shared_ptr<Gate> gate;
@@ -457,30 +527,41 @@ int Leonard::run()
         std::vector<std::pair<std::string, std::future<std::shared_ptr<Laplace_Results>>>> laplace_results;
 
         for (std::string &pop_name : selections.populations)
-        {   
+        {
             std::cout << "Enqueuing population " << pop_name << std::endl;
             std::vector<bool> subpopulation = *(dataset.subset[pop_name].membership.get());
 
-            if (selections.analysis_choice == 0) {
+            if (selections.analysis_choice == 0)
+            {
                 for (unsigned i = 0; i < num_vars_selected; i++)
                     for (auto it = std::find(subpopulation.begin(), subpopulation.end(), true); it != subpopulation.end(); it = std::find(it + 1, subpopulation.end(), true))
                         if ((*data[i])[it - subpopulation.begin()] < 0.0f || (*data[i])[it - subpopulation.begin()] > 1.0f)
                             subpopulation[it - subpopulation.begin()] = false;
                 size_t total_events = std::count(subpopulation.begin(), subpopulation.end(), true);
-                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name, total_events]() mutable {
-                    return do_Pursuit(data, std::move(subpop), pop_name, total_events);
-                })});
-            } else if (selections.analysis_choice == 1) {
+                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name, total_events]() mutable
+                                                                       { return do_Pursuit(data, std::move(subpop), pop_name, total_events); })});
+            }
+            else if (selections.analysis_choice == 1)
+            {
                 switch (num_vars_selected)
                 {
-                case 2: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<2>(data, subpopulation, pop_name); })}); break;
-                case 3: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<3>(data, subpopulation, pop_name); })}); break;
-                case 4: laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]() { return do_Laplace<4>(data, subpopulation, pop_name); })}); break;
+                case 2:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Laplace<2>(data, subpopulation, pop_name); })});
+                    break;
+                case 3:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Laplace<3>(data, subpopulation, pop_name); })});
+                    break;
+                case 4:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Laplace<4>(data, subpopulation, pop_name); })});
+                    break;
                 }
             }
         }
 
-        for (auto & result_pair : epp_results)
+        for (auto &result_pair : epp_results)
         {
             Pursuit_Results res = result_pair.second.get();
             res.wait_for_results();
@@ -490,14 +571,16 @@ int Leonard::run()
 
             res.wait_for_plots();
         }
-        for (auto & result_pair : laplace_results)
+        for (auto &result_pair : laplace_results)
         {
             std::shared_ptr<Laplace_Results> res = result_pair.second.get();
             res->wait_for_results();
-            if (res->idx.empty()) continue;
-            
+            if (res->idx.empty())
+                continue;
+
             // Merge local classes into the global classification tracking synchronously
-            for (size_t i = 0; i < res->idx.size(); ++i) {
+            for (size_t i = 0; i < res->idx.size(); ++i)
+            {
                 (*laplace.classifications)[res->idx[i]] = res->classification[i] + laplacian_offset;
             }
 
@@ -550,7 +633,8 @@ int Leonard::run()
         }
     };
 
-    if (!report_links.empty()) {
+    if (!report_links.empty())
+    {
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
     }
 
@@ -561,7 +645,8 @@ int main(int argc, char *argv[])
 {
     Leonard leonard;
     int res = leonard.parse_args(argc, argv);
-    if (res != -1) return res;
+    if (res != -1)
+        return res;
 
     return leonard.run();
 }

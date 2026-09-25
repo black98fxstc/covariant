@@ -1,7 +1,11 @@
+#pragma once
+
+#include <algorithm>
 #include <cmath>
 #include <array>
+#include <cstddef>
+#include <limits>
 #include <vector>
-#include <algorithm>
 #include "Weighty.hpp"
 
 template <unsigned Dimension>

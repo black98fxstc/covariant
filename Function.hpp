@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <vector>
 #include <array>
 #include <string>
@@ -9,9 +11,11 @@
 #include <assert.h>
 #include <fftw3.h>
 
+#include "Dimensions.hpp"
+
 // Functions on grids that play nice with FFTW and represent various tensors
 template <typename Type>
-Type squared(Type x) noexcept {return x * x;}
+Type squared(Type x) noexcept { return x * x; }
 
 template <unsigned Dimension, typename Type>
 class Function
@@ -20,10 +24,10 @@ class Function
     template <unsigned Dimension2>
     friend class Weighty;
 
-   template <unsigned Dimension2>
+    template <unsigned Dimension2>
     friend class Laplace;
 
-   template<unsigned Dimension2>
+    template <unsigned Dimension2>
     friend class Riemann;
 
     template <unsigned Dimension2, typename Type2>
@@ -45,9 +49,10 @@ public:
         return data[x];
     }
 
-    Function& operator=(const Function& other)
+    Function &operator=(const Function &other)
     {
-        if (this != &other) std::copy(other.data, other.data + dimensions.size(), data);
+        if (this != &other)
+            std::copy(other.data, other.data + dimensions.size(), data);
         return *this;
     }
 
@@ -98,10 +103,10 @@ class Function<Dimension, float>
     template <unsigned Dimension2>
     friend class Weighty;
 
-   template <unsigned Dimension2>
+    template <unsigned Dimension2>
     friend class Laplace;
 
-   template<unsigned Dimension2>
+    template <unsigned Dimension2>
     friend class Riemann;
 
     friend class Leonard;
@@ -123,9 +128,10 @@ public:
         return data[x];
     }
 
-    Function& operator=(const Function<Dimension, float>& other)
+    Function &operator=(const Function<Dimension, float> &other)
     {
-        if (this != &other) std::copy(other.data, other.data + dimensions.size(), data);
+        if (this != &other)
+            std::copy(other.data, other.data + dimensions.size(), data);
         return *this;
     }
 
@@ -172,7 +178,7 @@ class FunctionVector : public std::vector<Function<Dimension, Type>>
 public:
     void zero()
     {
-        for (Function<Dimension, Type>&f : *this)
+        for (Function<Dimension, Type> &f : *this)
             f.zero();
     }
 
@@ -190,7 +196,7 @@ class FunctionMatrix : public std::vector<std::vector<Function<Dimension, Type>>
 public:
     void zero()
     {
-        for (auto & fv : *this)
+        for (auto &fv : *this)
             for (auto &f : fv)
                 f.zero();
     }
@@ -252,5 +258,5 @@ public:
         return this;
     }
 
-    Kernel(Weighty<Dimension>& w) noexcept : Function<Dimension, Type>(w), dimensions(w) {}
+    Kernel(Weighty<Dimension> &w) noexcept : Function<Dimension, Type>(w), dimensions(w) {}
 };

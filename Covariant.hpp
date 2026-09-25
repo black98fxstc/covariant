@@ -1,5 +1,6 @@
 #include <cmath>
 #include <array>
+#include <limits>
 #include <vector>
 #include <fftw3.h>
 #include <assert.h>

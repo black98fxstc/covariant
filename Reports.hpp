@@ -1,8 +1,10 @@
 #pragma once
 
+#include <iosfwd>
 #include <string>
 #include <vector>
-#include "Leonard.hpp"
+
+#include "LeonardResults.hpp"
 
 void configure_noninteractive_gnuplot();
 
