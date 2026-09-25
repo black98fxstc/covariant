@@ -73,3 +73,14 @@ add_executable(leonard
 target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot ${OpenCV_LIBS} cxxopts::cxxopts nlohmann_json::nlohmann_json ${MATH_LIB})
 
 set_target_properties(leonard PROPERTIES OUTPUT_NAME "leonard")
+
+if(WIN32)
+    add_custom_command(TARGET leonard POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows/Leonard.cmd"
+            "$<TARGET_FILE_DIR:leonard>/Leonard.cmd"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows/Leonard.cmd"
+            "$<TARGET_FILE_DIR:leonard>/Leonard.bat"
+    )
+endif()

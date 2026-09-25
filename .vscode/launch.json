@@ -20,7 +20,7 @@
             "console": "internalConsole"
         },
         {
-            "name": "Leonard - EPP",
+            "name": "EPP Test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
@@ -36,7 +36,7 @@
             "console": "internalConsole"
         },
         {
-            "name": "Leonard - Laplace 2D",
+            "name": "Laplace 2D Test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
@@ -52,7 +52,7 @@
             "console": "internalConsole"
         },
         {
-            "name": "Leonard - Laplace 3D",
+            "name": "Laplace 3D Test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
@@ -68,7 +68,7 @@
             "preLaunchTask": "CMake: build"
         },
         {
-            "name": "Leonard - Laplace 4D",
+            "name": "Laplace 4D Test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",

@@ -240,6 +240,40 @@ std::string find_workspace(int argc, char *argv[])
         }
     }
 
+    // If still not found, prompt with native OS file dialog
+    if (filename.empty() || !std::filesystem::exists(filename))
+    {
+#if defined(_WIN32)
+        FILE *fp = _popen("powershell -NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'FlowJo Workspaces (*.wsp)|*.wsp|All Files (*.*)|*.*'; $f.Title = 'Select FlowJo Workspace'; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName }\" 2>NUL", "r");
+        if (fp)
+        {
+            char path[1024] = {0};
+            if (fgets(path, sizeof(path), fp))
+            {
+                std::string s(path);
+                while (!s.empty() && (s.back() == '\n' || s.back() == '\r'))
+                    s.pop_back();
+                filename = s;
+            }
+            _pclose(fp);
+        }
+#elif defined(__APPLE__)
+        FILE *fp = popen("osascript -e 'POSIX path of (choose file with prompt \"Select FlowJo Workspace:\" of type {\"wsp\", \"public.data\"})' 2>/dev/null", "r");
+        if (fp)
+        {
+            char path[1024] = {0};
+            if (fgets(path, sizeof(path), fp))
+            {
+                std::string s(path);
+                while (!s.empty() && (s.back() == '\n' || s.back() == '\r'))
+                    s.pop_back();
+                filename = s;
+            }
+            pclose(fp);
+        }
+#endif
+    }
+
     if (filename.empty() || !std::filesystem::exists(filename))
     {
         std::cerr << "Error: No workspace (.wsp) file found or specified.\n";
