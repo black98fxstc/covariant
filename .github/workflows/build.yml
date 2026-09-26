@@ -7,7 +7,7 @@ env:
 on:
   push:
     tags: [ "v*" ]
-  workflow_dispatch: # Allows you to run this manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,83 +15,91 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       actions: write
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-        - os: windows-latest
-          simd_flag: "/arch:AVX2"
-          name: windows-x64
-        - os: macos-latest
-          simd_flag: ""               # ARM64 enables NEON by default for Apple Silicon
-          name: macos-arm64
+          - os: windows-latest
+            simd_flag: "/arch:AVX2"
+            name: windows-x64
+          - os: macos-latest
+            simd_flag: ""
+            name: macos-arm64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install macOS build tools
-      if: runner.os == 'macOS'
-      run: brew install autoconf automake libtool
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
 
-    - name: Configure CMake
-      run: >
-        cmake -B build -S . 
-        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-        -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_CXX_FLAGS="${{ matrix.simd_flag }}"
+      - name: Configure CMake
+        run: >
+          cmake -B build -S .
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_FLAGS="${{ matrix.simd_flag }}"
 
-    - name: Build
-      run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build --config Release
 
-    - name: Package macOS Droplet
-      if: runner.os == 'macOS'
-      run: |
-        chmod +x scripts/mac/package_mac.sh
-        ./scripts/mac/package_mac.sh build
+      - name: Package macOS Droplet
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x scripts/mac/package_mac.sh
+          ./scripts/mac/package_mac.sh build
 
-    - name: Upload Artifact (macOS Droplet)
-      if: runner.os == 'macOS'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Leonard-macOS
-        path: Leonard-macOS.zip
+      - name: Upload Artifact (macOS Droplet)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Leonard-macOS
+          path: Leonard-macOS.zip
 
-    - name: Package Windows Droplet
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Copy-Item -Path "scripts/windows/Leonard.cmd" -Destination "build/Release/" -Force
-        # Copy any dynamic DLLs from vcpkg
-        Get-ChildItem -Path "${{ github.workspace }}/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
-        # Compile Inno Setup installer if iscc is found
-        $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
-        if (Test-Path $isccPath) {
-            & $isccPath "scripts/windows/installer.iss"
-        } elseif (Get-Command iscc -ErrorAction SilentlyContinue) {
-            iscc "scripts/windows/installer.iss"
-        } else {
-            Write-Host "Inno Setup not detected on runner; skipping installer compilation."
-        }
-        # Create portable zip bundle containing exe, cmd droplet launcher, and runtime DLLs
-        Compress-Archive -Path "build/Release/*" -DestinationPath "Leonard-Windows-Portable.zip" -Force
+      - name: Package Windows Droplet
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item -Path "scripts/windows/Leonard.cmd" -Destination "build/Release/" -Force
+          Get-ChildItem -Path "${{ github.workspace }}/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
+          if (Test-Path $isccPath) {
+              & $isccPath "scripts/windows/installer.iss"
+          } elseif (Get-Command iscc -ErrorAction SilentlyContinue) {
+              iscc "scripts/windows/installer.iss"
+          } else {
+              Write-Host "Inno Setup not detected on runner; skipping installer compilation."
+          }
+          Compress-Archive -Path "build/Release/*" -DestinationPath "Leonard-Windows-Portable.zip" -Force
 
-    - name: Upload Artifact (Windows Portable Droplet)
-      if: runner.os == 'Windows'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Leonard-Windows-Portable
-        path: Leonard-Windows-Portable.zip
+      - name: Upload Artifact (Windows Portable Droplet)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Leonard-Windows-Portable
+          path: Leonard-Windows-Portable.zip
 
-    - name: Upload Artifact (Windows Setup Installer)
-      if: runner.os == 'Windows' && hashFiles('dist/Leonard-Setup-x64.exe') != ''
-      uses: actions/upload-artifact@v4
-      with:
-        name: Leonard-Windows-Setup
-        path: dist/Leonard-Setup-x64.exe
+      - name: Upload Artifact (Windows Setup Installer)
+        if: runner.os == 'Windows' && hashFiles('dist/Leonard-Setup-x64.exe') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Leonard-Windows-Setup
+          path: dist/Leonard-Setup-x64.exe
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Leonard-macOS.zip
+            Leonard-Windows-Portable.zip
+            dist/Leonard-Setup-x64.exe
+          fail_on_unmatched_files: false
+          generate_release_notes: true
