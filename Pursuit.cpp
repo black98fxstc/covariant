@@ -58,7 +58,7 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
             double P = (double)(j - i) / (double)n;
             double Q = .5 * (erf((x[j] - mu) / sigma / std::numbers::sqrt2) - erf((x[i] - mu) / sigma / std::numbers::sqrt2)) / NQn;
             if (Q > 0)                          // catch underflow that causes infinite result
-                results.KLDn += P * log(P / Q); // I didn't think it was possible either
+                results.KLDn += P * std::log(P / Q); // I didn't think it was possible either
 
             if (i == 0 && m > 0)
                 P = (double)(j - m) / (double)(n - m);
@@ -66,7 +66,7 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
                 P = (double)(j - i) / (double)(n - m);
             Q = (exp(-x[i] / mu) - exp(-x[j] / mu)) / NQe;
             if (Q > 0)
-                results.KLDe += P * log(P / Q);
+                results.KLDe += P * std::log(P / Q);
         }
     }
     results.qualified = results.KLDn > selections.kld_norm && results.KLDe > selections.kld_exp;

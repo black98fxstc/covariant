@@ -15,6 +15,7 @@
 #include "Workers.hpp"
 #include "Covariant.hpp"
 #include "Events.hpp"
+#include "Log.hpp"
 
 struct Params
 {
@@ -52,10 +53,18 @@ void for_each_plane(std::function<void(const unsigned i, const unsigned j)> func
 
 class Leonard
 {
+    // Declared first so it outlives the thread pools, which can still log while they shut down.
+    SessionLog session_;
+
 public:
-    Leonard() = default;
+    Leonard() : say(&session_, LogLevel::Say), log(&session_, LogLevel::Log) {}
     Leonard(const Leonard &) = delete;
     Leonard &operator=(const Leonard &) = delete;
+
+    // say goes to the session file and to the console unless --quiet.
+    // log goes to the session file and to the console only with --verbose.
+    LogChannel say;
+    LogChannel log;
 
     Params params;
     SelectionState selections;
@@ -95,7 +104,7 @@ public:
             if (included[i])
                 results->idx.push_back(i);
 
-        std::cout << "Begin Laplacian clustering on " << results->idx.size() << " events..." << std::endl;
+        say << "Begin Laplacian clustering on " << results->idx.size() << " events..." << std::endl;
         Events<Dimension> events;
         events.resize(results->idx.size());
         for (unsigned d = 0; d < Dimension; ++d)
@@ -110,16 +119,16 @@ public:
         for (const auto &e : events)
             if (laplace.event(e))
                 valid_events++;
-        std::cout << "Found " << valid_events << " valid events..." << std::endl;
+        say << "Found " << valid_events << " valid events..." << std::endl;
 
-        std::cout << "Calculating the Laplacian of the sample..." << std::endl;
+        say << "Calculating the Laplacian of the sample..." << std::endl;
         laplace.analyze(selections.smoothing, selections.threshold);
         if (laplace.differentialError() > .0001)
-            std::cout << "Differential equation solution is unusually bad " << laplace.differentialError() << std::endl;
+            say << "Differential equation solution is unusually bad " << laplace.differentialError() << std::endl;
         else
-            std::cout << "Consistency checks passed..." << std::endl;
+            say << "Consistency checks passed..." << std::endl;
 
-        std::cout << "Performing Laplacian clustering..." << std::endl;
+        say << "Performing Laplacian clustering..." << std::endl;
         results->clusters_found = laplace.cluster(selections.threshold);
         results->valid_clusters = std::min(selections.max_clusters, results->clusters_found);
         results->cluster_events.resize(results->valid_clusters + 2);
@@ -187,7 +196,7 @@ public:
                     for (unsigned j = 0; j < Dimension; j++)
                         results->covariances[c][i][j] /= results->cluster_events[c].size() - 1;
 
-        std::cout << "Found " << results->valid_clusters << " valid clusters." << std::endl;
+        say << "Found " << results->valid_clusters << " valid clusters." << std::endl;
         return results;
     }
 

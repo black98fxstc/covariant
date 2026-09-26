@@ -31,7 +31,7 @@ int Leonard::parse_args(int argc, char *argv[])
 {
     cxxopts::Options options("Leonard", "Laplacian and Riemannian analysis from FlowJo workspaces");
 
-    options.add_options()("f,file", "File name", cxxopts::value<std::string>())("v,variables", "List of variables", cxxopts::value<std::string>())("p,populations", "List of populations", cxxopts::value<std::string>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))("h,help", "Print usage");
+    options.add_options()("f,file", "File name", cxxopts::value<std::string>())("v,variables", "List of variables", cxxopts::value<std::string>())("p,populations", "List of populations", cxxopts::value<std::string>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))("quiet", "Do not echo conversation to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("verbose", "Also echo the detailed log to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
 
     options.parse_positional({"file", "variables", "populations"});
 
@@ -71,6 +71,8 @@ int Leonard::parse_args(int argc, char *argv[])
     params.antialias = result["antialias"].as<bool>();
     params.verify = result["verify"].as<bool>();
     params.analysis_choice = result["analysis"].as<int>();
+    session_.set_quiet(result["quiet"].as<bool>());
+    session_.set_verbose(result["verbose"].as<bool>());
 
     return -1;
 };
@@ -314,39 +316,45 @@ int Leonard::run()
         }
     }
 
-    std::cout << "\n=== LEONARD SELECTIONS ===\n";
-    if (!selections.samples.empty())
+    std::filesystem::path source(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
+    std::string report_dir = source.stem().string() + ".len";
+    if (!session_.open(report_dir))
+        std::cerr << "Could not open session log in " << report_dir << std::endl;
+    else
+        say << "Session log: " << session_.path().string() << std::endl;
+
     {
-        std::cout << "Samples:";
-        for (const auto *s : selections.samples)
-            std::cout << " " << s->name;
-        std::cout << "\n";
+        auto message = say << "\n=== LEONARD SELECTIONS ===\n";
+        if (!selections.samples.empty())
+        {
+            message << "Samples:";
+            for (const auto *s : selections.samples)
+                message << " " << s->name;
+            message << "\n";
+        }
+        message << "Variables: ";
+        for (const auto &v : selections.variables)
+            message << v << " ";
+
+        message << "\nPopulations: ";
+        for (const auto &p : selections.populations)
+            message << p << " ";
+
+        message << "\n\nSettings:\n";
+        message << "  Smoothing: " << selections.smoothing << "\n";
+        message << "  Threshold: " << selections.threshold << "\n";
+        message << "  Max Clusters: " << selections.max_clusters << "\n";
+        message << "  Min Cluster Abs: " << selections.min_events << "\n";
+        message << "  Min Cluster Rel: " << selections.min_cluster_rel << "\n";
+        message << "  KLD Norm: " << selections.kld_norm << "\n";
+        message << "  KLD Exp: " << selections.kld_exp << "\n";
+        message << "  Tolerance: " << selections.tolerance << "\n";
+        message << "  Grid Size: " << selections.grid_size << "\n";
+
+        message << "\nAnalysis Method:\n"
+                << analysis_choices[selections.analysis_choice] << "\n\n";
     }
-    std::cout << "Variables: ";
-    for (const auto &v : selections.variables)
-        std::cout << v << " ";
 
-    std::cout << "\nPopulations: ";
-    for (const auto &p : selections.populations)
-        std::cout << p << " ";
-
-    std::cout << "\n\nSettings:\n";
-    std::cout << "  Smoothing: " << selections.smoothing << "\n";
-    std::cout << "  Threshold: " << selections.threshold << "\n";
-    std::cout << "  Max Clusters: " << selections.max_clusters << "\n";
-    std::cout << "  Min Cluster Abs: " << selections.min_events << "\n";
-    std::cout << "  Min Cluster Rel: " << selections.min_cluster_rel << "\n";
-    std::cout << "  KLD Norm: " << selections.kld_norm << "\n";
-    std::cout << "  KLD Exp: " << selections.kld_exp << "\n";
-    std::cout << "  Tolerance: " << selections.tolerance << "\n";
-    std::cout << "  Grid Size: " << selections.grid_size << "\n";
-
-    std::cout << "\nAnalysis Method:\n"
-              << analysis_choices[selections.analysis_choice] << "\n\n";
-
-    std::string report_dir;
-    std::filesystem::path p(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
-    report_dir = p.stem().string() + ".len";
     params.img_dir = std::filesystem::absolute(std::filesystem::path(report_dir) / "images")
                          .lexically_normal()
                          .generic_string();
@@ -361,14 +369,14 @@ int Leonard::run()
             if (g)
                 gate_id_to_gate[g->id] = g;
 
-        std::cout << "Processing sample: " << s.name << " ... " << std::endl;
+        say << "Processing sample: " << s.name << " ... " << std::endl;
         DataSet dataset;
         if (!dataset.read(s.name))
         {
-            std::cerr << "Failed to read dataset: " << s.name << std::endl;
+            session_.error("Failed to read dataset: " + s.name + "\n");
             continue;
         }
-        std::cout << dataset.size() << " events read" << std::endl;
+        say << dataset.size() << " events read" << std::endl;
 
         Classification &laplace = dataset.classification["Laplace"];
         if (!laplace.classifications)
@@ -462,7 +470,7 @@ int Leonard::run()
             return transformed;
         };
 
-        std::cout << "Scaling and unmixing data for analysis..." << std::endl;
+        say << "Scaling and unmixing data for analysis..." << std::endl;
         // generate the appropriate scaled data for analysis
         bool vars_valid = true;
         for (size_t v = 0; v < selections.variables.size(); ++v)
@@ -474,14 +482,14 @@ int Leonard::run()
                 var.data = transformed;
             else
             {
-                std::cerr << "Variable " << vname << " not found in sample " << s.name << std::endl;
+                session_.error("Variable " + vname + " not found in sample " + s.name + "\n");
                 vars_valid = false;
             }
         }
         if (!vars_valid)
             continue;
 
-        std::cout << "Finding all the gates and, scaling and unmixing the needed data..." << std::endl;
+        say << "Finding all the gates and, scaling and unmixing the needed data..." << std::endl;
         // find all the gates and any data they need
         std::vector<std::shared_ptr<Gate>> gates;
         for (size_t i = 0; i < selections.populations.size(); ++i)
@@ -518,7 +526,7 @@ int Leonard::run()
             }
         }
 
-        std::cout << "Evaluating all the necessary gates..." << std::endl;
+        say << "Evaluating all the necessary gates..." << std::endl;
         // evaluate all the gates needed
         for (auto it = gates.rbegin(); it != gates.rend(); ++it)
         {
@@ -550,7 +558,7 @@ int Leonard::run()
 
         for (std::string &pop_name : selections.populations)
         {
-            std::cout << "Enqueuing population " << pop_name << std::endl;
+            say << "Enqueuing population " << pop_name << std::endl;
             std::vector<bool> subpopulation = *(dataset.subset[pop_name].membership.get());
 
             if (selections.analysis_choice == 0)
