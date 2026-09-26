@@ -4,6 +4,9 @@
 
 To make it as simple as possible for bench biologists, Leonard is distributed as a **desktop droplet** for both Windows and macOS. You do not need to open a terminal, configure environment variables, or know how to code.
 
+> [!WARNING]
+> Leonard rewrites the FlowJo workspace file (`.wsp`) to include the new gating information. Always work on a copy of any important workspace.
+
 ---
 
 ## Windows Installation & Usage
