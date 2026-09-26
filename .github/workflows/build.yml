@@ -6,7 +6,7 @@ env:
 
 on:
   push:
-    branches: [ "main" ]
+    tags: [ "v*" ]
   workflow_dispatch: # Allows you to run this manually from the Actions tab
 
 jobs:

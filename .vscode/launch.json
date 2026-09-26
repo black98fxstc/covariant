@@ -85,6 +85,19 @@
             "console": "internalConsole"
         },
         {
+            "name": "FlowJo Workspace",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}",
+            "args": [
+                "26-Sep-2026 - Copy.wsp"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
             "name": "Test Data",
             "type": "cppvsdbg",
             "request": "launch",
