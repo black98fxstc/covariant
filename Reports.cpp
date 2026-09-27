@@ -306,7 +306,8 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                                               const std::string &sample_name,
                                               const std::string &pop_name,
                                               const Laplace_Results &res,
-                                              const std::vector<std::string> &selected_vars)
+                                              const std::vector<std::string> &selected_vars,
+                                              const std::vector<std::string> &display_vars)
 {
     fs::create_directories(report_dir);
     std::string stem = "laplace_" + sample_name + "_" + pop_name;
@@ -317,7 +318,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     std::string html_path = report_dir + "/" + stem + ".html";
     std::ofstream xml_out(xml_path);
 
-    auto write_visualizations = [&xml_out, &report_dir, &selected_vars](const std::vector<std::string> &images)
+    auto write_visualizations = [&xml_out, &report_dir, &selected_vars, &display_vars](const std::vector<std::string> &images)
     {
         std::vector<std::string> ordered_images = images;
         const auto plane_rank = [&selected_vars](const std::string &image)
@@ -354,8 +355,8 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                     if (stem.size() >= suffix.size() &&
                         stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
                     {
-                        x_label = selected_vars[x];
-                        y_label = selected_vars[y];
+                        x_label = x < display_vars.size() ? display_vars[x] : selected_vars[x];
+                        y_label = y < display_vars.size() ? display_vars[y] : selected_vars[y];
                         break;
                     }
                 }
@@ -396,8 +397,8 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                 << "      <Mean>\n";
         for (size_t dimension = 0; dimension < res.means[cluster].size(); ++dimension)
         {
-            const std::string label = dimension < selected_vars.size()
-                                          ? selected_vars[dimension]
+            const std::string label = dimension < display_vars.size()
+                                          ? display_vars[dimension]
                                           : "Dim" + std::to_string(dimension);
             const double mean = res.means[cluster][dimension];
             const double percentage = std::max(0.0, std::min(100.0, mean * 100.0));
@@ -524,9 +525,9 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     return stem + ".html";
 }
 
-std::string Reports::generate_laplace_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Laplace_Results &res, const std::vector<std::string> &selected_vars)
+std::string Reports::generate_laplace_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Laplace_Results &res, const std::vector<std::string> &selected_vars, const std::vector<std::string> &display_vars)
 {
-    return generate_laplace_report_v2(report_dir, sample_name, pop_name, res, selected_vars);
+    return generate_laplace_report_v2(report_dir, sample_name, pop_name, res, selected_vars, display_vars);
     fs::create_directories(report_dir);
     std::string stem = "laplace_" + sample_name + "_" + pop_name;
     std::replace(stem.begin(), stem.end(), ' ', '_');
@@ -665,7 +666,7 @@ std::string Reports::generate_laplace_report(const std::string &report_dir, cons
     return stem + ".html";
 }
 
-std::string Reports::generate_epp_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Pursuit_Results &res, const std::vector<std::string> &selected_vars)
+std::string Reports::generate_epp_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Pursuit_Results &res, const std::vector<std::string> &display_vars)
 {
     fs::create_directories(report_dir);
     std::string stem = "epp_" + sample_name + "_" + pop_name;
@@ -683,19 +684,19 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
     if (!res.means.empty())
     {
         xml_out << "    <Means>\n";
-        for (size_t i = 0; i < selected_vars.size() && i < res.means.size(); ++i)
+        for (size_t i = 0; i < display_vars.size() && i < res.means.size(); ++i)
         {
             std::ostringstream ss, ss_pct;
             ss << std::fixed << std::setprecision(4) << res.means[i];
             double pct = std::max(0.0, std::min(100.0, res.means[i] * 100.0));
             ss_pct << std::fixed << std::setprecision(1) << pct;
-            xml_out << "      <Variable name=\"" << escape_xml(selected_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
+            xml_out << "      <Variable name=\"" << escape_xml(display_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
         }
         xml_out << "    </Means>\n";
     }
     for (const auto &child : res.children)
     {
-        render_epp_node(xml_out, child, selected_vars, 2);
+        render_epp_node(xml_out, child, display_vars, 2);
     }
     xml_out << "  </AllEvents>\n";
     xml_out << "</EPPReport>\n";
@@ -839,11 +840,11 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
     return stem + ".html";
 }
 
-void Reports::render_epp_node(std::ostream &out, const Pursuit_Results &node, const std::vector<std::string> &selected_vars, int depth)
+void Reports::render_epp_node(std::ostream &out, const Pursuit_Results &node, const std::vector<std::string> &display_vars, int depth)
 {
     std::string indent(depth * 2, ' ');
-    std::string x_name = (node.has_gate && node.gate_x < selected_vars.size()) ? selected_vars[node.gate_x] : "X";
-    std::string y_name = (node.has_gate && node.gate_y < selected_vars.size()) ? selected_vars[node.gate_y] : "Y";
+    std::string x_name = (node.has_gate && node.gate_x < display_vars.size()) ? display_vars[node.gate_x] : "X";
+    std::string y_name = (node.has_gate && node.gate_y < display_vars.size()) ? display_vars[node.gate_y] : "Y";
 
     out << indent << "<Node id=\"" << escape_xml(node.node_id)
         << "\" branch=\"" << escape_xml(node.branch)
@@ -865,13 +866,13 @@ void Reports::render_epp_node(std::ostream &out, const Pursuit_Results &node, co
     if (!node.means.empty())
     {
         out << indent << "  <Means>\n";
-        for (size_t i = 0; i < selected_vars.size() && i < node.means.size(); ++i)
+        for (size_t i = 0; i < display_vars.size() && i < node.means.size(); ++i)
         {
             std::ostringstream ss, ss_pct;
             ss << std::fixed << std::setprecision(4) << node.means[i];
             double pct = std::max(0.0, std::min(100.0, node.means[i] * 100.0));
             ss_pct << std::fixed << std::setprecision(1) << pct;
-            out << indent << "    <Variable name=\"" << escape_xml(selected_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
+            out << indent << "    <Variable name=\"" << escape_xml(display_vars[i]) << "\" mean=\"" << ss.str() << "\" pct=\"" << ss_pct.str() << "\"/>\n";
         }
         out << indent << "  </Means>\n";
     }
@@ -880,7 +881,7 @@ void Reports::render_epp_node(std::ostream &out, const Pursuit_Results &node, co
     {
         for (const auto &child : node.children)
         {
-            render_epp_node(out, child, selected_vars, depth + 1);
+            render_epp_node(out, child, display_vars, depth + 1);
         }
     }
 

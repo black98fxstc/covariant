@@ -73,7 +73,7 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
     return results;
 }
 
-Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name)
+Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name, const std::vector<std::string> &display_vars)
 {
     Projection_Results candidate(X, Y);
     Weighty<2> weighty(256);
@@ -416,11 +416,10 @@ Projection_Results Leonard::do_Projection(const std::vector<std::vector<float> *
     // and the check is in the mail
     candidate.outcome = Projection_Results::Status::EPP_success;
     candidate.score = best.score;
-
     return candidate;
 }
 
-Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, std::string node_id, std::string branch)
+Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, const std::vector<std::string> &display_vars, std::string node_id, std::string branch)
 {
     Pursuit_Results results;
     results.total_events = total_events;
@@ -472,8 +471,8 @@ Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &dat
         for (unsigned i = 1; i < results.qualified.size(); ++i)
             for (unsigned j = 0; j < i; ++j)
             {
-                future_projection.push_back(compute_plane.enqueue([this, plane = std::vector<std::vector<float> *>{data[j], data[i]}, i, j, &included, &pop_name]()
-                                                                  { return do_Projection(plane, j, i, included, pop_name); }));
+                future_projection.push_back(compute_plane.enqueue([this, plane = std::vector<std::vector<float> *>{data[j], data[i]}, i, j, &included, &pop_name, display_vars]()
+                                              { return do_Projection(plane, j, i, included, pop_name, display_vars); }));
             }
     for (auto &result : future_projection)
     {
@@ -491,12 +490,18 @@ Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &dat
             min_count = selections.min_events;
         if (results.best_split->outcome == Projection_Results::Status::EPP_success)
         {
+            const Measurement X = results.best_split->X;
+            const Measurement Y = results.best_split->Y;
+            const std::string x_name = X < display_vars.size() ? display_vars[X] : selections.variables[X];
+            const std::string y_name = Y < display_vars.size() ? display_vars[Y] : selections.variables[Y];
+            say << "Found a suitable split in " << x_name << " vs " << y_name << std::endl;
+
             if (results.best_split->in.count >= min_count)
-                results.future_children.push_back(control_plane.enqueue([this, data, in_set = std::move(results.best_split->in.set), pop_name, total_events = results.total_events, child_id = node_id + ".1"]() mutable
-                                                                        { return do_Pursuit(data, std::move(in_set), pop_name, total_events, child_id, "in"); }));
+                results.future_children.push_back(control_plane.enqueue([this, data, in_set = std::move(results.best_split->in.set), pop_name, total_events = results.total_events, display_vars, child_id = node_id + ".1"]() mutable
+                                                                        { return do_Pursuit(data, std::move(in_set), pop_name, total_events, display_vars, child_id, "in"); }));
             if (results.best_split->out.count >= min_count)
-                results.future_children.push_back(control_plane.enqueue([this, data, out_set = std::move(results.best_split->out.set), pop_name, total_events = results.total_events, child_id = node_id + ".2"]() mutable
-                                                                        { return do_Pursuit(data, std::move(out_set), pop_name, total_events, child_id, "out"); }));
+                results.future_children.push_back(control_plane.enqueue([this, data, out_set = std::move(results.best_split->out.set), pop_name, total_events = results.total_events, display_vars, child_id = node_id + ".2"]() mutable
+                                                                        { return do_Pursuit(data, std::move(out_set), pop_name, total_events, display_vars, child_id, "out"); }));
 
             if (selections.tolerance > 0.0)
                 results.best_split->separatrix = results.best_split->separatrix.simplify(selections.tolerance);

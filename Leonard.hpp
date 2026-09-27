@@ -82,11 +82,11 @@ public:
 
     Qualify_Results do_Qualify(const std::vector<float> *data, const Measurement X, const std::vector<bool> &included, std::string pop_name);
 
-    Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name);
+    Projection_Results do_Projection(const std::vector<std::vector<float> *> &data, const Measurement X, const Measurement Y, const std::vector<bool> &included, std::string pop_name, const std::vector<std::string> &display_vars);
 
     EPP_Node_Results do_EPP_Node(const std::vector<std::vector<float> *> data, const std::vector<bool> &included, const Measurement X, const Measurement Y, const Polygon &in_poly, const Polygon &out_poly, std::string pop_name, std::string node_id);
 
-    Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, std::string node_id = "1", std::string branch = "root");
+    Pursuit_Results do_Pursuit(const std::vector<std::vector<float> *> &data, std::vector<bool> included, std::string pop_name, size_t total_events, const std::vector<std::string> &display_vars, std::string node_id = "1", std::string branch = "root");
 
     Marginal_Results do_Marginal(std::shared_ptr<Laplace_Results> laplace, const std::vector<std::vector<float> *> &data, const Measurement i, const Measurement j, std::string pop_name) noexcept;
 

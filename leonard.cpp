@@ -553,6 +553,23 @@ int Leonard::run()
         for (size_t i = 0; i < num_vars_selected; ++i)
             data[i] = dataset.variable[selections.variables[i]].data.get();
 
+        std::vector<std::string> display_vars;
+        display_vars.reserve(selections.variables.size());
+        for (const auto &variable : selections.variables)
+        {
+            auto variable_it = std::find(s.variables.begin(), s.variables.end(), variable);
+            if (variable_it != s.variables.end())
+            {
+                const size_t variable_index = std::distance(s.variables.begin(), variable_it);
+                if (variable_index < s.stains.size() && !s.stains[variable_index].empty())
+                {
+                    display_vars.push_back(s.stains[variable_index]);
+                    continue;
+                }
+            }
+            display_vars.push_back(variable);
+        }
+
         std::vector<std::pair<std::string, std::future<Pursuit_Results>>> epp_results;
         std::vector<std::pair<std::string, std::future<std::shared_ptr<Laplace_Results>>>> laplace_results;
 
@@ -568,8 +585,8 @@ int Leonard::run()
                         if ((*data[i])[it - subpopulation.begin()] < 0.0f || (*data[i])[it - subpopulation.begin()] > 1.0f)
                             subpopulation[it - subpopulation.begin()] = false;
                 size_t total_events = std::count(subpopulation.begin(), subpopulation.end(), true);
-                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name, total_events]() mutable
-                                                                       { return do_Pursuit(data, std::move(subpop), pop_name, total_events); })});
+                epp_results.push_back({pop_name, control_plane.enqueue([this, data, subpop = std::move(subpopulation), pop_name, total_events, display_vars]() mutable
+                                                                       { return do_Pursuit(data, std::move(subpop), pop_name, total_events, display_vars); })});
             }
             else if (selections.analysis_choice == 1)
             {
@@ -591,12 +608,13 @@ int Leonard::run()
             }
         }
 
+        say << "Waiting for analysis to complete..." << std::endl;
         for (auto &result_pair : epp_results)
         {
             Pursuit_Results res = result_pair.second.get();
             res.wait_for_results();
 
-            std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, selections.variables);
+            std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, display_vars);
             report_links.push_back({s.name + " - " + result_pair.first + " (EPP)", filename, "EPP tree analysis"});
 
             res.wait_for_plots();
@@ -635,10 +653,11 @@ int Leonard::run()
                 make_overlay_transparent(entry.path().string());
             }
 
-            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables);
+            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables, display_vars);
             report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
         }
 
+        say << "Enriching FlowJo workspace with analysis results..." << std::endl;
         if (selections.analysis_choice == 1)
         {
             std::filesystem::path csv_path = s.name;
@@ -665,6 +684,8 @@ int Leonard::run()
 
     if (!report_links.empty())
     {
+        say << "Opening browser window with analysis report..." << std::endl;
+
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
         std::filesystem::path index_path = std::filesystem::absolute(std::filesystem::path(report_dir) / "index.html");
 #if defined(_WIN32)
@@ -678,6 +699,7 @@ int Leonard::run()
 #endif
     }
 
+    say << "Analysis complete." << std::endl;
     return 0;
 }
 
