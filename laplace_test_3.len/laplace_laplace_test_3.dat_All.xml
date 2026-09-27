@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="laplace_report.xsl"?>
+<LaplaceReport sample="laplace_test_3.dat" population="All" dimensions="3">
+  <Summary totalEvents="100000" clustersFound="3" />
+  <Sample>
+    <Summary totalEvents="100000" clustersFound="3" />
+      <Visualizations>
+        <Visualization src="images/sample_X_Y.png.rgba.png" under="images/sample_X_Y_under.png" x="X" y="Y" />
+        <Visualization src="images/sample_X_Z.png.rgba.png" under="images/sample_X_Z_under.png" x="X" y="Z" />
+        <Visualization src="images/sample_Y_Z.png.rgba.png" under="images/sample_Y_Z_under.png" x="Y" y="Z" />
+      </Visualizations>
+  </Sample>
+  <Clusters>
+    <Cluster id="1" events="27002" percentage="27.002">
+      <Mean>
+        <Value label="X" mean="0.0409274" pct="4.09274">0.0409274</Value>
+        <Value label="Y" mean="0.689849" pct="68.9849">0.689849</Value>
+        <Value label="Z" mean="0.730254" pct="73.0254">0.730254</Value>
+      </Mean>
+      <Covariance>
+        <Row>
+          <Cell>0.000294797</Cell>
+          <Cell>8.50375e-07</Cell>
+          <Cell>2.44984e-06</Cell>
+        </Row>
+        <Row>
+          <Cell>8.50375e-07</Cell>
+          <Cell>0.000320556</Cell>
+          <Cell>2.33023e-06</Cell>
+        </Row>
+        <Row>
+          <Cell>2.44984e-06</Cell>
+          <Cell>2.33023e-06</Cell>
+          <Cell>0.000318286</Cell>
+        </Row>
+      </Covariance>
+      <Visualizations>
+        <Visualization src="images/cluster_1_X_Y.png.rgba.png" under="images/cluster_1_X_Y_under.png" x="X" y="Y" />
+        <Visualization src="images/cluster_1_X_Z.png.rgba.png" under="images/cluster_1_X_Z_under.png" x="X" y="Z" />
+        <Visualization src="images/cluster_1_Y_Z.png.rgba.png" under="images/cluster_1_Y_Z_under.png" x="Y" y="Z" />
+      </Visualizations>
+    </Cluster>
+    <Cluster id="2" events="48459" percentage="48.459">
+      <Mean>
+        <Value label="X" mean="0.323268" pct="32.3268">0.323268</Value>
+        <Value label="Y" mean="0.772209" pct="77.2209">0.772209</Value>
+        <Value label="Z" mean="0.813228" pct="81.3228">0.813228</Value>
+      </Mean>
+      <Covariance>
+        <Row>
+          <Cell>0.00261597</Cell>
+          <Cell>-1.71354e-05</Cell>
+          <Cell>-1.91096e-05</Cell>
+        </Row>
+        <Row>
+          <Cell>-1.71354e-05</Cell>
+          <Cell>0.00266933</Cell>
+          <Cell>6.13228e-06</Cell>
+        </Row>
+        <Row>
+          <Cell>-1.91096e-05</Cell>
+          <Cell>6.13228e-06</Cell>
+          <Cell>0.00261443</Cell>
+        </Row>
+      </Covariance>
+      <Visualizations>
+        <Visualization src="images/cluster_2_X_Y.png.rgba.png" under="images/cluster_2_X_Y_under.png" x="X" y="Y" />
+        <Visualization src="images/cluster_2_X_Z.png.rgba.png" under="images/cluster_2_X_Z_under.png" x="X" y="Z" />
+        <Visualization src="images/cluster_2_Y_Z.png.rgba.png" under="images/cluster_2_Y_Z_under.png" x="Y" y="Z" />
+      </Visualizations>
+    </Cluster>
+    <Cluster id="3" events="23985" percentage="23.985">
+      <Mean>
+        <Value label="X" mean="0.471337" pct="47.1337">0.471337</Value>
+        <Value label="Y" mean="0.367677" pct="36.7677">0.367677</Value>
+        <Value label="Z" mean="0.557975" pct="55.7975">0.557975</Value>
+      </Mean>
+      <Covariance>
+        <Row>
+          <Cell>0.00710408</Cell>
+          <Cell>8.70508e-05</Cell>
+          <Cell>8.0154e-05</Cell>
+        </Row>
+        <Row>
+          <Cell>8.70508e-05</Cell>
+          <Cell>0.00689201</Cell>
+          <Cell>-0.00016441</Cell>
+        </Row>
+        <Row>
+          <Cell>8.0154e-05</Cell>
+          <Cell>-0.00016441</Cell>
+          <Cell>0.00715815</Cell>
+        </Row>
+      </Covariance>
+      <Visualizations>
+        <Visualization src="images/cluster_3_X_Y.png.rgba.png" under="images/cluster_3_X_Y_under.png" x="X" y="Y" />
+        <Visualization src="images/cluster_3_X_Z.png.rgba.png" under="images/cluster_3_X_Z_under.png" x="X" y="Z" />
+        <Visualization src="images/cluster_3_Y_Z.png.rgba.png" under="images/cluster_3_Y_Z_under.png" x="Y" y="Z" />
+      </Visualizations>
+    </Cluster>
+  </Clusters>
+</LaplaceReport>

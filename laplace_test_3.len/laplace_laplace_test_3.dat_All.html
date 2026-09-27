@@ -1,0 +1,187 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Laplace Report: laplace_test_3.dat</title>
+<style>
+                body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
+                .row { display: flex; gap: 20px; background: #fff; margin-bottom: 20px; padding: 15px; }
+                .info { flex: 0 0 350px; }
+                .plots { display: flex; flex-wrap: wrap; gap: 10px; }
+                .plot-stack {
+                    --underlay-x: 10%;
+                    --underlay-y: 10%;
+                    --underlay-scale-x: .78;
+                    --underlay-scale-y: .78;
+                    position: relative;
+                    width: 400px;
+                    height: 400px;
+                    aspect-ratio: 1 / 1;
+                    overflow: hidden;
+                }
+                .plot-stack-2 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-3 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-4 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
+                .plot-label { position: absolute; z-index: 2; top: 4px; left: 50%; transform: translateX(-50%); padding: 2px 5px; background: rgba(255,255,255,.8); font-weight: 600; white-space: nowrap; }
+                .plot-underlay {
+                    transform: translate(var(--underlay-x), var(--underlay-y))
+                               scale(var(--underlay-scale-x), var(--underlay-scale-y));
+                    transform-origin: top left;
+                }
+                .plot-overlay { pointer-events: none; mix-blend-mode: multiply; }
+                .means-panel { margin-top: 10px; }
+                .means-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+                .means-label { width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .means-track { flex: 1; height: 10px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+                .means-fill { height: 100%; background: #2563eb; }
+                .means-value { width: 48px; text-align: right; font-family: monospace; }
+                table { border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+            </style>
+</head>
+<body>
+<h1>Laplace Report: laplace_test_3.dat</h1>
+<div class="row">
+<div class="info">
+<h2>All</h2>
+<p>Total events: 100000</p>
+<p>Clusters: 3</p>
+<p>554 Events (0.6%) Unclassified</p>
+</div>
+<div class="plots">
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Y</div>
+<img class="plot-underlay" src="images/sample_X_Y_under.png"><img class="plot-overlay" src="images/sample_X_Y.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Z</div>
+<img class="plot-underlay" src="images/sample_X_Z_under.png"><img class="plot-overlay" src="images/sample_X_Z.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">Y vs Z</div>
+<img class="plot-underlay" src="images/sample_Y_Z_under.png"><img class="plot-overlay" src="images/sample_Y_Z.png.rgba.png">
+</div>
+</div>
+</div>
+<div class="row">
+<div class="info">
+<h2>Cluster 1</h2>
+<p>Events: 27002 (27.0%)</p>
+<h3>Expression Levels</h3>
+<div class="means-panel">
+<div class="means-row">
+<span class="means-label" title="X">X</span><div class="means-track"><div class="means-fill" style="width: 4.09274%;"></div></div>
+<span class="means-value">0.04</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Y">Y</span><div class="means-track"><div class="means-fill" style="width: 68.9849%;"></div></div>
+<span class="means-value">0.69</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Z">Z</span><div class="means-track"><div class="means-fill" style="width: 73.0254%;"></div></div>
+<span class="means-value">0.73</span>
+</div>
+</div>
+</div>
+<div class="plots">
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Y</div>
+<img class="plot-underlay" src="images/cluster_1_X_Y_under.png"><img class="plot-overlay" src="images/cluster_1_X_Y.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Z</div>
+<img class="plot-underlay" src="images/cluster_1_X_Z_under.png"><img class="plot-overlay" src="images/cluster_1_X_Z.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">Y vs Z</div>
+<img class="plot-underlay" src="images/cluster_1_Y_Z_under.png"><img class="plot-overlay" src="images/cluster_1_Y_Z.png.rgba.png">
+</div>
+</div>
+</div>
+<div class="row">
+<div class="info">
+<h2>Cluster 2</h2>
+<p>Events: 48459 (48.5%)</p>
+<h3>Expression Levels</h3>
+<div class="means-panel">
+<div class="means-row">
+<span class="means-label" title="X">X</span><div class="means-track"><div class="means-fill" style="width: 32.3268%;"></div></div>
+<span class="means-value">0.32</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Y">Y</span><div class="means-track"><div class="means-fill" style="width: 77.2209%;"></div></div>
+<span class="means-value">0.77</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Z">Z</span><div class="means-track"><div class="means-fill" style="width: 81.3228%;"></div></div>
+<span class="means-value">0.81</span>
+</div>
+</div>
+</div>
+<div class="plots">
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Y</div>
+<img class="plot-underlay" src="images/cluster_2_X_Y_under.png"><img class="plot-overlay" src="images/cluster_2_X_Y.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Z</div>
+<img class="plot-underlay" src="images/cluster_2_X_Z_under.png"><img class="plot-overlay" src="images/cluster_2_X_Z.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">Y vs Z</div>
+<img class="plot-underlay" src="images/cluster_2_Y_Z_under.png"><img class="plot-overlay" src="images/cluster_2_Y_Z.png.rgba.png">
+</div>
+</div>
+</div>
+<div class="row">
+<div class="info">
+<h2>Cluster 3</h2>
+<p>Events: 23985 (24.0%)</p>
+<h3>Expression Levels</h3>
+<div class="means-panel">
+<div class="means-row">
+<span class="means-label" title="X">X</span><div class="means-track"><div class="means-fill" style="width: 47.1337%;"></div></div>
+<span class="means-value">0.47</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Y">Y</span><div class="means-track"><div class="means-fill" style="width: 36.7677%;"></div></div>
+<span class="means-value">0.37</span>
+</div>
+<div class="means-row">
+<span class="means-label" title="Z">Z</span><div class="means-track"><div class="means-fill" style="width: 55.7975%;"></div></div>
+<span class="means-value">0.56</span>
+</div>
+</div>
+</div>
+<div class="plots">
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Y</div>
+<img class="plot-underlay" src="images/cluster_3_X_Y_under.png"><img class="plot-overlay" src="images/cluster_3_X_Y.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">X vs Z</div>
+<img class="plot-underlay" src="images/cluster_3_X_Z_under.png"><img class="plot-overlay" src="images/cluster_3_X_Z.png.rgba.png">
+</div>
+<div class="plot-stack plot-stack-3">
+<div class="plot-label">Y vs Z</div>
+<img class="plot-underlay" src="images/cluster_3_Y_Z_under.png"><img class="plot-overlay" src="images/cluster_3_Y_Z.png.rgba.png">
+</div>
+</div>
+</div>
+</body>
+</html>
