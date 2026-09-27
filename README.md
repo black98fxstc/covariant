@@ -9,6 +9,10 @@ To make it as simple as possible for bench biologists, Leonard is distributed as
 
 ---
 
+## 📥 Download Leonard
+
+👉 [Download the latest version here](https://github.com/black98fxstc/covariant/releases/latest)
+
 ## Windows Installation & Usage
 
 There are two options for Windows: the **Setup Installer (Recommended)** or the **Portable Zip**.

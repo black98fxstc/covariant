@@ -1,4 +1,4 @@
-## v0.1.0 — First Release
+## v0.1.0-alpha.1 — First alpha release
 
 This is the first public release of the project.
 
