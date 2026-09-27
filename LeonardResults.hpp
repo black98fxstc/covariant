@@ -130,6 +130,10 @@ public:
     std::vector<unsigned short> classification;
     std::vector<std::vector<float>> means;
     std::vector<std::vector<std::vector<float>>> covariances;
+    // Covariant Statistics: per-cluster, per-variable morphology R/Q values and the per-cluster total R, all in [0, 3].
+    std::vector<std::vector<float>> morph_R;
+    std::vector<std::vector<float>> morph_Q;
+    std::vector<float> total_R;
     std::vector<std::future<Marginal_Results>> future_marginals;
     std::vector<Marginal_Results> marginals;
     std::vector<std::future<void>> future_plots;

@@ -525,6 +525,297 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     return stem + ".html";
 }
 
+static double clamp_pct_of_range(double value, double range_max)
+{
+    return std::max(0.0, std::min(100.0, 100.0 * value / range_max));
+}
+
+static std::string generate_covariant_report_v2(const std::string &report_dir,
+                                                 const std::string &sample_name,
+                                                 const std::string &pop_name,
+                                                 const Laplace_Results &res,
+                                                 const std::vector<std::string> &selected_vars,
+                                                 const std::vector<std::string> &display_vars)
+{
+    fs::create_directories(report_dir);
+    std::string stem = "covariant_" + sample_name + "_" + pop_name;
+    std::replace(stem.begin(), stem.end(), ' ', '_');
+
+    std::string xml_path = report_dir + "/" + stem + ".xml";
+    std::string xsl_path = report_dir + "/covariant_report.xsl";
+    std::string html_path = report_dir + "/" + stem + ".html";
+    std::ofstream xml_out(xml_path);
+
+    auto write_visualizations = [&xml_out, &report_dir, &selected_vars, &display_vars](const std::vector<std::string> &images)
+    {
+        std::vector<std::string> ordered_images = images;
+        const auto plane_rank = [&selected_vars](const std::string &image)
+        {
+            const std::string stem = fs::path(image).stem().string();
+            for (size_t x = 0; x < selected_vars.size(); ++x)
+                for (size_t y = x + 1; y < selected_vars.size(); ++y)
+                {
+                    const std::string suffix = selected_vars[x] + "_" + selected_vars[y];
+                    if (stem.size() >= suffix.size() &&
+                        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+                        return x * selected_vars.size() + y;
+                }
+            return std::numeric_limits<size_t>::max();
+        };
+        std::stable_sort(ordered_images.begin(), ordered_images.end(),
+                         [&plane_rank](const std::string &left, const std::string &right)
+                         { return plane_rank(left) < plane_rank(right); });
+
+        xml_out << "      <Visualizations>\n";
+        for (const auto &image : ordered_images)
+        {
+            const std::string transparent = transparent_overlay_path(image);
+            const std::string source = fs::exists(report_dir + "/" + transparent)
+                                           ? transparent
+                                           : image;
+            const std::string stem = fs::path(image).stem().string();
+            std::string x_label;
+            std::string y_label;
+            for (size_t x = 0; x < selected_vars.size() && x_label.empty(); ++x)
+                for (size_t y = x + 1; y < selected_vars.size(); ++y)
+                {
+                    const std::string suffix = selected_vars[x] + "_" + selected_vars[y];
+                    if (stem.size() >= suffix.size() &&
+                        stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
+                    {
+                        x_label = x < display_vars.size() ? display_vars[x] : selected_vars[x];
+                        y_label = y < display_vars.size() ? display_vars[y] : selected_vars[y];
+                        break;
+                    }
+                }
+            xml_out << "        <Visualization src=\"" << escape_xml(source)
+                    << "\" under=\"" << escape_xml(underlay_path(image))
+                    << "\" x=\"" << escape_xml(x_label)
+                    << "\" y=\"" << escape_xml(y_label) << "\" />\n";
+        }
+        xml_out << "      </Visualizations>\n";
+    };
+
+    xml_out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            << "<?xml-stylesheet type=\"text/xsl\" href=\"covariant_report.xsl\"?>\n"
+            << "<CovariantReport sample=\"" << escape_xml(sample_name)
+            << "\" population=\"" << escape_xml(pop_name)
+            << "\" dimensions=\"" << selected_vars.size() << "\">\n"
+            << "  <Summary totalEvents=\"" << res.idx.size()
+            << "\" clustersFound=\"" << res.valid_clusters << "\" />\n"
+            << "  <Sample>\n"
+            << "    <Summary totalEvents=\"" << res.idx.size()
+            << "\" clustersFound=\"" << res.valid_clusters << "\" />\n";
+    write_visualizations(res.sample_images);
+    xml_out << "  </Sample>\n  <Clusters>\n";
+
+    for (unsigned cluster = 1; cluster <= res.valid_clusters; ++cluster)
+    {
+        const size_t event_count = cluster < res.cluster_events.size()
+                                       ? res.cluster_events[cluster].size()
+                                       : 0;
+        if (event_count == 0)
+            continue;
+        const double percentage = res.idx.empty()
+                                      ? 0.0
+                                      : 100.0 * event_count / res.idx.size();
+
+        xml_out << "    <Cluster id=\"" << cluster << "\" events=\""
+                << event_count << "\" percentage=\"" << percentage << "\">\n"
+                << "      <Mean>\n";
+        for (size_t dimension = 0; dimension < res.means[cluster].size(); ++dimension)
+        {
+            const std::string label = dimension < display_vars.size()
+                                          ? display_vars[dimension]
+                                          : "Dim" + std::to_string(dimension);
+            const double mean = res.means[cluster][dimension];
+            const double percentage = std::max(0.0, std::min(100.0, mean * 100.0));
+            xml_out << "        <Value label=\"" << escape_xml(label)
+                << "\" mean=\"" << mean << "\" pct=\"" << percentage << "\">"
+                << mean << "</Value>\n";
+        }
+        xml_out << "      </Mean>\n";
+
+        const double total_r = cluster < res.total_R.size() ? res.total_R[cluster] : 0.0;
+        xml_out << "      <Morphology totalR=\"" << total_r
+                << "\" totalRpct=\"" << clamp_pct_of_range(total_r, 3.0) << "\">\n";
+        if (cluster < res.morph_R.size())
+        {
+            for (size_t dimension = 0; dimension < res.morph_R[cluster].size(); ++dimension)
+            {
+                const std::string label = dimension < display_vars.size()
+                                              ? display_vars[dimension]
+                                              : "Dim" + std::to_string(dimension);
+                const double r = res.morph_R[cluster][dimension];
+                const double q = cluster < res.morph_Q.size() && dimension < res.morph_Q[cluster].size()
+                                     ? res.morph_Q[cluster][dimension]
+                                     : 0.0;
+                xml_out << "        <Value label=\"" << escape_xml(label)
+                    << "\" R=\"" << r << "\" Q=\"" << q
+                    << "\" Rpct=\"" << clamp_pct_of_range(r, 3.0)
+                    << "\" Qpct=\"" << clamp_pct_of_range(q, 3.0) << "\" />\n";
+            }
+        }
+        xml_out << "      </Morphology>\n      <Covariance>\n";
+        for (const auto &row : res.covariances[cluster])
+        {
+            xml_out << "        <Row>\n";
+            for (const auto value : row)
+                xml_out << "          <Cell>" << value << "</Cell>\n";
+            xml_out << "        </Row>\n";
+        }
+        xml_out << "      </Covariance>\n";
+
+        std::vector<std::string> cluster_images;
+        const std::string prefix = "images/cluster_" + std::to_string(cluster) + "_";
+        for (const auto &image : res.cluster_images)
+            if (image.rfind(prefix, 0) == 0)
+                cluster_images.push_back(image);
+        write_visualizations(cluster_images);
+        xml_out << "    </Cluster>\n";
+    }
+    xml_out << "  </Clusters>\n</CovariantReport>\n";
+    xml_out.close();
+
+    std::ofstream xsl_out(xsl_path);
+    xsl_out << R"XSL(<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+    <xsl:output method="html" indent="yes"/>
+    <xsl:template name="plot">
+        <div>
+            <xsl:attribute name="class">plot-stack plot-stack-<xsl:value-of select="/CovariantReport/@dimensions"/></xsl:attribute>
+            <div class="plot-label"><xsl:value-of select="@x"/> vs <xsl:value-of select="@y"/></div>
+            <img class="plot-underlay" src="{@under}"/>
+            <img class="plot-overlay" src="{@src}"/>
+        </div>
+    </xsl:template>
+    <xsl:template match="/CovariantReport">
+        <html><head>
+            <title>Covariant Statistics: <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></title>
+            <style>
+                body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
+                .row { display: flex; gap: 20px; background: #fff; margin-bottom: 20px; padding: 15px; }
+                .info { flex: 0 0 350px; }
+                .plots { display: flex; flex-wrap: wrap; gap: 10px; }
+                .plot-stack {
+                    --underlay-x: 10%;
+                    --underlay-y: 10%;
+                    --underlay-scale-x: .78;
+                    --underlay-scale-y: .78;
+                    position: relative;
+                    width: 400px;
+                    height: 400px;
+                    aspect-ratio: 1 / 1;
+                    overflow: hidden;
+                }
+                .plot-stack-2 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-3 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack-4 {
+                    --underlay-x: 13%;
+                    --underlay-y: 7.75%;
+                    --underlay-scale-x: .735;
+                    --underlay-scale-y: .81;
+                }
+                .plot-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; display: block; }
+                .plot-label { position: absolute; z-index: 2; top: 4px; left: 50%; transform: translateX(-50%); padding: 2px 5px; background: rgba(255,255,255,.8); font-weight: 600; white-space: nowrap; }
+                .plot-underlay {
+                    transform: translate(var(--underlay-x), var(--underlay-y))
+                               scale(var(--underlay-scale-x), var(--underlay-scale-y));
+                    transform-origin: top left;
+                }
+                .plot-overlay { pointer-events: none; mix-blend-mode: multiply; }
+                .means-panel { margin-top: 10px; }
+                .means-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+                .means-label { width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .means-track { flex: 1; height: 10px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+                .means-fill { height: 100%; background: #2563eb; }
+                .means-value { width: 48px; text-align: right; font-family: monospace; }
+                .morph-panel { margin-top: 10px; }
+                .morph-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+                .morph-label { width: 54px; flex: 0 0 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .morph-metric { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+                .morph-tag { width: 12px; flex: 0 0 12px; font-weight: 600; color: #64748b; }
+                .morph-track { flex: 1; min-width: 0; height: 10px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+                .morph-fill-r { height: 100%; background: #dc2626; }
+                .morph-fill-q { height: 100%; background: #16a34a; }
+                .morph-value { width: 34px; flex: 0 0 34px; text-align: right; font-family: monospace; }
+                .morph-total { margin-top: 8px; font-weight: 600; }
+                table { border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+            </style>
+        </head><body>
+            <h1>Covariant Statistics: <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></h1>
+            <div class="row"><div class="info"><h2><xsl:value-of select="/CovariantReport/@population"/></h2>
+                <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
+                <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
+                <xsl:variable name="unclassified" select="number(Summary/@totalEvents) - sum(Clusters/Cluster/@events)"/>
+                <p><xsl:value-of select="$unclassified"/> Events (<xsl:value-of select="format-number(100 * $unclassified div number(Summary/@totalEvents), '0.0')"/>%) Unclassified</p>
+            </div><div class="plots"><xsl:for-each select="Sample/Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
+            <xsl:for-each select="Clusters/Cluster">
+                <div class="row"><div class="info"><h2>Cluster <xsl:value-of select="@id"/></h2>
+                    <p>Events: <xsl:value-of select="@events"/> (<xsl:value-of select="format-number(@percentage, '0.0')"/>%)</p>
+                    <h3>Expression Levels</h3>
+                    <div class="means-panel">
+                        <xsl:for-each select="Mean/Value">
+                            <div class="means-row">
+                                <span class="means-label" title="{@label}"><xsl:value-of select="@label"/></span>
+                                <div class="means-track"><div class="means-fill" style="width: {@pct}%;"></div></div>
+                                <span class="means-value"><xsl:value-of select="format-number(@mean, '#.##')"/></span>
+                            </div>
+                        </xsl:for-each>
+                    </div>
+                    <h3>Morphology</h3>
+                    <div class="morph-panel">
+                        <xsl:for-each select="Morphology/Value">
+                            <div class="morph-row">
+                                <span class="morph-label" title="{@label}"><xsl:value-of select="@label"/></span>
+                                <div class="morph-metric">
+                                    <span class="morph-tag">R</span>
+                                    <div class="morph-track"><div class="morph-fill-r" style="width: {@Rpct}%;"></div></div>
+                                    <span class="morph-value"><xsl:value-of select="format-number(@R, '#.##')"/></span>
+                                </div>
+                                <div class="morph-metric">
+                                    <span class="morph-tag">Q</span>
+                                    <div class="morph-track"><div class="morph-fill-q" style="width: {@Qpct}%;"></div></div>
+                                    <span class="morph-value"><xsl:value-of select="format-number(@Q, '#.##')"/></span>
+                                </div>
+                            </div>
+                        </xsl:for-each>
+                        <div class="morph-row morph-total">
+                            <span class="morph-label">Total</span>
+                            <div class="morph-metric">
+                                <span class="morph-tag">R</span>
+                                <div class="morph-track"><div class="morph-fill-r" style="width: {Morphology/@totalRpct}%;"></div></div>
+                                <span class="morph-value"><xsl:value-of select="format-number(Morphology/@totalR, '#.##')"/></span>
+                            </div>
+                        </div>
+                    </div>
+                </div><div class="plots"><xsl:for-each select="Visualizations/Visualization"><xsl:call-template name="plot"/></xsl:for-each></div></div>
+            </xsl:for-each>
+        </body></html>
+    </xsl:template>
+</xsl:stylesheet>
+)XSL";
+    xsl_out.close();
+    apply_stylesheet(xml_path, xsl_path, html_path);
+    return stem + ".html";
+}
+
+std::string Reports::generate_covariant_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Laplace_Results &res, const std::vector<std::string> &selected_vars, const std::vector<std::string> &display_vars)
+{
+    return generate_covariant_report_v2(report_dir, sample_name, pop_name, res, selected_vars, display_vars);
+}
+
 std::string Reports::generate_laplace_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Laplace_Results &res, const std::vector<std::string> &selected_vars, const std::vector<std::string> &display_vars)
 {
     return generate_laplace_report_v2(report_dir, sample_name, pop_name, res, selected_vars, display_vars);

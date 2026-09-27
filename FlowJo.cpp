@@ -33,7 +33,7 @@
 
 using json = nlohmann::json;
 
-std::vector<std::string> analysis_choices = {"Exhaustive Projection Pursuit", "Laplacian Clustering"};
+std::vector<std::string> analysis_choices = {"Exhaustive Projection Pursuit", "Laplacian Clustering", "Covariant Statistics"};
 
 std::string get_settings_path() {
     std::string path;
@@ -1519,6 +1519,19 @@ SelectionState build_ftxui_interface(Workspace &ws)
                 state.populations.push_back(ws.all_populations[i]);
         }
         state.analysis_choice = analysis_choice;
+
+        switch (state.variables.size())
+        {
+        case 3:
+            state.grid_size = 128;
+            break;
+        case 4:
+            state.grid_size = 48;
+            break;
+        default:
+            state.grid_size = 256;
+            break;
+        }
 
         char* end;
         float sf = std::strtof(state.smoothing_str.c_str(), &end);

@@ -544,7 +544,7 @@ int Leonard::run()
         }
 
         std::vector<unsigned short> *classification = nullptr;
-        if (selections.analysis_choice == 1)
+        if (selections.analysis_choice == 1 || selections.analysis_choice == 2)
             classification = laplace.classifications.get();
 
         // scaled data marshalled as events for analysis
@@ -606,6 +606,24 @@ int Leonard::run()
                     break;
                 }
             }
+            else if (selections.analysis_choice == 2)
+            {
+                switch (num_vars_selected)
+                {
+                case 2:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Covariant<2>(data, subpopulation, pop_name); })});
+                    break;
+                case 3:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Covariant<3>(data, subpopulation, pop_name); })});
+                    break;
+                case 4:
+                    laplace_results.push_back({pop_name, compute_plane.enqueue([this, data, subpopulation, pop_name]()
+                                                                               { return do_Covariant<4>(data, subpopulation, pop_name); })});
+                    break;
+                }
+            }
         }
 
         say << "Waiting for analysis to complete..." << std::endl;
@@ -653,12 +671,15 @@ int Leonard::run()
                 make_overlay_transparent(entry.path().string());
             }
 
-            std::string filename = Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables, display_vars);
-            report_links.push_back({s.name + " - " + result_pair.first + " (Laplace)", filename, "Laplacian clustering analysis"});
+            std::string filename = selections.analysis_choice == 2
+                                        ? Reports::generate_covariant_report(report_dir, s.name, result_pair.first, *res, selections.variables, display_vars)
+                                        : Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables, display_vars);
+            const std::string label = selections.analysis_choice == 2 ? "Covariant Statistics" : "Laplace";
+            report_links.push_back({s.name + " - " + result_pair.first + " (" + label + ")", filename, selections.analysis_choice == 2 ? "Covariant Statistics analysis" : "Laplacian clustering analysis"});
         }
 
         say << "Enriching FlowJo workspace with analysis results..." << std::endl;
-        if (selections.analysis_choice == 1)
+        if (selections.analysis_choice == 1 || selections.analysis_choice == 2)
         {
             std::filesystem::path csv_path = s.name;
             std::string csv_filename = csv_path.stem().string();

@@ -20,6 +20,8 @@ public:
 
     static std::string generate_laplace_report(const std::string& report_dir, const std::string& sample_name, const std::string& pop_name, const Laplace_Results& res, const std::vector<std::string>& selected_vars, const std::vector<std::string>& display_vars);
 
+    static std::string generate_covariant_report(const std::string& report_dir, const std::string& sample_name, const std::string& pop_name, const Laplace_Results& res, const std::vector<std::string>& selected_vars, const std::vector<std::string>& display_vars);
+
     static std::string generate_epp_report(const std::string& report_dir, const std::string& sample_name, const std::string& pop_name, const Pursuit_Results& res, const std::vector<std::string>& display_vars);
 
 private:

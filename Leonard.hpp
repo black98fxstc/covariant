@@ -200,5 +200,24 @@ public:
         return results;
     }
 
+    // Covariant Statistics: reproduces the Laplacian clustering workflow, then computes
+    // additional morphology metrics (R and Q per variable, plus a total R) for each valid cluster.
+    template <unsigned Dimension>
+    std::shared_ptr<Laplace_Results> do_Covariant(const std::vector<std::vector<float> *> &data, const std::vector<bool> &included, std::string pop_name)
+    {
+        auto results = do_Laplace<Dimension>(data, included, pop_name);
+        if (results->idx.empty())
+            return results;
+
+        say << "Computing Covariant morphology statistics..." << std::endl;
+        results->morph_R.assign(results->valid_clusters + 1, std::vector<float>(Dimension, 0.0f));
+        results->morph_Q.assign(results->valid_clusters + 1, std::vector<float>(Dimension, 0.0f));
+        results->total_R.assign(results->valid_clusters + 1, 0.0f);
+
+        // TODO: replace with the real per-variable morphology R/Q computation; values are in [0, 3].
+
+        return results;
+    }
+
     int run();
 };
