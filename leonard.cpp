@@ -318,7 +318,7 @@ int Leonard::run()
 
     std::filesystem::path source(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
     std::string report_dir = source.stem().string() + ".len";
-    if (!session_.open(report_dir))
+    if (!session_.open(std::filesystem::path(report_dir) / "logs"))
         std::cerr << "Could not open session log in " << report_dir << std::endl;
     else
         say << "Session log: " << session_.path().string() << std::endl;
