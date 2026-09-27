@@ -33,7 +33,7 @@
 
 using json = nlohmann::json;
 
-std::vector<std::string> analysis_choices = {"Exhaustive Projection Pursuit", "Laplacian Clustering", "Laplacian Clustering and Covariant Statistics"};
+std::vector<std::string> analysis_choices = {"Exhaustive Projection Pursuit", "Laplacian Clustering"};
 
 std::string get_settings_path() {
     std::string path;

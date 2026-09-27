@@ -494,7 +494,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                 th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
             </style>
         </head><body>
-            <h1>Laplace Report: <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></h1>
+            <h1>Laplacian Clustering : <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></h1>
             <div class="row"><div class="info"><h2><xsl:value-of select="/LaplaceReport/@population"/></h2>
                 <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
                 <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
@@ -746,7 +746,7 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
             << "      </head>\n"
             << "      <body>\n"
             << "        <div class=\"container\">\n"
-            << "          <h2>EPP Analysis: <xsl:value-of select=\"@sample\"/> / <xsl:value-of select=\"@population\"/></h2>\n"
+            << "          <h2>Exhaustive Projection Pursuit : <xsl:value-of select=\"@sample\"/> / <xsl:value-of select=\"@population\"/></h2>\n"
             << "          <div class=\"tree\">\n"
             << "            <ul>\n"
             << "              <xsl:apply-templates select=\"AllEvents\"/>\n"
