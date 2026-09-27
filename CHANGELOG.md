@@ -21,3 +21,9 @@ This is an early release, so some workflows may still be rough around the edges.
 - Calculate the covariant statistics on the Laplacian clusters and enrich the reports.
 - Return gating polygon trees to FlowJo by mangling the workspace file
 - Integrate more cleanly with FlowJo
+
+## v0.1.0-alpha.2 - Cosmetic fixes
+
+- Use stain name instead of detector in html reports when it is available
+- More informative progress messages to the console so it doesn't run silently for so long
+- Normalize report titles

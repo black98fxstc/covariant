@@ -441,7 +441,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
     </xsl:template>
     <xsl:template match="/LaplaceReport">
         <html><head>
-            <title>Laplace Report: <xsl:value-of select="@sample"/></title>
+            <title>Laplacian Clustering: <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></title>
             <style>
                 body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
                 .row { display: flex; gap: 20px; background: #fff; margin-bottom: 20px; padding: 15px; }
@@ -494,7 +494,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                 th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
             </style>
         </head><body>
-            <h1>Laplace Report: <xsl:value-of select="@sample"/></h1>
+            <h1>Laplace Report: <xsl:value-of select="@sample"/> / <xsl:value-of select="@population"/></h1>
             <div class="row"><div class="info"><h2><xsl:value-of select="/LaplaceReport/@population"/></h2>
                 <p>Total events: <xsl:value-of select="Sample/Summary/@totalEvents"/></p>
                 <p>Clusters: <xsl:value-of select="Sample/Summary/@clustersFound"/></p>
@@ -709,7 +709,7 @@ std::string Reports::generate_epp_report(const std::string &report_dir, const st
             << "  <xsl:template match=\"/EPPReport\">\n"
             << "    <html>\n"
             << "      <head>\n"
-            << "        <title>EPP Report: <xsl:value-of select=\"@population\"/></title>\n"
+            << "        <title>Exhaustive Projection Pursuit Report: <xsl:value-of select=\"@sample\"/> / <xsl:value-of select=\"@population\"/></title>\n"
             << "        <style>\n"
             << "          body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; margin: 20px; background: #f8fafc; color: #1e293b; }\n"
             << "          .container { width: 100%; min-width: 800px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); box-sizing: border-box; }\n"
