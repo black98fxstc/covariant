@@ -17,6 +17,9 @@ norminv.cpp
 *.fcs
 *.class
 *.list
+*.wsp
+*.len
+*.csv
 testdata
 laplace
 riemann
@@ -24,5 +27,6 @@ darwin
 build
 tmp
 matplotplusplus
+vcpkg
 vcpkg_installed
 
