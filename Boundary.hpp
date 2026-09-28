@@ -232,7 +232,7 @@ public:
         Color clockwise,
         Color widdershins,
         double weight) noexcept
-        : points(points), weight((float)weight), clockwise(clockwise), widdershins(widdershins) {};
+        : points(points), weight(static_cast<float>(weight)), clockwise(clockwise), widdershins(widdershins) {};
 
     ColoredEdge(
         std::vector<ColoredPoint> &points,
@@ -289,8 +289,8 @@ public:
         const double x,
         const double y) const noexcept
     {
-        int i = (int)(x * N);
-        int j = (int)(y * N);
+        int i = static_cast<int>(x * N);
+        int j = static_cast<int>(y * N);
         // jump to the first element for this i
         ColoredSegment *segment = index[i];
         Color result = edge_color[i];
@@ -733,7 +733,7 @@ public:
         Color widdershins,
         double weight) noexcept
     {
-        addSegment(ColoredSegment(slope, (Coordinate)i, (Coordinate)j, clockwise, widdershins, (float)weight));
+        addSegment(ColoredSegment(slope, static_cast<Coordinate>(i), static_cast<Coordinate>(j), clockwise, widdershins, static_cast<float>(weight)));
     }
 
     void addSegment(
@@ -743,7 +743,7 @@ public:
         Color clockwise,
         Color widdershins) noexcept
     {
-        addSegment(ColoredSegment(slope, (Coordinate)i, (Coordinate)j, clockwise, widdershins, 0));
+        addSegment(ColoredSegment(slope, static_cast<Coordinate>(i), static_cast<Coordinate>(j), clockwise, widdershins, 0));
     }
 
     void addSegment(
@@ -789,7 +789,7 @@ public:
         Color widdershins,
         double weight) noexcept
     {
-        addSegment(tail, head, clockwise, widdershins, (float)weight);
+        addSegment(tail, head, clockwise, widdershins, static_cast<float>(weight));
     }
 
     void addSegment(

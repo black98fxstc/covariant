@@ -81,7 +81,7 @@ public:
     {
     public:
         const double pi = 3.14159265358979323846;
-        const float half_pi = (float)(pi / 2);
+        const float half_pi = static_cast<float>(pi / 2);
         std::vector<float> mean;
         unsigned X, Y;
         float stddev;
@@ -99,9 +99,9 @@ public:
             delta_y = .5 * std::sin(theta);
             for (unsigned i = 0; i < dimension; i++)
                 if (i == X)
-                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_x + s * delta_y), stddev});
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{static_cast<float>(mean[i] + c * delta_x + s * delta_y), stddev});
                 else if (i == Y)
-                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{(float)(mean[i] + c * delta_y - s * delta_x), stddev});
+                    event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{static_cast<float>(mean[i] + c * delta_y - s * delta_x), stddev});
                 else
                     event[i] = this->normal_distribution(this->rng(), typename std::normal_distribution<float>::param_type{mean[i], stddev});
             return 0;

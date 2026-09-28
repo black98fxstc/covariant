@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 
     std::unordered_map<std::string, std::shared_ptr<Transform>> transforms;
 
-    xmlXPathObjectPtr transObj = xmlXPathEvalExpression((const xmlChar *)"//*[local-name()='logicle' or local-name()='hyperlog' or local-name()='lin' or local-name()='log' or local-name()='fasinh' or local-name()='biexp']", xpathCtx);
+    xmlXPathObjectPtr transObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>("//*[local-name()='logicle' or local-name()='hyperlog' or local-name()='lin' or local-name()='log' or local-name()='fasinh' or local-name()='biexp']"), xpathCtx);
     if (transObj && transObj->nodesetval)
     {
         for (int i = 0; i < transObj->nodesetval->nodeNr; ++i)
@@ -240,18 +240,18 @@ int main(int argc, char **argv)
             xmlNodePtr node = transObj->nodesetval->nodeTab[i];
 
             std::string id;
-            xmlChar *idAttr = xmlGetProp(node, (const xmlChar *)"id");
+            xmlChar *idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("id"));
             if (!idAttr)
-                idAttr = xmlGetProp(node, (const xmlChar *)"gating:id");
+                idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("gating:id"));
             if (!idAttr && node->parent)
             {
-                idAttr = xmlGetProp(node->parent, (const xmlChar *)"id");
+                idAttr = xmlGetProp(node->parent, reinterpret_cast<const xmlChar *>("id"));
                 if (!idAttr)
-                    idAttr = xmlGetProp(node->parent, (const xmlChar *)"gating:id");
+                    idAttr = xmlGetProp(node->parent, reinterpret_cast<const xmlChar *>("gating:id"));
             }
             if (idAttr)
             {
-                id = (const char *)idAttr;
+                id = reinterpret_cast<const char *>(idAttr);
                 xmlFree(idAttr);
             }
 
@@ -260,13 +260,13 @@ int main(int argc, char **argv)
 
             auto get_double = [](xmlNodePtr n, const char *attr_name, double def)
             {
-                xmlChar *attr = xmlGetProp(n, (const xmlChar *)attr_name);
+                xmlChar *attr = xmlGetProp(n, reinterpret_cast<const xmlChar *>(attr_name));
                 if (attr)
                 {
                     double val = def;
                     char *end;
-                    double v = std::strtod((char *)attr, &end);
-                    if (end != (char *)attr) {
+                    double v = std::strtod(reinterpret_cast<char *>(attr), &end);
+                    if (end != reinterpret_cast<char *>(attr)) {
                         val = v;
                     }
                     xmlFree(attr);
@@ -275,7 +275,7 @@ int main(int argc, char **argv)
                 return def;
             };
 
-            std::string name = (const char *)node->name;
+            std::string name = reinterpret_cast<const char *>(node->name);
             std::shared_ptr<Transform> transform;
             try
             {
@@ -322,24 +322,24 @@ int main(int argc, char **argv)
     }
 
     // Step 1: Extract all gates across the document
-    xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression((const xmlChar *)"//*[contains(local-name(), 'Gate')]", xpathCtx);
+    xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>("//*[contains(local-name(), 'Gate')]"), xpathCtx);
     if (xpathObj != nullptr && xpathObj->nodesetval != nullptr)
     {
         int size = xpathObj->nodesetval->nodeNr;
         for (int i = 0; i < size; ++i)
         {
             xmlNodePtr node = xpathObj->nodesetval->nodeTab[i];
-            std::string name = (const char *)node->name;
+            std::string name = reinterpret_cast<const char *>(node->name);
 
             std::string id;
-            xmlChar *idAttr = xmlGetProp(node, (const xmlChar *)"gating:id");
+            xmlChar *idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("gating:id"));
             if (!idAttr)
-                idAttr = xmlGetProp(node, (const xmlChar *)"id");
+                idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("id"));
             if (!idAttr)
             {
                 for (xmlAttrPtr attr = node->properties; attr != nullptr; attr = attr->next)
                 {
-                    if (xmlStrEqual(attr->name, (const xmlChar *)"id"))
+                    if (xmlStrEqual(attr->name, reinterpret_cast<const xmlChar *>("id")))
                     {
                         idAttr = xmlNodeListGetString(node->doc, attr->children, 1);
                         break;
@@ -348,19 +348,19 @@ int main(int argc, char **argv)
             }
             if (idAttr)
             {
-                id = (const char *)idAttr;
+                id = reinterpret_cast<const char *>(idAttr);
                 xmlFree(idAttr);
             }
 
             std::string parent_id;
-            xmlChar *parentIdAttr = xmlGetProp(node, (const xmlChar *)"gating:parent_id");
+            xmlChar *parentIdAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("gating:parent_id"));
             if (!parentIdAttr)
-                parentIdAttr = xmlGetProp(node, (const xmlChar *)"parent_id");
+                parentIdAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("parent_id"));
             if (!parentIdAttr)
             {
                 for (xmlAttrPtr attr = node->properties; attr != nullptr; attr = attr->next)
                 {
-                    if (xmlStrEqual(attr->name, (const xmlChar *)"parent_id"))
+                    if (xmlStrEqual(attr->name, reinterpret_cast<const xmlChar *>("parent_id")))
                     {
                         parentIdAttr = xmlNodeListGetString(node->doc, attr->children, 1);
                         break;
@@ -369,7 +369,7 @@ int main(int argc, char **argv)
             }
             if (parentIdAttr)
             {
-                parent_id = (const char *)parentIdAttr;
+                parent_id = reinterpret_cast<const char *>(parentIdAttr);
                 xmlFree(parentIdAttr);
             }
 
@@ -387,7 +387,7 @@ int main(int argc, char **argv)
 
             if (gate && !id.empty())
             {
-                xmlXPathObjectPtr dimObj = xmlXPathNodeEval(node, (const xmlChar *)".//*[contains(local-name(), 'fcs-dimension')]", xpathCtx);
+                xmlXPathObjectPtr dimObj = xmlXPathNodeEval(node, reinterpret_cast<const xmlChar *>(".//*[contains(local-name(), 'fcs-dimension')]"), xpathCtx);
                 if (dimObj && dimObj->nodesetval)
                 {
                     for (int j = 0; j < dimObj->nodesetval->nodeNr; ++j)
@@ -395,21 +395,21 @@ int main(int argc, char **argv)
                         xmlNodePtr dimNode = dimObj->nodesetval->nodeTab[j];
                         Gate::Dimension dim;
 
-                        xmlChar *nAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:name");
+                        xmlChar *nAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("data-type:name"));
                         if (!nAttr)
-                            nAttr = xmlGetProp(dimNode, (const xmlChar *)"name");
+                            nAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("name"));
                         if (nAttr)
                         {
-                            dim.name = (char *)nAttr;
+                            dim.name = reinterpret_cast<char *>(nAttr);
                             xmlFree(nAttr);
                         }
 
-                        xmlChar *sAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:transformation-ref");
+                        xmlChar *sAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("data-type:transformation-ref"));
                         if (!sAttr)
-                            sAttr = xmlGetProp(dimNode, (const xmlChar *)"transformation-ref");
+                            sAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("transformation-ref"));
                         if (sAttr)
                         {
-                            dim.scale = (char *)sAttr;
+                            dim.scale = reinterpret_cast<char *>(sAttr);
                             auto it = transforms.find(dim.scale);
                             if (it != transforms.end())
                             {
@@ -418,12 +418,12 @@ int main(int argc, char **argv)
                             xmlFree(sAttr);
                         }
 
-                        xmlChar *cAttr = xmlGetProp(dimNode, (const xmlChar *)"data-type:compensation-ref");
+                        xmlChar *cAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("data-type:compensation-ref"));
                         if (!cAttr)
-                            cAttr = xmlGetProp(dimNode, (const xmlChar *)"compensation-ref");
+                            cAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("compensation-ref"));
                         if (cAttr)
                         {
-                            dim.compensation = (char *)cAttr;
+                            dim.compensation = reinterpret_cast<char *>(cAttr);
                             xmlFree(cAttr);
                         }
 

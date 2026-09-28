@@ -64,7 +64,7 @@ public:
             x.d = i;
             x.points = points(i);
             x.stride = stride(i);
-            x.delta = 1.0 / (double)(points(x.d) - 1);
+            x.delta = 1.0 / static_cast<double>(points(x.d) - 1);
 
             for (x.id = 0; x.id < size() / points(x.d); x.id++)
             {

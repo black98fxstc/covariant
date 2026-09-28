@@ -141,7 +141,7 @@ public:
             x += floor * stride(i);
         }
         // and distribute the weight to the corners of the hypercube containing it.
-        for (unsigned neighbor = 0; neighbor < (unsigned)(1 << Dimension); neighbor++)
+        for (unsigned neighbor = 0; neighbor < static_cast<unsigned>(1 << Dimension); neighbor++)
         {
             size_t offset = 0;
             double weight = 1.0;

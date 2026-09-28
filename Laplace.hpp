@@ -130,7 +130,7 @@ public:
 
         // Supress ringing
         if (this->antialias)
-            this->filter(L, std::pow(this->size(), -1.0f / (float)Dimension), true);
+            this->filter(L, std::pow(this->size(), -1.0f / static_cast<float>(Dimension)), true);
 
         // Remove outliers
         this->trim(L, threshold);
@@ -291,15 +291,15 @@ private:
             else
             {
                 const double delta_steps = static_cast<double>(x.delta) * static_cast<double>(j - k);
-                tt = -2.0 * ((std::log((double)this->density[x[j]]) - std::log((double)this->density[x[k]])) / squared(delta_steps) - S[x.d][x[k]] / delta_steps);
+                tt = -2.0 * ((std::log(static_cast<double>(this->density[x[j]])) - std::log(static_cast<double>(this->density[x[k]]))) / squared(delta_steps) - S[x.d][x[k]] / delta_steps);
             }
             while (k < j)
             {
-                T[x.d][x[k]] = (float)tt;
+                T[x.d][x[k]] = static_cast<float>(tt);
                 if (k != x.points - 1)
                 {
                     double ss = -tt * x.delta + S[x.d][x[k]];
-                    S[x.d][x[k + 1]] = (float)ss;
+                    S[x.d][x[k + 1]] = static_cast<float>(ss);
                 }
                 k++;
             }
@@ -314,13 +314,13 @@ private:
             else
             {
                 const double delta_span = static_cast<double>(x.delta) * static_cast<double>(k - j);
-                tt = 2.0 * ((std::log((double)this->density[x[k]]) - std::log((double)this->density[x[j]])) / squared(delta_span) - S[x.d][x[k]] / delta_span);
+                tt = 2.0 * ((std::log(static_cast<double>(this->density[x[k]])) - std::log(static_cast<double>(this->density[x[j]]))) / squared(delta_span) - S[x.d][x[k]] / delta_span);
             }
             while (k > j)
             {
-                T[x.d][x[k - 1]] = (float)tt;
+                T[x.d][x[k - 1]] = static_cast<float>(tt);
                 double ss = tt * x.delta + S[x.d][x[k]];
-                S[x.d][x[k - 1]] = (float)ss;
+                S[x.d][x[k - 1]] = static_cast<float>(ss);
                 k--;
             }
         }

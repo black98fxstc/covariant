@@ -57,59 +57,59 @@ std::string get_settings_path() {
 SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr xpathCtx)
 {
     SpilloverMatrix sm;
-    xmlChar *idAttr = xmlGetProp(matrixNode, (const xmlChar *)"transforms:id");
+    xmlChar *idAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("transforms:id"));
     if (!idAttr)
-        idAttr = xmlGetProp(matrixNode, (const xmlChar *)"gating:id");
+        idAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("gating:id"));
     if (!idAttr)
-        idAttr = xmlGetProp(matrixNode, (const xmlChar *)"id");
+        idAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("id"));
     if (idAttr)
     {
-        sm.id = (char *)idAttr;
+        sm.id = reinterpret_cast<char *>(idAttr);
         xmlFree(idAttr);
     }
 
-    xmlChar *nameAttr = xmlGetProp(matrixNode, (const xmlChar *)"name");
+    xmlChar *nameAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("name"));
     if (nameAttr)
     {
-        sm.name = (char *)nameAttr;
+        sm.name = reinterpret_cast<char *>(nameAttr);
         xmlFree(nameAttr);
     }
 
-    xmlChar *prefixAttr = xmlGetProp(matrixNode, (const xmlChar *)"prefix");
+    xmlChar *prefixAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("prefix"));
     if (prefixAttr)
     {
-        sm.prefix = (char *)prefixAttr;
+        sm.prefix = reinterpret_cast<char *>(prefixAttr);
         xmlFree(prefixAttr);
     }
 
-    xmlChar *suffixAttr = xmlGetProp(matrixNode, (const xmlChar *)"suffix");
+    xmlChar *suffixAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("suffix"));
     if (suffixAttr)
     {
-        sm.suffix = (char *)suffixAttr;
+        sm.suffix = reinterpret_cast<char *>(suffixAttr);
         xmlFree(suffixAttr);
     }
 
-    xmlXPathObjectPtr paramObj = xmlXPathNodeEval(matrixNode, (const xmlChar *)".//*[local-name()='parameters']/*[local-name()='parameter']", xpathCtx);
+    xmlXPathObjectPtr paramObj = xmlXPathNodeEval(matrixNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='parameters']/*[local-name()='parameter']"), xpathCtx);
     if (paramObj && paramObj->nodesetval)
     {
         for (int i = 0; i < paramObj->nodesetval->nodeNr; ++i)
         {
             xmlNodePtr pNode = paramObj->nodesetval->nodeTab[i];
             std::string pname;
-            xmlChar *nAttr = xmlGetProp(pNode, (const xmlChar *)"data-type:name");
+            xmlChar *nAttr = xmlGetProp(pNode, reinterpret_cast<const xmlChar *>("data-type:name"));
             if (!nAttr)
-                nAttr = xmlGetProp(pNode, (const xmlChar *)"name");
+                nAttr = xmlGetProp(pNode, reinterpret_cast<const xmlChar *>("name"));
             if (nAttr)
             {
-                pname = (char *)nAttr;
+                pname = reinterpret_cast<char *>(nAttr);
                 xmlFree(nAttr);
             }
 
             std::string pinfix;
-            xmlChar *iAttr = xmlGetProp(pNode, (const xmlChar *)"userProvidedCompInfix");
+            xmlChar *iAttr = xmlGetProp(pNode, reinterpret_cast<const xmlChar *>("userProvidedCompInfix"));
             if (iAttr)
             {
-                pinfix = (char *)iAttr;
+                pinfix = reinterpret_cast<char *>(iAttr);
                 xmlFree(iAttr);
             }
 
@@ -125,19 +125,19 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
 
     sm.matrix.resize(sm.parameters.size(), std::vector<double>(sm.parameters.size(), 0.0));
 
-    xmlXPathObjectPtr spillObj = xmlXPathNodeEval(matrixNode, (const xmlChar *)".//*[local-name()='spillover']", xpathCtx);
+    xmlXPathObjectPtr spillObj = xmlXPathNodeEval(matrixNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='spillover']"), xpathCtx);
     if (spillObj && spillObj->nodesetval)
     {
         for (int i = 0; i < spillObj->nodesetval->nodeNr; ++i)
         {
             xmlNodePtr sNode = spillObj->nodesetval->nodeTab[i];
             std::string row_param;
-            xmlChar *nAttr = xmlGetProp(sNode, (const xmlChar *)"data-type:parameter");
+            xmlChar *nAttr = xmlGetProp(sNode, reinterpret_cast<const xmlChar *>("data-type:parameter"));
             if (!nAttr)
-                nAttr = xmlGetProp(sNode, (const xmlChar *)"parameter");
+                nAttr = xmlGetProp(sNode, reinterpret_cast<const xmlChar *>("parameter"));
             if (nAttr)
             {
-                row_param = (char *)nAttr;
+                row_param = reinterpret_cast<char *>(nAttr);
                 xmlFree(nAttr);
             }
 
@@ -153,31 +153,31 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
 
             if (row_idx >= 0)
             {
-                xmlXPathObjectPtr coefObj = xmlXPathNodeEval(sNode, (const xmlChar *)".//*[local-name()='coefficient']", xpathCtx);
+                xmlXPathObjectPtr coefObj = xmlXPathNodeEval(sNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='coefficient']"), xpathCtx);
                 if (coefObj && coefObj->nodesetval)
                 {
                     for (int j = 0; j < coefObj->nodesetval->nodeNr; ++j)
                     {
                         xmlNodePtr cNode = coefObj->nodesetval->nodeTab[j];
                         std::string col_param;
-                        xmlChar *cnAttr = xmlGetProp(cNode, (const xmlChar *)"data-type:parameter");
+                        xmlChar *cnAttr = xmlGetProp(cNode, reinterpret_cast<const xmlChar *>("data-type:parameter"));
                         if (!cnAttr)
-                            cnAttr = xmlGetProp(cNode, (const xmlChar *)"parameter");
+                            cnAttr = xmlGetProp(cNode, reinterpret_cast<const xmlChar *>("parameter"));
                         if (cnAttr)
                         {
-                            col_param = (char *)cnAttr;
+                            col_param = reinterpret_cast<char *>(cnAttr);
                             xmlFree(cnAttr);
                         }
 
                         double val = 0.0;
-                        xmlChar *vAttr = xmlGetProp(cNode, (const xmlChar *)"transforms:value");
+                        xmlChar *vAttr = xmlGetProp(cNode, reinterpret_cast<const xmlChar *>("transforms:value"));
                         if (!vAttr)
-                            vAttr = xmlGetProp(cNode, (const xmlChar *)"value");
+                            vAttr = xmlGetProp(cNode, reinterpret_cast<const xmlChar *>("value"));
                         if (vAttr)
                         {
                             char *end;
-                            double parsed_val = std::strtod((char *)vAttr, &end);
-                            if (end != (char *)vAttr) {
+                            double parsed_val = std::strtod(reinterpret_cast<char *>(vAttr), &end);
+                            if (end != reinterpret_cast<char *>(vAttr)) {
                                 val = parsed_val;
                             }
                             xmlFree(vAttr);
@@ -302,7 +302,7 @@ Workspace parse_workspace(const std::string &filename)
     }
 
     // Fetch Samples or SampleNodes
-    xmlXPathObjectPtr samplesObj = xmlXPathEvalExpression((const xmlChar *)"//SampleList/Sample", xpathCtx);
+    xmlXPathObjectPtr samplesObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>("//SampleList/Sample"), xpathCtx);
     if (samplesObj && samplesObj->nodesetval)
     {
         for (int i = 0; i < samplesObj->nodesetval->nodeNr; ++i)
@@ -311,7 +311,7 @@ Workspace parse_workspace(const std::string &filename)
             SampleData sd;
 
             xpathCtx->node = sampleNode;
-            xmlXPathObjectPtr transObj = xmlXPathEvalExpression((const xmlChar *)".//*[local-name()='logicle' or local-name()='hyperlog' or local-name()='lin' or local-name()='linear' or local-name()='log' or local-name()='fasinh' or local-name()='biexp' or local-name()='biex']", xpathCtx);
+            xmlXPathObjectPtr transObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//*[local-name()='logicle' or local-name()='hyperlog' or local-name()='lin' or local-name()='linear' or local-name()='log' or local-name()='fasinh' or local-name()='biexp' or local-name()='biex']"), xpathCtx);
             if (transObj && transObj->nodesetval)
             {
                 for (int t = 0; t < transObj->nodesetval->nodeNr; ++t)
@@ -319,34 +319,34 @@ Workspace parse_workspace(const std::string &filename)
                     xmlNodePtr node = transObj->nodesetval->nodeTab[t];
 
                     std::string id;
-                    xmlChar *idAttr = xmlGetProp(node, (const xmlChar *)"id");
+                    xmlChar *idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("id"));
                     if (!idAttr)
-                        idAttr = xmlGetProp(node, (const xmlChar *)"gating:id");
+                        idAttr = xmlGetProp(node, reinterpret_cast<const xmlChar *>("gating:id"));
                     if (!idAttr && node->parent)
                     {
-                        idAttr = xmlGetProp(node->parent, (const xmlChar *)"id");
+                        idAttr = xmlGetProp(node->parent, reinterpret_cast<const xmlChar *>("id"));
                         if (!idAttr)
-                            idAttr = xmlGetProp(node->parent, (const xmlChar *)"gating:id");
+                            idAttr = xmlGetProp(node->parent, reinterpret_cast<const xmlChar *>("gating:id"));
                     }
                     if (idAttr)
                     {
-                        id = (char *)idAttr;
+                        id = reinterpret_cast<char *>(idAttr);
                         xmlFree(idAttr);
                     }
 
                     if (id.empty())
                     {
                         // Fallback to checking the parameter name since they don't explicitly carry IDs
-                        xmlXPathObjectPtr paramObj = xmlXPathNodeEval(node, (const xmlChar *)".//*[local-name()='parameter']", xpathCtx);
+                        xmlXPathObjectPtr paramObj = xmlXPathNodeEval(node, reinterpret_cast<const xmlChar *>(".//*[local-name()='parameter']"), xpathCtx);
                         if (paramObj && paramObj->nodesetval && paramObj->nodesetval->nodeNr > 0)
                         {
                             xmlNodePtr paramNode = paramObj->nodesetval->nodeTab[0];
-                            xmlChar *nameAttr = xmlGetProp(paramNode, (const xmlChar *)"data-type:name");
+                            xmlChar *nameAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("data-type:name"));
                             if (!nameAttr)
-                                nameAttr = xmlGetProp(paramNode, (const xmlChar *)"name");
+                                nameAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("name"));
                             if (nameAttr)
                             {
-                                id = (char *)nameAttr;
+                                id = reinterpret_cast<char *>(nameAttr);
                                 xmlFree(nameAttr);
                             }
                         }
@@ -359,13 +359,13 @@ Workspace parse_workspace(const std::string &filename)
 
                     auto get_double = [](xmlNodePtr n, const char *attr_name, double def)
                     {
-                        xmlChar *attr = xmlGetProp(n, (const xmlChar *)attr_name);
+                        xmlChar *attr = xmlGetProp(n, reinterpret_cast<const xmlChar *>(attr_name));
                         if (attr)
                         {
                             double val = def;
                             char *end;
-                            double v = std::strtod((char *)attr, &end);
-                            if (end != (char *)attr) {
+                            double v = std::strtod(reinterpret_cast<char *>(attr), &end);
+                            if (end != reinterpret_cast<char *>(attr)) {
                                 val = v;
                             }
                             xmlFree(attr);
@@ -374,7 +374,7 @@ Workspace parse_workspace(const std::string &filename)
                         return def;
                     };
 
-                    std::string name = (const char *)node->name;
+                    std::string name = reinterpret_cast<const char *>(node->name);
                     std::shared_ptr<Transform> transform;
                     try
                     {
@@ -421,7 +421,7 @@ Workspace parse_workspace(const std::string &filename)
             if (transObj)
                 xmlXPathFreeObject(transObj);
 
-            xmlXPathObjectPtr sampleMatObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)".//*[local-name()='spilloverMatrix']", xpathCtx);
+            xmlXPathObjectPtr sampleMatObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='spilloverMatrix']"), xpathCtx);
             if (sampleMatObj && sampleMatObj->nodesetval && sampleMatObj->nodesetval->nodeNr > 0)
             {
                 sd.spillover_matrix = parse_spillover_matrix(sampleMatObj->nodesetval->nodeTab[0], xpathCtx);
@@ -430,20 +430,20 @@ Workspace parse_workspace(const std::string &filename)
                 xmlXPathFreeObject(sampleMatObj);
 
             // Try fetching name from 'name' attribute
-            xmlChar *nameAttr = xmlGetProp(sampleNode, (const xmlChar *)"name");
+            xmlChar *nameAttr = xmlGetProp(sampleNode, reinterpret_cast<const xmlChar *>("name"));
             if (nameAttr)
             {
-                sd.name = (char *)nameAttr;
+                sd.name = reinterpret_cast<char *>(nameAttr);
                 xmlFree(nameAttr);
             }
             else
             {
                 // Fallback to finding the $FIL keyword
                 xpathCtx->node = sampleNode;
-                xmlXPathObjectPtr filObj = xmlXPathEvalExpression((const xmlChar *)".//Keyword[@name='$FIL']/@value", xpathCtx);
+                xmlXPathObjectPtr filObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Keyword[@name='$FIL']/@value"), xpathCtx);
                 if (filObj && filObj->nodesetval && filObj->nodesetval->nodeNr > 0)
                 {
-                    sd.name = (char *)xmlNodeGetContent(filObj->nodesetval->nodeTab[0]);
+                    sd.name = reinterpret_cast<char *>(xmlNodeGetContent(filObj->nodesetval->nodeTab[0]));
                 }
                 else
                 {
@@ -462,28 +462,28 @@ Workspace parse_workspace(const std::string &filename)
 
             // Collect $PnN keywords (variables) and $PnS keywords (stains)
             xpathCtx->node = sampleNode;
-            xmlXPathObjectPtr varObj = xmlXPathEvalExpression((const xmlChar *)".//Keyword[starts-with(@name, '$P') and substring(@name, string-length(@name)) = 'N']", xpathCtx);
+            xmlXPathObjectPtr varObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Keyword[starts-with(@name, '$P') and substring(@name, string-length(@name)) = 'N']"), xpathCtx);
             if (varObj && varObj->nodesetval)
             {
                 for (int j = 0; j < varObj->nodesetval->nodeNr; ++j)
                 {
                     xmlNodePtr kwNode = varObj->nodesetval->nodeTab[j];
-                    xmlChar *nameAttr = xmlGetProp(kwNode, (const xmlChar *)"name");
-                    xmlChar *valAttr = xmlGetProp(kwNode, (const xmlChar *)"value");
+                    xmlChar *nameAttr = xmlGetProp(kwNode, reinterpret_cast<const xmlChar *>("name"));
+                    xmlChar *valAttr = xmlGetProp(kwNode, reinterpret_cast<const xmlChar *>("value"));
                     if (nameAttr && valAttr)
                     {
-                        std::string varName = (char *)nameAttr;
-                        sd.variables.push_back((char *)valAttr);
+                        std::string varName = reinterpret_cast<char *>(nameAttr);
+                        sd.variables.push_back(reinterpret_cast<char *>(valAttr));
 
                         std::string num = varName.substr(2, varName.length() - 3);
                         std::string stainPath = ".//Keyword[@name='$P" + num + "S']/@value";
-                        xmlXPathObjectPtr sObj = xmlXPathEvalExpression((const xmlChar *)stainPath.c_str(), xpathCtx);
+                        xmlXPathObjectPtr sObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(stainPath.c_str()), xpathCtx);
                         if (sObj && sObj->nodesetval && sObj->nodesetval->nodeNr > 0)
                         {
                             xmlChar *sVal = xmlNodeGetContent(sObj->nodesetval->nodeTab[0]);
                             if (sVal)
                             {
-                                sd.stains.push_back((char *)sVal);
+                                sd.stains.push_back(reinterpret_cast<char *>(sVal));
                                 xmlFree(sVal);
                             }
                             else
@@ -508,15 +508,15 @@ Workspace parse_workspace(const std::string &filename)
                 xmlXPathFreeObject(varObj);
 
             // Collect Populations
-            xmlXPathObjectPtr popObj = xmlXPathEvalExpression((const xmlChar *)".//Population", xpathCtx);
+            xmlXPathObjectPtr popObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Population"), xpathCtx);
             if (popObj && popObj->nodesetval)
             {
                 for (int j = 0; j < popObj->nodesetval->nodeNr; ++j)
                 {
-                    xmlChar *popName = xmlGetProp(popObj->nodesetval->nodeTab[j], (const xmlChar *)"name");
+                    xmlChar *popName = xmlGetProp(popObj->nodesetval->nodeTab[j], reinterpret_cast<const xmlChar *>("name"));
                     if (popName)
                     {
-                        std::string pname = (char *)popName;
+                        std::string pname = reinterpret_cast<char *>(popName);
                         pname.erase(std::remove_if(pname.begin(), pname.end(), [](unsigned char c)
                                                    { return c < 32 || c == 127; }),
                                     pname.end());
@@ -544,31 +544,31 @@ Workspace parse_workspace(const std::string &filename)
                                 std::string id;
                                 std::string parent_id;
                                 xpathCtx->node = popObj->nodesetval->nodeTab[j];
-                                xmlXPathObjectPtr gateObj = xmlXPathEvalExpression((const xmlChar *)".//*[contains(local-name(), 'Gate')]", xpathCtx);
+                                xmlXPathObjectPtr gateObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//*[contains(local-name(), 'Gate')]"), xpathCtx);
                                 if (gateObj && gateObj->nodesetval)
                                 {
                                     for (int k = 0; k < gateObj->nodesetval->nodeNr; ++k)
                                     {
                                         xmlNodePtr gateNode = gateObj->nodesetval->nodeTab[k];
-                                        std::string gname = (const char *)gateNode->name;
+                                        std::string gname = reinterpret_cast<const char *>(gateNode->name);
                                         // get the graph ids
                                         if (gname == "Gate")
                                         {
-                                            xmlChar *idAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:id");
+                                            xmlChar *idAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:id"));
                                             if (!idAttr)
-                                                idAttr = xmlGetProp(gateNode, (const xmlChar *)"id");
+                                                idAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("id"));
                                             if (idAttr)
                                             {
-                                                id = (const char *)idAttr;
+                                                id = reinterpret_cast<const char *>(idAttr);
                                                 xmlFree(idAttr);
                                             }
 
-                                            xmlChar *parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"gating:parent_id");
+                                            xmlChar *parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:parent_id"));
                                             if (!parentIdAttr)
-                                                parentIdAttr = xmlGetProp(gateNode, (const xmlChar *)"parent_id");
+                                                parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("parent_id"));
                                             if (parentIdAttr)
                                             {
-                                                parent_id = (const char *)parentIdAttr;
+                                                parent_id = reinterpret_cast<const char *>(parentIdAttr);
                                                 xmlFree(parentIdAttr);
                                             }
 
@@ -583,25 +583,25 @@ Workspace parse_workspace(const std::string &filename)
                                         else if (gname.find("PolygonGate") != std::string::npos)
                                         {
                                             auto poly = std::make_shared<PolygonGate>(id, parent_id);
-                                            xmlXPathObjectPtr vObj = xmlXPathNodeEval(gateNode, (const xmlChar *)".//*[local-name()='vertex']", xpathCtx);
+                                            xmlXPathObjectPtr vObj = xmlXPathNodeEval(gateNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='vertex']"), xpathCtx);
                                             if (vObj && vObj->nodesetval)
                                             {
                                                 for (int v = 0; v < vObj->nodesetval->nodeNr; ++v)
                                                 {
                                                     std::vector<double> vertex;
-                                                    xmlXPathObjectPtr coordObj = xmlXPathNodeEval(vObj->nodesetval->nodeTab[v], (const xmlChar *)".//*[local-name()='coordinate']", xpathCtx);
+                                                    xmlXPathObjectPtr coordObj = xmlXPathNodeEval(vObj->nodesetval->nodeTab[v], reinterpret_cast<const xmlChar *>(".//*[local-name()='coordinate']"), xpathCtx);
                                                     if (coordObj && coordObj->nodesetval)
                                                     {
                                                         for (int c = 0; c < coordObj->nodesetval->nodeNr; ++c)
                                                         {
-                                                            xmlChar *valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
+                                                            xmlChar *valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], reinterpret_cast<const xmlChar *>("data-type:value"));
                                                             if (!valAttr)
-                                                                valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
+                                                                valAttr = xmlGetProp(coordObj->nodesetval->nodeTab[c], reinterpret_cast<const xmlChar *>("value"));
                                                             if (valAttr)
                                                             {
                                                                 char *end;
-                                                                double v = std::strtod((char *)valAttr, &end);
-                                                                if (end != (char *)valAttr) {
+                                                                double v = std::strtod(reinterpret_cast<char *>(valAttr), &end);
+                                                                if (end != reinterpret_cast<char *>(valAttr)) {
                                                                     vertex.push_back(v);
                                                                 }
                                                                 xmlFree(valAttr);
@@ -624,19 +624,19 @@ Workspace parse_workspace(const std::string &filename)
                                         else if (gname.find("EllipsoidGate") != std::string::npos)
                                         {
                                             auto ellip = std::make_shared<EllipsoidGate>(id, parent_id);
-                                            xmlXPathObjectPtr meanObj = xmlXPathNodeEval(gateNode, (const xmlChar *)".//*[local-name()='mean']//*[local-name()='coordinate']", xpathCtx);
+                                            xmlXPathObjectPtr meanObj = xmlXPathNodeEval(gateNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='mean']//*[local-name()='coordinate']"), xpathCtx);
                                             if (meanObj && meanObj->nodesetval)
                                             {
                                                 for (int c = 0; c < meanObj->nodesetval->nodeNr; ++c)
                                                 {
-                                                    xmlChar *valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"data-type:value");
+                                                    xmlChar *valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], reinterpret_cast<const xmlChar *>("data-type:value"));
                                                     if (!valAttr)
-                                                        valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], (const xmlChar *)"value");
+                                                        valAttr = xmlGetProp(meanObj->nodesetval->nodeTab[c], reinterpret_cast<const xmlChar *>("value"));
                                                     if (valAttr)
                                                     {
                                                         char *end;
-                                                        double v = std::strtod((char *)valAttr, &end);
-                                                        if (end != (char *)valAttr) {
+                                                        double v = std::strtod(reinterpret_cast<char *>(valAttr), &end);
+                                                        if (end != reinterpret_cast<char *>(valAttr)) {
                                                             ellip->mean.push_back(v);
                                                         }
                                                         xmlFree(valAttr);
@@ -645,25 +645,25 @@ Workspace parse_workspace(const std::string &filename)
                                             }
                                             if (meanObj)
                                                 xmlXPathFreeObject(meanObj);
-                                            xmlXPathObjectPtr rowObj = xmlXPathNodeEval(gateNode, (const xmlChar *)".//*[local-name()='covarianceMatrix']//*[local-name()='row']", xpathCtx);
+                                            xmlXPathObjectPtr rowObj = xmlXPathNodeEval(gateNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='covarianceMatrix']//*[local-name()='row']"), xpathCtx);
                                             if (rowObj && rowObj->nodesetval)
                                             {
                                                 for (int r = 0; r < rowObj->nodesetval->nodeNr; ++r)
                                                 {
                                                     std::vector<double> row;
-                                                    xmlXPathObjectPtr entryObj = xmlXPathNodeEval(rowObj->nodesetval->nodeTab[r], (const xmlChar *)".//*[local-name()='entry']", xpathCtx);
+                                                    xmlXPathObjectPtr entryObj = xmlXPathNodeEval(rowObj->nodesetval->nodeTab[r], reinterpret_cast<const xmlChar *>(".//*[local-name()='entry']"), xpathCtx);
                                                     if (entryObj && entryObj->nodesetval)
                                                     {
                                                         for (int e = 0; e < entryObj->nodesetval->nodeNr; ++e)
                                                         {
-                                                            xmlChar *valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"data-type:value");
+                                                            xmlChar *valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], reinterpret_cast<const xmlChar *>("data-type:value"));
                                                             if (!valAttr)
-                                                                valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], (const xmlChar *)"value");
+                                                                valAttr = xmlGetProp(entryObj->nodesetval->nodeTab[e], reinterpret_cast<const xmlChar *>("value"));
                                                             if (valAttr)
                                                             {
                                                                 char *end;
-                                                                double v = std::strtod((char *)valAttr, &end);
-                                                                if (end != (char *)valAttr) {
+                                                                double v = std::strtod(reinterpret_cast<char *>(valAttr), &end);
+                                                                if (end != reinterpret_cast<char *>(valAttr)) {
                                                                     row.push_back(v);
                                                                 }
                                                                 xmlFree(valAttr);
@@ -685,16 +685,16 @@ Workspace parse_workspace(const std::string &filename)
 
                                         if (gate)
                                         {
-                                            xmlXPathObjectPtr dimObj = xmlXPathNodeEval(gateNode, (const xmlChar *)".//*[local-name()='dimension' or local-name()='Dimension' or local-name()='fcs-dimension']", xpathCtx);
+                                            xmlXPathObjectPtr dimObj = xmlXPathNodeEval(gateNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='dimension' or local-name()='Dimension' or local-name()='fcs-dimension']"), xpathCtx);
                                             if (dimObj && dimObj->nodesetval)
                                             {
                                                 for (int d = 0; d < dimObj->nodesetval->nodeNr; ++d)
                                                 {
                                                     xmlNodePtr dimNode = dimObj->nodesetval->nodeTab[d];
-                                                    std::string nodeName = (const char *)dimNode->name;
+                                                    std::string nodeName = reinterpret_cast<const char *>(dimNode->name);
                                                     if (nodeName.find("fcs-dimension") != std::string::npos && dimNode->parent)
                                                     {
-                                                        std::string parentName = (const char *)dimNode->parent->name;
+                                                        std::string parentName = reinterpret_cast<const char *>(dimNode->parent->name);
                                                         if (parentName.find("dimension") != std::string::npos || parentName.find("Dimension") != std::string::npos)
                                                         {
                                                             continue;
@@ -703,34 +703,34 @@ Workspace parse_workspace(const std::string &filename)
 
                                                     Gate::Dimension dim;
 
-                                                    xmlChar *minAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:min");
+                                                    xmlChar *minAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("gating:min"));
                                                     if (!minAttr)
-                                                        minAttr = xmlGetProp(dimNode, (const xmlChar *)"min");
+                                                        minAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("min"));
                                                     if (minAttr)
                                                     {
                                                         char *end;
-                                                        double v = std::strtod((char *)minAttr, &end);
-                                                        if (end != (char *)minAttr) {
+                                                        double v = std::strtod(reinterpret_cast<char *>(minAttr), &end);
+                                                        if (end != reinterpret_cast<char *>(minAttr)) {
                                                             dim.min_val = v;
                                                         }
                                                         xmlFree(minAttr);
                                                     }
 
-                                                    xmlChar *maxAttr = xmlGetProp(dimNode, (const xmlChar *)"gating:max");
+                                                    xmlChar *maxAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("gating:max"));
                                                     if (!maxAttr)
-                                                        maxAttr = xmlGetProp(dimNode, (const xmlChar *)"max");
+                                                        maxAttr = xmlGetProp(dimNode, reinterpret_cast<const xmlChar *>("max"));
                                                     if (maxAttr)
                                                     {
                                                         char *end;
-                                                        double v = std::strtod((char *)maxAttr, &end);
-                                                        if (end != (char *)maxAttr) {
+                                                        double v = std::strtod(reinterpret_cast<char *>(maxAttr), &end);
+                                                        if (end != reinterpret_cast<char *>(maxAttr)) {
                                                             dim.max_val = v;
                                                         }
                                                         xmlFree(maxAttr);
                                                     }
 
                                                     xmlNodePtr paramNode = dimNode;
-                                                    xmlXPathObjectPtr fcsDimObj = xmlXPathNodeEval(dimNode, (const xmlChar *)".//*[local-name()='fcs-dimension']", xpathCtx);
+                                                    xmlXPathObjectPtr fcsDimObj = xmlXPathNodeEval(dimNode, reinterpret_cast<const xmlChar *>(".//*[local-name()='fcs-dimension']"), xpathCtx);
                                                     if (fcsDimObj && fcsDimObj->nodesetval && fcsDimObj->nodesetval->nodeNr > 0)
                                                     {
                                                         paramNode = fcsDimObj->nodesetval->nodeTab[0];
@@ -738,21 +738,21 @@ Workspace parse_workspace(const std::string &filename)
                                                     if (fcsDimObj)
                                                         xmlXPathFreeObject(fcsDimObj);
 
-                                                    xmlChar *nAttr = xmlGetProp(paramNode, (const xmlChar *)"data-type:name");
+                                                    xmlChar *nAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("data-type:name"));
                                                     if (!nAttr)
-                                                        nAttr = xmlGetProp(paramNode, (const xmlChar *)"name");
+                                                        nAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("name"));
                                                     if (nAttr)
                                                     {
-                                                        dim.name = (char *)nAttr;
+                                                        dim.name = reinterpret_cast<char *>(nAttr);
                                                         xmlFree(nAttr);
                                                     }
 
-                                                    xmlChar *sAttr = xmlGetProp(paramNode, (const xmlChar *)"data-type:transformation-ref");
+                                                    xmlChar *sAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("data-type:transformation-ref"));
                                                     if (!sAttr)
-                                                        sAttr = xmlGetProp(paramNode, (const xmlChar *)"transformation-ref");
+                                                        sAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("transformation-ref"));
                                                     if (sAttr)
                                                     {
-                                                        dim.scale = (char *)sAttr;
+                                                        dim.scale = reinterpret_cast<char *>(sAttr);
                                                         auto it = sd.transforms.find(dim.scale);
                                                         if (it != sd.transforms.end())
                                                         {
@@ -761,12 +761,12 @@ Workspace parse_workspace(const std::string &filename)
                                                         xmlFree(sAttr);
                                                     }
 
-                                                    xmlChar *cAttr = xmlGetProp(paramNode, (const xmlChar *)"data-type:compensation-ref");
+                                                    xmlChar *cAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("data-type:compensation-ref"));
                                                     if (!cAttr)
-                                                        cAttr = xmlGetProp(paramNode, (const xmlChar *)"compensation-ref");
+                                                        cAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("compensation-ref"));
                                                     if (cAttr)
                                                     {
-                                                        dim.compensation = (char *)cAttr;
+                                                        dim.compensation = reinterpret_cast<char *>(cAttr);
                                                         xmlFree(cAttr);
                                                     }
 
@@ -873,19 +873,19 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
     }
 
     std::string expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
-    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression((const xmlChar *)expr.c_str(), xpathCtx);
+    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(expr.c_str()), xpathCtx);
     if (sampleObj && sampleObj->nodesetval && sampleObj->nodesetval->nodeNr > 0)
     {
         xmlNodePtr sampleNode = sampleObj->nodesetval->nodeTab[0];
 
-        xmlXPathObjectPtr datasetObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./DataSet", xpathCtx);
+        xmlXPathObjectPtr datasetObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>("./DataSet"), xpathCtx);
         std::string uri;
         if (datasetObj && datasetObj->nodesetval && datasetObj->nodesetval->nodeNr > 0)
         {
-            xmlChar *uriAttr = xmlGetProp(datasetObj->nodesetval->nodeTab[0], (const xmlChar *)"uri");
+            xmlChar *uriAttr = xmlGetProp(datasetObj->nodesetval->nodeTab[0], reinterpret_cast<const xmlChar *>("uri"));
             if (uriAttr)
             {
-                uri = (char *)uriAttr;
+                uri = reinterpret_cast<char *>(uriAttr);
                 xmlFree(uriAttr);
             }
         }
@@ -911,7 +911,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
             while ((p = uri.find(" ")) != std::string::npos) uri.replace(p, 1, "_");
         }
 
-        xmlXPathObjectPtr dpObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./DerivedParameters", xpathCtx);
+        xmlXPathObjectPtr dpObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>("./DerivedParameters"), xpathCtx);
         xmlNodePtr dpNode = nullptr;
         if (dpObj && dpObj->nodesetval && dpObj->nodesetval->nodeNr > 0)
         {
@@ -919,11 +919,11 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         }
         else
         {
-            dpNode = xmlNewNode(nullptr, (const xmlChar *)"DerivedParameters");
+            dpNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("DerivedParameters"));
             xmlNodePtr keywordsNode = nullptr;
             for (xmlNodePtr child = sampleNode->children; child; child = child->next)
             {
-                if (child->type == XML_ELEMENT_NODE && (xmlStrcmp(child->name, (const xmlChar *)"Keywords") == 0 || xmlStrcmp(child->name, (const xmlChar *)"SampleNode") == 0))
+                if (child->type == XML_ELEMENT_NODE && (xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("Keywords")) == 0 || xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("SampleNode")) == 0))
                 {
                     keywordsNode = child;
                     break;
@@ -932,7 +932,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
             if (keywordsNode)
             {
                 xmlAddPrevSibling(keywordsNode, dpNode);
-                xmlAddPrevSibling(keywordsNode, xmlNewText((const xmlChar *)"\n       "));
+                xmlAddPrevSibling(keywordsNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n       ")));
             }
             else
             {
@@ -943,63 +943,63 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
 
         bool modified = false;
 
-        xmlXPathObjectPtr pObj = xmlXPathNodeEval(dpNode, (const xmlChar *)"./DerivedParameter[@name='Laplace']", xpathCtx);
+        xmlXPathObjectPtr pObj = xmlXPathNodeEval(dpNode, reinterpret_cast<const xmlChar *>("./DerivedParameter[@name='Laplace']"), xpathCtx);
         if (!pObj || !pObj->nodesetval || pObj->nodesetval->nodeNr == 0)
         {
-            xmlNodePtr paramNode = xmlNewNode(nullptr, (const xmlChar *)"DerivedParameter");
-            xmlSetProp(paramNode, (const xmlChar *)"name", (const xmlChar *)"Laplace");
-            xmlSetProp(paramNode, (const xmlChar *)"type", (const xmlChar *)"importCsv");
-            xmlSetProp(paramNode, (const xmlChar *)"importFile", (const xmlChar *)uri.c_str());
-            xmlSetProp(paramNode, (const xmlChar *)"range", (const xmlChar *)"1024");
-            xmlSetProp(paramNode, (const xmlChar *)"columnIndex", (const xmlChar *)"1");
+            xmlNodePtr paramNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("DerivedParameter"));
+            xmlSetProp(paramNode, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>("Laplace"));
+            xmlSetProp(paramNode, reinterpret_cast<const xmlChar *>("type"), reinterpret_cast<const xmlChar *>("importCsv"));
+            xmlSetProp(paramNode, reinterpret_cast<const xmlChar *>("importFile"), reinterpret_cast<const xmlChar *>(uri.c_str()));
+            xmlSetProp(paramNode, reinterpret_cast<const xmlChar *>("range"), reinterpret_cast<const xmlChar *>("1024"));
+            xmlSetProp(paramNode, reinterpret_cast<const xmlChar *>("columnIndex"), reinterpret_cast<const xmlChar *>("1"));
 
-            xmlNodePtr transNode = xmlNewNode(nullptr, (const xmlChar *)"Transform");
+            xmlNodePtr transNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Transform"));
 
-            xmlNsPtr transformsNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"transforms");
-            xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
+            xmlNsPtr transformsNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("transforms"));
+            xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("data-type"));
 
             xmlNodePtr linearNode = nullptr;
             if (transformsNs) {
-                linearNode = xmlNewNode(transformsNs, (const xmlChar *)"linear");
-                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"minRange", (const xmlChar *)"0");
-                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"maxRange", (const xmlChar *)"1024");
+                linearNode = xmlNewNode(transformsNs, reinterpret_cast<const xmlChar *>("linear"));
+                xmlSetNsProp(linearNode, transformsNs, reinterpret_cast<const xmlChar *>("minRange"), reinterpret_cast<const xmlChar *>("0"));
+                xmlSetNsProp(linearNode, transformsNs, reinterpret_cast<const xmlChar *>("maxRange"), reinterpret_cast<const xmlChar *>("1024"));
             } else {
-                linearNode = xmlNewNode(nullptr, (const xmlChar *)"transforms:linear");
-                xmlSetProp(linearNode, (const xmlChar *)"transforms:minRange", (const xmlChar *)"0");
-                xmlSetProp(linearNode, (const xmlChar *)"transforms:maxRange", (const xmlChar *)"1024");
+                linearNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("transforms:linear"));
+                xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("transforms:minRange"), reinterpret_cast<const xmlChar *>("0"));
+                xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("transforms:maxRange"), reinterpret_cast<const xmlChar *>("1024"));
             }
-            xmlSetProp(linearNode, (const xmlChar *)"gain", (const xmlChar *)"1");
+            xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("gain"), reinterpret_cast<const xmlChar *>("1"));
 
             xmlNodePtr pNode = nullptr;
             if (datatypeNs) {
-                pNode = xmlNewNode(datatypeNs, (const xmlChar *)"parameter");
-                xmlSetNsProp(pNode, datatypeNs, (const xmlChar *)"name", (const xmlChar *)"Laplace");
+                pNode = xmlNewNode(datatypeNs, reinterpret_cast<const xmlChar *>("parameter"));
+                xmlSetNsProp(pNode, datatypeNs, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>("Laplace"));
             } else {
-                pNode = xmlNewNode(nullptr, (const xmlChar *)"data-type:parameter");
-                xmlSetProp(pNode, (const xmlChar *)"data-type:name", (const xmlChar *)"Laplace");
+                pNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("data-type:parameter"));
+                xmlSetProp(pNode, reinterpret_cast<const xmlChar *>("data-type:name"), reinterpret_cast<const xmlChar *>("Laplace"));
             }
 
-            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n               "));
+            xmlAddChild(linearNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n               ")));
             xmlAddChild(linearNode, pNode);
-            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n             "));
+            xmlAddChild(linearNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n             ")));
 
-            xmlAddChild(transNode, xmlNewText((const xmlChar *)"\n             "));
+            xmlAddChild(transNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n             ")));
             xmlAddChild(transNode, linearNode);
-            xmlAddChild(transNode, xmlNewText((const xmlChar *)"\n           "));
+            xmlAddChild(transNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n           ")));
 
-            xmlAddChild(paramNode, xmlNewText((const xmlChar *)"\n           "));
+            xmlAddChild(paramNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n           ")));
             xmlAddChild(paramNode, transNode);
-            xmlAddChild(paramNode, xmlNewText((const xmlChar *)"\n         "));
+            xmlAddChild(paramNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n         ")));
 
-            xmlAddChild(dpNode, xmlNewText((const xmlChar *)"\n         "));
+            xmlAddChild(dpNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n         ")));
             xmlAddChild(dpNode, paramNode);
-            xmlAddChild(dpNode, xmlNewText((const xmlChar *)"\n       "));
+            xmlAddChild(dpNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n       ")));
 
             modified = true;
         }
         if (pObj) xmlXPathFreeObject(pObj);
 
-        xmlXPathObjectPtr transBlockObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./Transformations", xpathCtx);
+        xmlXPathObjectPtr transBlockObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>("./Transformations"), xpathCtx);
         xmlNodePtr transBlockNode = nullptr;
         if (transBlockObj && transBlockObj->nodesetval && transBlockObj->nodesetval->nodeNr > 0)
         {
@@ -1007,11 +1007,11 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         }
         else
         {
-            transBlockNode = xmlNewNode(nullptr, (const xmlChar *)"Transformations");
+            transBlockNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Transformations"));
             xmlNodePtr keywordsNode = nullptr;
             for (xmlNodePtr child = sampleNode->children; child; child = child->next)
             {
-                if (child->type == XML_ELEMENT_NODE && (xmlStrcmp(child->name, (const xmlChar *)"Keywords") == 0 || xmlStrcmp(child->name, (const xmlChar *)"DerivedParameters") == 0 || xmlStrcmp(child->name, (const xmlChar *)"SampleNode") == 0))
+                if (child->type == XML_ELEMENT_NODE && (xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("Keywords")) == 0 || xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("DerivedParameters")) == 0 || xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("SampleNode")) == 0))
                 {
                     keywordsNode = child;
                     break;
@@ -1020,7 +1020,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
             if (keywordsNode)
             {
                 xmlAddPrevSibling(keywordsNode, transBlockNode);
-                xmlAddPrevSibling(keywordsNode, xmlNewText((const xmlChar *)"\n       "));
+                xmlAddPrevSibling(keywordsNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n       ")));
             }
             else
             {
@@ -1030,40 +1030,40 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         if (transBlockObj) xmlXPathFreeObject(transBlockObj);
 
         std::string transExpr = "./*[local-name()='linear']/*[local-name()='parameter' and (@name='Laplace' or @*[local-name()='name']='Laplace')]";
-        xmlXPathObjectPtr tCheckObj = xmlXPathNodeEval(transBlockNode, (const xmlChar *)transExpr.c_str(), xpathCtx);
+        xmlXPathObjectPtr tCheckObj = xmlXPathNodeEval(transBlockNode, reinterpret_cast<const xmlChar *>(transExpr.c_str()), xpathCtx);
         if (!tCheckObj || !tCheckObj->nodesetval || tCheckObj->nodesetval->nodeNr == 0)
         {
-            xmlNsPtr transformsNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"transforms");
-            xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
+            xmlNsPtr transformsNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("transforms"));
+            xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("data-type"));
 
             xmlNodePtr linearNode = nullptr;
             if (transformsNs) {
-                linearNode = xmlNewNode(transformsNs, (const xmlChar *)"linear");
-                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"minRange", (const xmlChar *)"0");
-                xmlSetNsProp(linearNode, transformsNs, (const xmlChar *)"maxRange", (const xmlChar *)"1024");
+                linearNode = xmlNewNode(transformsNs, reinterpret_cast<const xmlChar *>("linear"));
+                xmlSetNsProp(linearNode, transformsNs, reinterpret_cast<const xmlChar *>("minRange"), reinterpret_cast<const xmlChar *>("0"));
+                xmlSetNsProp(linearNode, transformsNs, reinterpret_cast<const xmlChar *>("maxRange"), reinterpret_cast<const xmlChar *>("1024"));
             } else {
-                linearNode = xmlNewNode(nullptr, (const xmlChar *)"transforms:linear");
-                xmlSetProp(linearNode, (const xmlChar *)"transforms:minRange", (const xmlChar *)"0");
-                xmlSetProp(linearNode, (const xmlChar *)"transforms:maxRange", (const xmlChar *)"1024");
+                linearNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("transforms:linear"));
+                xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("transforms:minRange"), reinterpret_cast<const xmlChar *>("0"));
+                xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("transforms:maxRange"), reinterpret_cast<const xmlChar *>("1024"));
             }
-            xmlSetProp(linearNode, (const xmlChar *)"gain", (const xmlChar *)"1");
+            xmlSetProp(linearNode, reinterpret_cast<const xmlChar *>("gain"), reinterpret_cast<const xmlChar *>("1"));
 
             xmlNodePtr pNode = nullptr;
             if (datatypeNs) {
-                pNode = xmlNewNode(datatypeNs, (const xmlChar *)"parameter");
-                xmlSetNsProp(pNode, datatypeNs, (const xmlChar *)"name", (const xmlChar *)"Laplace");
+                pNode = xmlNewNode(datatypeNs, reinterpret_cast<const xmlChar *>("parameter"));
+                xmlSetNsProp(pNode, datatypeNs, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>("Laplace"));
             } else {
-                pNode = xmlNewNode(nullptr, (const xmlChar *)"data-type:parameter");
-                xmlSetProp(pNode, (const xmlChar *)"data-type:name", (const xmlChar *)"Laplace");
+                pNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("data-type:parameter"));
+                xmlSetProp(pNode, reinterpret_cast<const xmlChar *>("data-type:name"), reinterpret_cast<const xmlChar *>("Laplace"));
             }
 
-            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n           "));
+            xmlAddChild(linearNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n           ")));
             xmlAddChild(linearNode, pNode);
-            xmlAddChild(linearNode, xmlNewText((const xmlChar *)"\n         "));
+            xmlAddChild(linearNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n         ")));
 
-            xmlAddChild(transBlockNode, xmlNewText((const xmlChar *)"\n         "));
+            xmlAddChild(transBlockNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n         ")));
             xmlAddChild(transBlockNode, linearNode);
-            xmlAddChild(transBlockNode, xmlNewText((const xmlChar *)"\n       "));
+            xmlAddChild(transBlockNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n       ")));
 
             modified = true;
         }
@@ -1095,7 +1095,7 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
     }
 
     std::string sample_expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
-    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression((const xmlChar *)sample_expr.c_str(), xpathCtx);
+    xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(sample_expr.c_str()), xpathCtx);
     if (!sampleObj || !sampleObj->nodesetval || sampleObj->nodesetval->nodeNr == 0) {
         if (sampleObj) xmlXPathFreeObject(sampleObj);
         xmlXPathFreeContext(xpathCtx);
@@ -1107,14 +1107,14 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
 
     xmlNodePtr parentPopNode = nullptr;
     if (parent_pop_name == "All") {
-        xmlXPathObjectPtr snObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)"./SampleNode", xpathCtx);
+        xmlXPathObjectPtr snObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>("./SampleNode"), xpathCtx);
         if (snObj && snObj->nodesetval && snObj->nodesetval->nodeNr > 0) {
             parentPopNode = snObj->nodesetval->nodeTab[0];
         }
         if (snObj) xmlXPathFreeObject(snObj);
     } else {
         std::string pop_expr = ".//Population[@name='" + parent_pop_name + "']";
-        xmlXPathObjectPtr popObj = xmlXPathNodeEval(sampleNode, (const xmlChar *)pop_expr.c_str(), xpathCtx);
+        xmlXPathObjectPtr popObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>(pop_expr.c_str()), xpathCtx);
         if (popObj && popObj->nodesetval && popObj->nodesetval->nodeNr > 0) {
             parentPopNode = popObj->nodesetval->nodeTab[0];
         }
@@ -1131,20 +1131,20 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
     xmlNodePtr subpopsNode = nullptr;
     xmlNodePtr parentGraphNode = nullptr;
     for (xmlNodePtr child = parentPopNode->children; child; child = child->next) {
-        if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Subpopulations") == 0) {
+        if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("Subpopulations")) == 0) {
             subpopsNode = child;
-        } else if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Graph") == 0) {
+        } else if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("Graph")) == 0) {
             parentGraphNode = child;
         }
     }
     if (!subpopsNode) {
-        subpopsNode = xmlNewNode(nullptr, (const xmlChar *)"Subpopulations");
-        xmlAddChild(parentPopNode, xmlNewText((const xmlChar *)"\n           "));
+        subpopsNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Subpopulations"));
+        xmlAddChild(parentPopNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n           ")));
         xmlAddChild(parentPopNode, subpopsNode);
     }
 
-    xmlNsPtr gatingNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"gating");
-    xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, (const xmlChar *)"data-type");
+    xmlNsPtr gatingNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("gating"));
+    xmlNsPtr datatypeNs = xmlSearchNs(doc, doc->children, reinterpret_cast<const xmlChar *>("data-type"));
 
     for (unsigned k = 0; k <= clusters_found + 1; ++k) {
         size_t klass = k + laplacian_offset;
@@ -1156,31 +1156,31 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
             continue;
         
         std::string check_expr = "./Population[@name='" + pop_name + "']";
-        xmlXPathObjectPtr pCheckObj = xmlXPathNodeEval(subpopsNode, (const xmlChar*)check_expr.c_str(), xpathCtx);
+        xmlXPathObjectPtr pCheckObj = xmlXPathNodeEval(subpopsNode, reinterpret_cast<const xmlChar *>(check_expr.c_str()), xpathCtx);
         bool exists = (pCheckObj && pCheckObj->nodesetval && pCheckObj->nodesetval->nodeNr > 0);
         if (pCheckObj) xmlXPathFreeObject(pCheckObj);
         if (exists) continue;
 
-        xmlNodePtr popNode = xmlNewNode(nullptr, (const xmlChar *)"Population");
-        xmlSetProp(popNode, (const xmlChar *)"name", (const xmlChar *)pop_name.c_str());
-        xmlSetProp(popNode, (const xmlChar *)"expanded", (const xmlChar *)"1");
+        xmlNodePtr popNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Population"));
+        xmlSetProp(popNode, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(pop_name.c_str()));
+        xmlSetProp(popNode, reinterpret_cast<const xmlChar *>("expanded"), reinterpret_cast<const xmlChar *>("1"));
         std::string count_str = k < cluster_events.size() ? std::to_string(cluster_events[k].size()) : "0";
-        xmlSetProp(popNode, (const xmlChar *)"count", (const xmlChar *)count_str.c_str());
+        xmlSetProp(popNode, reinterpret_cast<const xmlChar *>("count"), reinterpret_cast<const xmlChar *>(count_str.c_str()));
 
         if (parentGraphNode) {
-            xmlAddChild(popNode, xmlNewText((const xmlChar *)"\n             "));
+            xmlAddChild(popNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n             ")));
             xmlNodePtr copiedGraphNode = xmlCopyNode(parentGraphNode, 1);
             xmlAddChild(popNode, copiedGraphNode);
             
             if (selected_vars.size() >= 2) {
                 for (xmlNodePtr child = copiedGraphNode->children; child; child = child->next) {
-                    if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, (const xmlChar *)"Axis") == 0) {
-                        xmlChar* dimAttr = xmlGetProp(child, (const xmlChar*)"dimension");
+                    if (child->type == XML_ELEMENT_NODE && xmlStrcmp(child->name, reinterpret_cast<const xmlChar *>("Axis")) == 0) {
+                        xmlChar* dimAttr = xmlGetProp(child, reinterpret_cast<const xmlChar *>("dimension"));
                         if (dimAttr) {
-                            if (xmlStrcmp(dimAttr, (const xmlChar*)"x") == 0) {
-                                xmlSetProp(child, (const xmlChar*)"name", (const xmlChar*)selected_vars[0].c_str());
-                            } else if (xmlStrcmp(dimAttr, (const xmlChar*)"y") == 0) {
-                                xmlSetProp(child, (const xmlChar*)"name", (const xmlChar*)selected_vars[1].c_str());
+                            if (xmlStrcmp(dimAttr, reinterpret_cast<const xmlChar *>("x")) == 0) {
+                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(selected_vars[0].c_str()));
+                            } else if (xmlStrcmp(dimAttr, reinterpret_cast<const xmlChar *>("y")) == 0) {
+                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(selected_vars[1].c_str()));
                             }
                             xmlFree(dimAttr);
                         }
@@ -1189,31 +1189,31 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
             }
         }
 
-        xmlNodePtr gateNode = xmlNewNode(nullptr, (const xmlChar *)"Gate");
+        xmlNodePtr gateNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Gate"));
         std::string gateId = "LaplaceGate_" + sample_name + "_" + parent_pop_name + "_" + std::to_string(klass);
-        xmlSetProp(gateNode, (const xmlChar *)"gating:id", (const xmlChar *)gateId.c_str());
+        xmlSetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:id"), reinterpret_cast<const xmlChar *>(gateId.c_str()));
 
-        xmlNodePtr rectGateNode = xmlNewNode(gatingNs, (const xmlChar *)"RectangleGate");
-        xmlSetProp(rectGateNode, (const xmlChar *)"eventsInside", (const xmlChar *)"1");
+        xmlNodePtr rectGateNode = xmlNewNode(gatingNs, reinterpret_cast<const xmlChar *>("RectangleGate"));
+        xmlSetProp(rectGateNode, reinterpret_cast<const xmlChar *>("eventsInside"), reinterpret_cast<const xmlChar *>("1"));
         
-        xmlNodePtr dimNode = xmlNewNode(gatingNs, (const xmlChar *)"dimension");
+        xmlNodePtr dimNode = xmlNewNode(gatingNs, reinterpret_cast<const xmlChar *>("dimension"));
         std::string min_val = std::to_string(1 + 4 * klass);
         std::string max_val = std::to_string(3 + 4 * klass);
-        xmlSetProp(dimNode, (const xmlChar *)"gating:min", (const xmlChar *)min_val.c_str());
-        xmlSetProp(dimNode, (const xmlChar *)"gating:max", (const xmlChar *)max_val.c_str());
+        xmlSetProp(dimNode, reinterpret_cast<const xmlChar *>("gating:min"), reinterpret_cast<const xmlChar *>(min_val.c_str()));
+        xmlSetProp(dimNode, reinterpret_cast<const xmlChar *>("gating:max"), reinterpret_cast<const xmlChar *>(max_val.c_str()));
 
-        xmlNodePtr fcsDimNode = xmlNewNode(datatypeNs, (const xmlChar *)"fcs-dimension");
-        xmlSetProp(fcsDimNode, (const xmlChar *)"data-type:name", (const xmlChar *)"Laplace");
+        xmlNodePtr fcsDimNode = xmlNewNode(datatypeNs, reinterpret_cast<const xmlChar *>("fcs-dimension"));
+        xmlSetProp(fcsDimNode, reinterpret_cast<const xmlChar *>("data-type:name"), reinterpret_cast<const xmlChar *>("Laplace"));
 
         xmlAddChild(dimNode, fcsDimNode);
         xmlAddChild(rectGateNode, dimNode);
         xmlAddChild(gateNode, rectGateNode);
         xmlAddChild(popNode, gateNode);
         
-        xmlAddChild(subpopsNode, xmlNewText((const xmlChar *)"\n             "));
+        xmlAddChild(subpopsNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n             ")));
         xmlAddChild(subpopsNode, popNode);
     }
-    xmlAddChild(subpopsNode, xmlNewText((const xmlChar *)"\n           "));
+    xmlAddChild(subpopsNode, xmlNewText(reinterpret_cast<const xmlChar *>("\n           ")));
 
     xmlSaveFormatFile(filename.c_str(), doc, 1);
 

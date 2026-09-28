@@ -39,9 +39,9 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
         ++m; // for CyToF/exponential we censor true zeros
     if (m == n)
         return results;
-    const double mu = Sx / (double)n;
-    const double sigma = sqrt((Sxx - Sx * mu) / (double)(n - 1));
-    const double lambda = Sx / (double)(n - m);
+    const double mu = Sx / static_cast<double>(n);
+    const double sigma = sqrt((Sxx - Sx * mu) / static_cast<double>(n - 1));
+    const double lambda = Sx / static_cast<double>(n - m);
 
     // compute Kullback-Leibler Divergence
     if (sigma > 0)
@@ -55,15 +55,15 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
             while ((x[j] - x[i]) < .001 && j < n)
                 j++;
 
-            double P = (double)(j - i) / (double)n;
+            double P = static_cast<double>(j - i) / static_cast<double>(n);
             double Q = .5 * (erf((x[j] - mu) / sigma / std::numbers::sqrt2) - erf((x[i] - mu) / sigma / std::numbers::sqrt2)) / NQn;
             if (Q > 0)                          // catch underflow that causes infinite result
                 results.KLDn += P * std::log(P / Q); // I didn't think it was possible either
 
             if (i == 0 && m > 0)
-                P = (double)(j - m) / (double)(n - m);
+                P = static_cast<double>(j - m) / static_cast<double>(n - m);
             else
-                P = (double)(j - i) / (double)(n - m);
+                P = static_cast<double>(j - i) / static_cast<double>(n - m);
             Q = (exp(-x[i] / mu) - exp(-x[j] / mu)) / NQe;
             if (Q > 0)
                 results.KLDe += P * std::log(P / Q);
@@ -441,7 +441,7 @@ Pursuit_Results Leonard::do_Pursuit(const std::vector<std::vector<float> *> &dat
     if (count > 0)
     {
         for (size_t v = 0; v < data.size(); ++v)
-            results.means[v] /= (double)count;
+            results.means[v] /= static_cast<double>(count);
     }
 
     std::vector<std::unique_ptr<Qualify_Results>> qualifications;
@@ -544,8 +544,8 @@ void Pursuit_Results::wait_for_results() noexcept
                 child.polygon_image = EPP_node->image_in;
             else if (child.branch == "out")
                 child.polygon_image = EPP_node->image_out;
-            child.pct_parent = (double)child.event_count / (double)event_count;
-            child.pct_total = (double)child.event_count / (double)total_events;
+            child.pct_parent = static_cast<double>(child.event_count) / static_cast<double>(event_count);
+            child.pct_total = static_cast<double>(child.event_count) / static_cast<double>(total_events);
         }
     }
     else
@@ -590,7 +590,7 @@ EPP_Node_Results Leonard::do_EPP_Node(const std::vector<std::vector<float> *> da
         for (unsigned x = 0; x < parent.points(0); ++x)
         {
             size_t idx = x + y * parent.points(0);
-            (*quant_data)[y][x] = (double)static_cast<const Function<2, float> &>(parent.quantile)[idx];
+            (*quant_data)[y][x] = static_cast<double>(static_cast<const Function<2, float> &>(parent.quantile)[idx]);
         }
     }
 

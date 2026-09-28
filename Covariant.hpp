@@ -86,8 +86,8 @@ public:
             for (unsigned j = 0; j < Dimension; j++)
                 for (unsigned i = 0; i < Dimension; i++)
                 {
-                    this->filter(s[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
-                    this->filter(t[i][j], std::pow(this->size(), -1.0f / (float)Dimension), true);
+                    this->filter(s[i][j], std::pow(this->size(), -1.0f / static_cast<float>(Dimension)), true);
+                    this->filter(t[i][j], std::pow(this->size(), -1.0f / static_cast<float>(Dimension)), true);
                 }
         }
 
@@ -181,7 +181,7 @@ private:
         for (unsigned i = 1; i < x.points - 1; i++)
             marginal += this->density[x[i]];
         // keep it real in the denominator
-        if (marginal < 1.0 / (double)this->events())
+        if (marginal < 1.0 / static_cast<double>(this->events()))
             for (unsigned i = 0; i < x.points; i++)
                 f[x.d][x[i]] = 0.0f;
         else
@@ -232,14 +232,14 @@ private:
                 if (f[i][x[j]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = -2.0 * ((std::log((double)f[i][x[j]]) - std::log((double)f[i][x[k]])) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / (x.delta * (j - k)));
+                    tt = -2.0 * ((std::log(static_cast<double>(f[i][x[j]])) - std::log(static_cast<double>(f[i][x[k]]))) / squared(x.delta * (j - k)) - s[i][x.d][x[k]] / (x.delta * (j - k)));
                 while (k < j)
                 {
-                    t[i][x.d][x[k]] = (float)tt;
+                    t[i][x.d][x[k]] = static_cast<float>(tt);
                     if (k != x.points - 1)
                     {
                         double ss = -tt * x.delta + s[i][x.d][x[k]];
-                        s[i][x.d][x[k + 1]] = (float)ss;
+                        s[i][x.d][x[k + 1]] = static_cast<float>(ss);
                     }
                     k++;
                 }
@@ -252,12 +252,12 @@ private:
                 if (f[i][x[j]] <= 0.0 || f[i][x[k]] <= 0.0)
                     tt = 1.0 / x.delta;
                 else
-                    tt = 2.0 * ((std::log((double)f[i][x[k]]) - std::log((double)f[i][x[j]])) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
+                    tt = 2.0 * ((std::log(static_cast<double>(f[i][x[k]])) - std::log(static_cast<double>(f[i][x[j]]))) / squared(x.delta * (k - j)) - s[i][x.d][x[k]] / (x.delta * (k - j)));
                 while (k > j)
                 {
-                    t[i][x.d][x[k - 1]] = (float)tt;
+                    t[i][x.d][x[k - 1]] = static_cast<float>(tt);
                     double ss = tt * x.delta + s[i][x.d][x[k]];
-                    s[i][x.d][x[k - 1]] = (float)ss;
+                    s[i][x.d][x[k - 1]] = static_cast<float>(ss);
                     k--;
                 }
             }

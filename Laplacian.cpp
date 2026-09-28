@@ -30,7 +30,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
                 continue;
 
             marginal.locate(marginal_event, marginal_coord);
-            size_t idx = (size_t)marginal_coord;
+            size_t idx = static_cast<size_t>(marginal_coord);
             unsigned short d = marginal_klass[idx];
             if (d == 0)
                 marginal_klass[idx] = c;
@@ -56,7 +56,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
                     unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
                     (*class_data)[i][y][x] = 255 * colors[hue][i];
                 }
-            (*quant_data)[y][x] = (double)static_cast<const Function<2, float> &>(marginal.quantile)[idx];
+            (*quant_data)[y][x] = static_cast<double>(static_cast<const Function<2, float> &>(marginal.quantile)[idx]);
         }
     }
 
@@ -84,7 +84,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
                 continue;
 
             marginal.locate(marginal_event, marginal_coord);
-            size_t idx = (size_t)marginal_coord;
+            size_t idx = static_cast<size_t>(marginal_coord);
             marginal_klass[idx] = c;
         }
         marginal.prepare(selections.smoothing);
@@ -106,7 +106,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
                         unsigned hue = (255 * (marginal_klass[idx] - 1) / (laplace->valid_clusters - 1));
                         (*class_data)[i][y][x] = 255 * colors[hue][i];
                     }
-                (*quant_data)[y][x] = (double)static_cast<const Function<2, float> &>(marginal.quantile)[idx];
+                (*quant_data)[y][x] = static_cast<double>(static_cast<const Function<2, float> &>(marginal.quantile)[idx]);
             }
         }
 

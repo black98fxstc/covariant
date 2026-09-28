@@ -163,13 +163,13 @@ void make_marginal_plot(const std::string &path, const std::vector<std::vector<s
         ax->grid(true);
 
         // Update limits to fit the data grid
-        ax->xlim({0, (double)quant_data[0].size() - 1});
-        ax->ylim({0, (double)quant_data.size() - 1});
+        ax->xlim({0, static_cast<double>(quant_data[0].size()) - 1});
+        ax->ylim({0, static_cast<double>(quant_data.size()) - 1});
 
-        ax->xticks({0, .2 * (double)quant_data[0].size(), .4 * (double)quant_data[0].size(), .6 * (double)quant_data[0].size(), .8 * (double)quant_data[0].size(), (double)quant_data[0].size() - 1});
+        ax->xticks({0, .2 * static_cast<double>(quant_data[0].size()), .4 * static_cast<double>(quant_data[0].size()), .6 * static_cast<double>(quant_data[0].size()), .8 * static_cast<double>(quant_data[0].size()), static_cast<double>(quant_data[0].size()) - 1});
         ax->xticklabels({"0", ".2", ".4", ".6", ".8", "1"});
 
-        ax->yticks({0, .2 * (double)quant_data.size(), .4 * (double)quant_data.size(), .6 * (double)quant_data.size(), .8 * (double)quant_data.size(), (double)quant_data.size() - 1});
+        ax->yticks({0, .2 * static_cast<double>(quant_data.size()), .4 * static_cast<double>(quant_data.size()), .6 * static_cast<double>(quant_data.size()), .8 * static_cast<double>(quant_data.size()), static_cast<double>(quant_data.size()) - 1});
         ax->yticklabels({"0", ".2", ".4", ".6", ".8", "1"});
 
         fig->save(path);

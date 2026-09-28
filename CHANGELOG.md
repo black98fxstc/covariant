@@ -29,3 +29,10 @@ This is an early release, so some workflows may still be rough around the edges.
 - Normalize report titles
 - Add Covariant Statistics stubs
 - Fixed grid size when launched from FlowJo
+
+## v0.1.0-alpha.3 - Basic UI complete and git cleanup
+
+- Initial implementation of analysis ledger and reporting
+- Several code quality flags fixed by copilot
+- Mistakenly submitted files cleaned out
+- remove C style casts

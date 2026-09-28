@@ -22,7 +22,7 @@ public:
     static const unsigned short N = 256; // resolution of points and boundaries
                                     // optimized when there are lots of small factors
 
-    double W = (double)2 / (double)N; // standard deviation of kernel,
+    double W = static_cast<double>(2) / static_cast<double>(N); // standard deviation of kernel,
                                         // this is the highest achievable resolution for DBM
 
     enum Goal
@@ -81,7 +81,7 @@ public:
     EPP_Parameters(
         Goal goal = best_balance,
         KLD kld = {.04, .2},
-        double W = 2.0 / (double)N)
+        double W = 2.0 / static_cast<double>(N))
         : W(W), goal(goal), kld(kld), censor(0), finalists(1),
             sigma(3), max_clusters(12), tolerance(.01){};
 };
@@ -108,8 +108,8 @@ struct Point
 {
     Coordinate i, j;
 
-    inline double x() const noexcept { return (double)i / (double)EPP_Parameters::N; };
-    inline double y() const noexcept { return (double)j / (double)EPP_Parameters::N; };
+    inline double x() const noexcept { return static_cast<double>(i) / static_cast<double>(EPP_Parameters::N); };
+    inline double y() const noexcept { return static_cast<double>(j) / static_cast<double>(EPP_Parameters::N); };
 
     inline bool operator==(const Point &other) const noexcept
     {
