@@ -134,7 +134,7 @@ public:
         {
             if (event[i] < 0.0f || event[i] >= 1.0f)
                 return false;
-            rem[i] = event[i] * (points(i) - 1);
+            rem[i] = static_cast<double>(event[i]) * static_cast<double>(points(i) - 1);
             unsigned floor = static_cast<unsigned>(rem[i]);
             rem[i] -= floor;
             x += floor * stride(i);
