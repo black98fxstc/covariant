@@ -132,9 +132,10 @@ public:
         double rem[Dimension];
         for (unsigned i = 0; i < Dimension; i++)
         {
-            if (event[i] < 0.0f || event[i] >= 1.0f)
+            const double event_value = static_cast<double>(event[i]);
+            if (event_value < 0.0 || event_value >= 1.0)
                 return false;
-            rem[i] = event[i] * (points(i) - 1);
+            rem[i] = event_value * static_cast<double>(points(i) - 1);
             unsigned floor = static_cast<unsigned>(rem[i]);
             rem[i] -= floor;
             x += floor * stride(i);
