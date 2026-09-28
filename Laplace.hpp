@@ -312,7 +312,10 @@ private:
             if (this->density[x[j]] <= 0.0 || this->density[x[k]] <= 0.0)
                 tt = 1.0 / x.delta;
             else
-                tt = 2.0 * ((std::log((double)this->density[x[k]]) - std::log((double)this->density[x[j]])) / squared(x.delta * (k - j)) - S[x.d][x[k]] / (x.delta * (k - j)));
+            {
+                const double delta_span = static_cast<double>(x.delta) * static_cast<double>(k - j);
+                tt = 2.0 * ((std::log((double)this->density[x[k]]) - std::log((double)this->density[x[j]])) / squared(delta_span) - S[x.d][x[k]] / delta_span);
+            }
             while (k > j)
             {
                 T[x.d][x[k - 1]] = (float)tt;
