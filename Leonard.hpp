@@ -35,6 +35,7 @@ struct Params
     bool verify = true;
     int analysis_choice = 1;
     std::string img_dir = "images";
+    std::string summary_mode; // "sample" | "population" | "stains" | "all", set by --summary
 };
 
 // Forward declare plotting functions implemented in Reports.cpp

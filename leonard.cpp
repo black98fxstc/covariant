@@ -25,13 +25,14 @@
 
 #include "Leonard.hpp"
 #include "Reports.hpp"
+#include "Ledger.hpp"
 #include "Samples.hpp"
 
 int Leonard::parse_args(int argc, char *argv[])
 {
     cxxopts::Options options("Leonard", "Laplacian and Riemannian analysis from FlowJo workspaces");
 
-    options.add_options()("f,file", "File name", cxxopts::value<std::string>())("v,variables", "List of variables", cxxopts::value<std::string>())("p,populations", "List of populations", cxxopts::value<std::string>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))("quiet", "Do not echo conversation to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("verbose", "Also echo the detailed log to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
+    options.add_options()("f,file", "File name", cxxopts::value<std::string>())("v,variables", "List of variables", cxxopts::value<std::string>())("p,populations", "List of populations", cxxopts::value<std::string>())("s,smooth", "Smoothing factor", cxxopts::value<float>()->default_value("0.01"))("t,threshold", "Threshold", cxxopts::value<float>()->default_value("0.001"))("max-clusters", "Max clusters", cxxopts::value<unsigned>()->default_value("12"))("min-events", "Min cluster abs", cxxopts::value<size_t>()->default_value("0"))("min-relative", "Min cluster rel", cxxopts::value<float>()->default_value("0.0"))("kld-norm", "KLD Normal", cxxopts::value<float>()->default_value("0.04"))("kld-exp", "KLD Exponential", cxxopts::value<float>()->default_value("0.2"))("tolerance", "Tolerance", cxxopts::value<float>()->default_value("0.01"))("antialias", "Antialiasing", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("verify", "Verify consistency", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))("g,grid", "Grid resolution", cxxopts::value<unsigned>()->default_value("256"))("a,analysis", "Analysis choice (0=EPP, 1=Laplace)", cxxopts::value<int>()->default_value("0"))("summary", "Print analysis history (sample|population|stains|all) and exit", cxxopts::value<std::string>())("quiet", "Do not echo conversation to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("verbose", "Also echo the detailed log to the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))("h,help", "Print usage");
 
     options.parse_positional({"file", "variables", "populations"});
 
@@ -71,6 +72,8 @@ int Leonard::parse_args(int argc, char *argv[])
     params.antialias = result["antialias"].as<bool>();
     params.verify = result["verify"].as<bool>();
     params.analysis_choice = result["analysis"].as<int>();
+    if (result.count("summary"))
+        params.summary_mode = result["summary"].as<std::string>();
     session_.set_quiet(result["quiet"].as<bool>());
     session_.set_verbose(result["verbose"].as<bool>());
 
@@ -192,6 +195,32 @@ int Leonard::run()
     bool is_datafile = false;
     if (!params.files.empty() && params.files[0].find(".wsp") == std::string::npos)
         is_datafile = true;
+
+    if (!params.summary_mode.empty())
+    {
+        std::string filename = !params.files.empty() ? params.files[0] : find_workspace(0, nullptr);
+        if (filename.empty())
+            return 1;
+
+        std::filesystem::path resolved = std::filesystem::absolute(filename);
+        if (!std::filesystem::exists(resolved) && std::filesystem::exists(filename + ".wsp"))
+            resolved = std::filesystem::absolute(filename + ".wsp");
+        if (resolved.has_parent_path())
+        {
+            std::error_code ec;
+            std::filesystem::current_path(resolved.parent_path(), ec);
+        }
+
+        std::string report_dir = resolved.stem().string() + ".len";
+        if (!session_.open(std::filesystem::path(report_dir) / "logs"))
+            std::cerr << "Could not open session log in " << report_dir << std::endl;
+
+        auto records = Ledger::load_all(report_dir);
+        Ledger::print_text_summary(records, params.summary_mode);
+        std::string summary_file = Ledger::write_summary_html(report_dir, records);
+        say << "Summary written to " << (std::filesystem::path(report_dir) / summary_file).string() << std::endl;
+        return 0;
+    }
 
     if (is_datafile)
     {
@@ -635,6 +664,10 @@ int Leonard::run()
             std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, display_vars);
             report_links.push_back({s.name + " - " + result_pair.first + " (EPP)", filename, "EPP tree analysis"});
 
+            Ledger::append(report_dir, {Ledger::now_iso8601(), source.string(), s.name, result_pair.first,
+                                        "Exhaustive Projection Pursuit", selections.variables, display_vars,
+                                        res.event_count, 0, filename});
+
             res.wait_for_plots();
         }
         for (auto &result_pair : laplace_results)
@@ -676,6 +709,11 @@ int Leonard::run()
                                         : Reports::generate_laplace_report(report_dir, s.name, result_pair.first, *res, selections.variables, display_vars);
             const std::string label = selections.analysis_choice == 2 ? "Covariant Statistics" : "Laplace";
             report_links.push_back({s.name + " - " + result_pair.first + " (" + label + ")", filename, selections.analysis_choice == 2 ? "Covariant Statistics analysis" : "Laplacian clustering analysis"});
+
+            const std::string analysis_name = selections.analysis_choice == 2 ? "Covariant Statistics" : "Laplacian Clustering";
+            Ledger::append(report_dir, {Ledger::now_iso8601(), source.string(), s.name, result_pair.first,
+                                        analysis_name, selections.variables, display_vars,
+                                        res->idx.size(), res->valid_clusters, filename});
         }
 
         say << "Enriching FlowJo workspace with analysis results..." << std::endl;
@@ -706,6 +744,10 @@ int Leonard::run()
     if (!report_links.empty())
     {
         say << "Opening browser window with analysis report..." << std::endl;
+
+        auto ledger_records = Ledger::load_all(report_dir);
+        std::string summary_file = Ledger::write_summary_html(report_dir, ledger_records);
+        report_links.push_back({"Analysis History", summary_file, "Past analyses by sample, population, and stain set"});
 
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
         std::filesystem::path index_path = std::filesystem::absolute(std::filesystem::path(report_dir) / "index.html");
