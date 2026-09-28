@@ -29,7 +29,7 @@ Qualify_Results Leonard::do_Qualify(const std::vector<float> *data, const Measur
         float value = (*data)[i];
         ++n;
         Sx += value;
-        Sxx += value * value;
+        Sxx += static_cast<double>(value) * value;
         x.push_back(value);
         ++it;
     }
