@@ -35,7 +35,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
             if (d == 0)
                 marginal_klass[idx] = c;
             else
-                marginal_klass[idx] = std::min(c, d);
+                marginal_klass[idx] = std::min<unsigned>(c, d);
         }
     }
     marginal.prepare(params.smoothing);
