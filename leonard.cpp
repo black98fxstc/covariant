@@ -21,6 +21,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 #include "Leonard.hpp"
@@ -752,13 +756,19 @@ int Leonard::run()
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
         std::filesystem::path index_path = std::filesystem::absolute(std::filesystem::path(report_dir) / "index.html");
 #if defined(_WIN32)
-        ShellExecuteA(NULL, "open", index_path.string().c_str(), NULL, NULL, SW_SHOWNORMAL);
-#elif defined(__APPLE__)
-        std::string cmd = "open \"" + index_path.string() + "\"";
-        std::system(cmd.c_str());
+        ShellExecuteA(nullptr, "open", index_path.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-        std::string cmd = "xdg-open \"" + index_path.string() + "\"";
-        std::system(cmd.c_str());
+        // Launch via argv, not a shell string, so a workspace/sample name with quotes or `$()` can't inject commands.
+        std::string path_str = index_path.string();
+#if defined(__APPLE__)
+        const char *opener = "open";
+#else
+        const char *opener = "xdg-open";
+#endif
+        char *argv[] = {const_cast<char *>(opener), const_cast<char *>(path_str.c_str()), nullptr};
+        pid_t pid;
+        if (posix_spawnp(&pid, opener, nullptr, nullptr, argv, environ) == 0)
+            waitpid(pid, nullptr, 0);
 #endif
     }
 

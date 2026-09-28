@@ -201,14 +201,14 @@ bool DataSet::read_xml_xslt(const std::string &xml_file, const std::string &xsl_
     if (!xml_doc)
         return false;
 
-    xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile((const xmlChar *)xsl_file.c_str());
+    xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile(reinterpret_cast<const xmlChar *>(xsl_file.c_str()));
     if (!xsl_doc)
     {
         xmlFreeDoc(xml_doc);
         return false;
     }
 
-    xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, NULL);
+    xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, nullptr);
     std::string tmp_csv = xml_file + ".tmp.csv";
     bool success = false;
 

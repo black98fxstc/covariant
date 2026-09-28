@@ -230,14 +230,14 @@ static void apply_stylesheet(const std::string &xml_path, const std::string &xsl
         std::cerr << "Error parsing XML file: " << xml_path << std::endl;
         return;
     }
-    xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile((const xmlChar *)xsl_path.c_str());
+    xsltStylesheetPtr xsl_doc = xsltParseStylesheetFile(reinterpret_cast<const xmlChar *>(xsl_path.c_str()));
     if (!xsl_doc)
     {
         std::cerr << "Error parsing XSLT file: " << xsl_path << std::endl;
         xmlFreeDoc(xml_doc);
         return;
     }
-    xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, NULL);
+    xmlDocPtr res_doc = xsltApplyStylesheet(xsl_doc, xml_doc, nullptr);
     if (res_doc)
     {
         if (xsltSaveResultToFilename(out_path.c_str(), res_doc, xsl_doc, 0) == -1)

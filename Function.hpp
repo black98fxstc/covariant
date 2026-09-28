@@ -76,8 +76,8 @@ public:
 
     Function(Dimensions<Dimension> &dimensions) : dimensions(dimensions), data(nullptr)
     {
+        // new[] throws std::bad_alloc on failure rather than returning nullptr, so no post-check is needed.
         data = new Type[dimensions.size()];
-        assert(data != nullptr);
     }
 
     ~Function()
