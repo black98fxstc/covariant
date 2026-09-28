@@ -19,7 +19,7 @@ Marginal_Results Leonard::do_Marginal(std::shared_ptr<Laplace_Results> laplace, 
     std::vector<unsigned short> marginal_klass(marginal.points(0) * marginal.points(1), 0);
     std::fill(marginal_klass.begin(), marginal_klass.end(), 0);
 
-    for (unsigned short c = 0; c <= laplace->valid_clusters; ++c)
+    for (unsigned c = 0; c <= laplace->valid_clusters; ++c)
     {
         for (unsigned e : laplace->cluster_events[c])
         {
