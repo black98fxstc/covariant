@@ -14,6 +14,9 @@
 #include <numbers>
 #include <cmath>
 #include <cctype>
+#include <cstdint>
+#include <cerrno>
+#include <cstring>
 
 #include <Eigen/Dense>
 #include <fftw3.h>
@@ -780,7 +783,10 @@ int Leonard::run()
         Reports::update_index(report_dir, "Leonard Analysis Report", report_links);
         std::filesystem::path index_path = std::filesystem::absolute(std::filesystem::path(report_dir) / "index.html");
 #if defined(_WIN32)
-        ShellExecuteA(nullptr, "open", index_path.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    const std::wstring index_path_string = index_path.wstring();
+    const HINSTANCE browser_result = ShellExecuteW(nullptr, L"open", index_path_string.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<std::intptr_t>(browser_result) <= 32)
+        std::cerr << "Could not open report in a browser: " << index_path.string() << std::endl;
 #else
         // Launch via argv, not a shell string, so a workspace/sample name with quotes or `$()` can't inject commands.
         std::string path_str = index_path.string();
@@ -791,8 +797,15 @@ int Leonard::run()
 #endif
         char *argv[] = {const_cast<char *>(opener), const_cast<char *>(path_str.c_str()), nullptr};
         pid_t pid;
-        if (posix_spawnp(&pid, opener, nullptr, nullptr, argv, environ) == 0)
-            waitpid(pid, nullptr, 0);
+        const int spawn_result = posix_spawnp(&pid, opener, nullptr, nullptr, argv, environ);
+        if (spawn_result != 0)
+        {
+            std::cerr << "Could not open report in a browser: " << std::strerror(spawn_result) << std::endl;
+        }
+        else if (waitpid(pid, nullptr, 0) == -1)
+        {
+            std::cerr << "Could not wait for browser launcher: " << std::strerror(errno) << std::endl;
+        }
 #endif
     }
 
