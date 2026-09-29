@@ -16,6 +16,37 @@ To make it as simple as possible for bench biologists, Leonard is distributed as
 
 👉 [Download the latest version here](https://github.com/black98fxstc/covariant/releases/latest)
 
+### Verify your download (optional)
+
+Download **`SHA256SUMS`** from the same GitHub Release as your chosen package.
+Keep both files in your Downloads folder and check the package **before extracting
+or running it**. The filename must match the entry in `SHA256SUMS` exactly.
+You only need to verify the file you downloaded, not all three packages.
+
+On macOS, open Terminal and run:
+
+```bash
+cd ~/Downloads
+grep -E '^[0-9a-f]{64}  Leonard-macOS[.]zip$' SHA256SUMS | shasum -a 256 -c -
+```
+
+On Windows, open PowerShell and run (change `$asset` to
+`Leonard-Windows-Portable.zip` if you downloaded the portable zip):
+
+```powershell
+Set-Location "$HOME\Downloads"
+$asset = 'Leonard-Setup-x64.exe'
+$entry = Get-Content .\SHA256SUMS | Where-Object { $_ -match "^[0-9a-f]{64}  $([regex]::Escape($asset))$" }
+if (-not $entry) { throw "No SHA256SUMS entry for $asset" }
+$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset -ErrorAction Stop).Hash
+if ($actual -ine $entry.Substring(0, 64)) { throw "SHA-256 mismatch for $asset" }
+"SHA-256 verified: $asset"
+```
+
+A matching checksum detects download corruption or a mismatched file. Checksums
+from the same release do **not** authenticate its provenance if the release is
+compromised; code signing addresses authenticity separately.
+
 ## Windows Installation & Usage
 
 There are two options for Windows: the **Setup Installer (Recommended)** or the **Portable Zip**.
