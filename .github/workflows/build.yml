@@ -64,6 +64,21 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Generate third-party notices (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python3 scripts/generate_third_party_notices.py \
+            --vcpkg-root build/vcpkg_installed \
+            --output THIRD_PARTY_NOTICES.txt
+
+      - name: Generate third-party notices (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python scripts/generate_third_party_notices.py `
+            --vcpkg-root build/vcpkg_installed `
+            --output build/Release/THIRD_PARTY_NOTICES.txt
+
       - name: Package macOS Droplet
         if: runner.os == 'macOS'
         run: |
@@ -85,7 +100,7 @@ jobs:
           $version = python scripts/version.py
           $shortVersion = python scripts/version.py --print short-version
           Copy-Item -Path "scripts/windows/Leonard.cmd" -Destination "build/Release/" -Force
-          Get-ChildItem -Path "${{ github.workspace }}/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path "${{ github.workspace }}/build/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
           $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
           if (Test-Path $isccPath) {
               & $isccPath "/DMyAppVersion=$version" "/DMyAppNumericVersion=$shortVersion" "scripts/windows/installer.iss"
