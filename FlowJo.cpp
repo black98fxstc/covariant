@@ -33,6 +33,45 @@
 
 using json = nlohmann::json;
 
+static std::string sanitize_workspace_string(const std::string& value)
+{
+    std::string sanitized;
+    sanitized.reserve(value.size());
+    for (unsigned char c : value)
+    {
+        if (c >= 0x20 && c != 0x7f)
+            sanitized.push_back(static_cast<char>(c));
+    }
+    return sanitized;
+}
+
+static std::string xpath_literal(const std::string& value)
+{
+    if (value.find('\'') == std::string::npos)
+        return "'" + value + "'";
+    if (value.find('"') == std::string::npos)
+        return "\"" + value + "\"";
+
+    std::string expression = "concat(";
+    size_t start = 0;
+    bool first = true;
+    while (start < value.size())
+    {
+        size_t quote = value.find_first_of("'\"", start);
+        std::string part = value.substr(start, quote == std::string::npos ? std::string::npos : quote - start);
+        if (!first)
+            expression += ",";
+        expression += "'" + part + "'";
+        first = false;
+        if (quote == std::string::npos)
+            break;
+        expression += value[quote] == '\'' ? "\"'\"" : "'\"'";
+        start = quote + 1;
+    }
+    expression += ")";
+    return expression;
+}
+
 std::vector<std::string> analysis_choices = {"Exhaustive Projection Pursuit", "Laplacian Clustering", "Covariant Statistics"};
 
 std::string get_settings_path() {
@@ -64,28 +103,28 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
         idAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("id"));
     if (idAttr)
     {
-        sm.id = reinterpret_cast<char *>(idAttr);
+        sm.id = sanitize_workspace_string(reinterpret_cast<char *>(idAttr));
         xmlFree(idAttr);
     }
 
     xmlChar *nameAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("name"));
     if (nameAttr)
     {
-        sm.name = reinterpret_cast<char *>(nameAttr);
+        sm.name = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
         xmlFree(nameAttr);
     }
 
     xmlChar *prefixAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("prefix"));
     if (prefixAttr)
     {
-        sm.prefix = reinterpret_cast<char *>(prefixAttr);
+        sm.prefix = sanitize_workspace_string(reinterpret_cast<char *>(prefixAttr));
         xmlFree(prefixAttr);
     }
 
     xmlChar *suffixAttr = xmlGetProp(matrixNode, reinterpret_cast<const xmlChar *>("suffix"));
     if (suffixAttr)
     {
-        sm.suffix = reinterpret_cast<char *>(suffixAttr);
+        sm.suffix = sanitize_workspace_string(reinterpret_cast<char *>(suffixAttr));
         xmlFree(suffixAttr);
     }
 
@@ -101,7 +140,7 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
                 nAttr = xmlGetProp(pNode, reinterpret_cast<const xmlChar *>("name"));
             if (nAttr)
             {
-                pname = reinterpret_cast<char *>(nAttr);
+                pname = sanitize_workspace_string(reinterpret_cast<char *>(nAttr));
                 xmlFree(nAttr);
             }
 
@@ -109,7 +148,7 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
             xmlChar *iAttr = xmlGetProp(pNode, reinterpret_cast<const xmlChar *>("userProvidedCompInfix"));
             if (iAttr)
             {
-                pinfix = reinterpret_cast<char *>(iAttr);
+                pinfix = sanitize_workspace_string(reinterpret_cast<char *>(iAttr));
                 xmlFree(iAttr);
             }
 
@@ -137,7 +176,7 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
                 nAttr = xmlGetProp(sNode, reinterpret_cast<const xmlChar *>("parameter"));
             if (nAttr)
             {
-                row_param = reinterpret_cast<char *>(nAttr);
+                row_param = sanitize_workspace_string(reinterpret_cast<char *>(nAttr));
                 xmlFree(nAttr);
             }
 
@@ -165,7 +204,7 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
                             cnAttr = xmlGetProp(cNode, reinterpret_cast<const xmlChar *>("parameter"));
                         if (cnAttr)
                         {
-                            col_param = reinterpret_cast<char *>(cnAttr);
+                            col_param = sanitize_workspace_string(reinterpret_cast<char *>(cnAttr));
                             xmlFree(cnAttr);
                         }
 
@@ -330,7 +369,7 @@ Workspace parse_workspace(const std::string &filename)
                     }
                     if (idAttr)
                     {
-                        id = reinterpret_cast<char *>(idAttr);
+                        id = sanitize_workspace_string(reinterpret_cast<char *>(idAttr));
                         xmlFree(idAttr);
                     }
 
@@ -346,7 +385,7 @@ Workspace parse_workspace(const std::string &filename)
                                 nameAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("name"));
                             if (nameAttr)
                             {
-                                id = reinterpret_cast<char *>(nameAttr);
+                                id = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
                                 xmlFree(nameAttr);
                             }
                         }
@@ -433,7 +472,7 @@ Workspace parse_workspace(const std::string &filename)
             xmlChar *nameAttr = xmlGetProp(sampleNode, reinterpret_cast<const xmlChar *>("name"));
             if (nameAttr)
             {
-                sd.name = reinterpret_cast<char *>(nameAttr);
+                sd.name = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
                 xmlFree(nameAttr);
             }
             else
@@ -443,7 +482,12 @@ Workspace parse_workspace(const std::string &filename)
                 xmlXPathObjectPtr filObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Keyword[@name='$FIL']/@value"), xpathCtx);
                 if (filObj && filObj->nodesetval && filObj->nodesetval->nodeNr > 0)
                 {
-                    sd.name = reinterpret_cast<char *>(xmlNodeGetContent(filObj->nodesetval->nodeTab[0]));
+                    xmlChar *content = xmlNodeGetContent(filObj->nodesetval->nodeTab[0]);
+                    if (content)
+                    {
+                        sd.name = sanitize_workspace_string(reinterpret_cast<char *>(content));
+                        xmlFree(content);
+                    }
                 }
                 else
                 {
@@ -472,18 +516,27 @@ Workspace parse_workspace(const std::string &filename)
                     xmlChar *valAttr = xmlGetProp(kwNode, reinterpret_cast<const xmlChar *>("value"));
                     if (nameAttr && valAttr)
                     {
-                        std::string varName = reinterpret_cast<char *>(nameAttr);
-                        sd.variables.push_back(reinterpret_cast<char *>(valAttr));
+                        std::string varName = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
+                        sd.variables.push_back(sanitize_workspace_string(reinterpret_cast<char *>(valAttr)));
 
-                        std::string num = varName.substr(2, varName.length() - 3);
-                        std::string stainPath = ".//Keyword[@name='$P" + num + "S']/@value";
-                        xmlXPathObjectPtr sObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(stainPath.c_str()), xpathCtx);
+                        std::string num;
+                        if (varName.size() >= 4 && varName[0] == '$' && varName[1] == 'P' && varName.back() == 'N')
+                            num = varName.substr(2, varName.size() - 3);
+
+                        const bool valid_channel = !num.empty() && std::all_of(num.begin(), num.end(), [](unsigned char c)
+                                                                               { return std::isdigit(c) != 0; });
+                        xmlXPathObjectPtr sObj = nullptr;
+                        if (valid_channel)
+                        {
+                            std::string stainPath = ".//Keyword[@name='$P" + num + "S']/@value";
+                            sObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(stainPath.c_str()), xpathCtx);
+                        }
                         if (sObj && sObj->nodesetval && sObj->nodesetval->nodeNr > 0)
                         {
                             xmlChar *sVal = xmlNodeGetContent(sObj->nodesetval->nodeTab[0]);
                             if (sVal)
                             {
-                                sd.stains.push_back(reinterpret_cast<char *>(sVal));
+                                sd.stains.push_back(sanitize_workspace_string(reinterpret_cast<char *>(sVal)));
                                 xmlFree(sVal);
                             }
                             else
@@ -516,7 +569,7 @@ Workspace parse_workspace(const std::string &filename)
                     xmlChar *popName = xmlGetProp(popObj->nodesetval->nodeTab[j], reinterpret_cast<const xmlChar *>("name"));
                     if (popName)
                     {
-                        std::string pname = reinterpret_cast<char *>(popName);
+                        std::string pname = sanitize_workspace_string(reinterpret_cast<char *>(popName));
                         pname.erase(std::remove_if(pname.begin(), pname.end(), [](unsigned char c)
                                                    { return c < 32 || c == 127; }),
                                     pname.end());
@@ -566,7 +619,7 @@ Workspace parse_workspace(const std::string &filename)
                                             xmlChar *parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:parent_id"));
                                             if (!parentIdAttr)
                                                 parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("parent_id"));
-                                            if (parentIdAttr)
+                                                parent_id = sanitize_workspace_string(reinterpret_cast<char *>(parentIdAttr));
                                             {
                                                 parent_id = reinterpret_cast<const char *>(parentIdAttr);
                                                 xmlFree(parentIdAttr);
@@ -743,7 +796,7 @@ Workspace parse_workspace(const std::string &filename)
                                                         nAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("name"));
                                                     if (nAttr)
                                                     {
-                                                        dim.name = reinterpret_cast<char *>(nAttr);
+                                                        dim.name = sanitize_workspace_string(reinterpret_cast<char *>(nAttr));
                                                         xmlFree(nAttr);
                                                     }
 
@@ -752,7 +805,7 @@ Workspace parse_workspace(const std::string &filename)
                                                         sAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("transformation-ref"));
                                                     if (sAttr)
                                                     {
-                                                        dim.scale = reinterpret_cast<char *>(sAttr);
+                                                        dim.scale = sanitize_workspace_string(reinterpret_cast<char *>(sAttr));
                                                         auto it = sd.transforms.find(dim.scale);
                                                         if (it != sd.transforms.end())
                                                         {
@@ -766,7 +819,7 @@ Workspace parse_workspace(const std::string &filename)
                                                         cAttr = xmlGetProp(paramNode, reinterpret_cast<const xmlChar *>("compensation-ref"));
                                                     if (cAttr)
                                                     {
-                                                        dim.compensation = reinterpret_cast<char *>(cAttr);
+                                                        dim.compensation = sanitize_workspace_string(reinterpret_cast<char *>(cAttr));
                                                         xmlFree(cAttr);
                                                     }
 
@@ -872,7 +925,8 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
         return;
     }
 
-    std::string expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
+    const std::string safe_sample_name = sanitize_workspace_string(sample_name);
+    std::string expr = "//SampleList/Sample[SampleNode/@name=" + xpath_literal(safe_sample_name + ".fcs") + " or SampleNode/@name=" + xpath_literal(safe_sample_name + ".FCS") + " or SampleNode/@name=" + xpath_literal(safe_sample_name) + " or .//Keyword[@name='$FIL' and (@value=" + xpath_literal(safe_sample_name + ".fcs") + " or @value=" + xpath_literal(safe_sample_name + ".FCS") + " or @value=" + xpath_literal(safe_sample_name) + ")]]";
     xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(expr.c_str()), xpathCtx);
     if (sampleObj && sampleObj->nodesetval && sampleObj->nodesetval->nodeNr > 0)
     {
@@ -885,7 +939,7 @@ void add_laplace_derived_parameter(const std::string &filename, const std::strin
             xmlChar *uriAttr = xmlGetProp(datasetObj->nodesetval->nodeTab[0], reinterpret_cast<const xmlChar *>("uri"));
             if (uriAttr)
             {
-                uri = reinterpret_cast<char *>(uriAttr);
+                uri = sanitize_workspace_string(reinterpret_cast<char *>(uriAttr));
                 xmlFree(uriAttr);
             }
         }
@@ -1094,7 +1148,8 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         return;
     }
 
-    std::string sample_expr = "//SampleList/Sample[SampleNode/@name='" + sample_name + ".fcs' or SampleNode/@name='" + sample_name + ".FCS' or SampleNode/@name='" + sample_name + "' or .//Keyword[@name='$FIL' and (@value='" + sample_name + ".fcs' or @value='" + sample_name + ".FCS' or @value='" + sample_name + "')]]";
+    const std::string safe_sample_name = sanitize_workspace_string(sample_name);
+    std::string sample_expr = "//SampleList/Sample[SampleNode/@name=" + xpath_literal(safe_sample_name + ".fcs") + " or SampleNode/@name=" + xpath_literal(safe_sample_name + ".FCS") + " or SampleNode/@name=" + xpath_literal(safe_sample_name) + " or .//Keyword[@name='$FIL' and (@value=" + xpath_literal(safe_sample_name + ".fcs") + " or @value=" + xpath_literal(safe_sample_name + ".FCS") + " or @value=" + xpath_literal(safe_sample_name) + ")]]";
     xmlXPathObjectPtr sampleObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(sample_expr.c_str()), xpathCtx);
     if (!sampleObj || !sampleObj->nodesetval || sampleObj->nodesetval->nodeNr == 0) {
         if (sampleObj) xmlXPathFreeObject(sampleObj);
@@ -1113,7 +1168,7 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         }
         if (snObj) xmlXPathFreeObject(snObj);
     } else {
-        std::string pop_expr = ".//Population[@name='" + parent_pop_name + "']";
+        std::string pop_expr = ".//Population[@name=" + xpath_literal(sanitize_workspace_string(parent_pop_name)) + "]";
         xmlXPathObjectPtr popObj = xmlXPathNodeEval(sampleNode, reinterpret_cast<const xmlChar *>(pop_expr.c_str()), xpathCtx);
         if (popObj && popObj->nodesetval && popObj->nodesetval->nodeNr > 0) {
             parentPopNode = popObj->nodesetval->nodeTab[0];
@@ -1178,9 +1233,11 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
                         xmlChar* dimAttr = xmlGetProp(child, reinterpret_cast<const xmlChar *>("dimension"));
                         if (dimAttr) {
                             if (xmlStrcmp(dimAttr, reinterpret_cast<const xmlChar *>("x")) == 0) {
-                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(selected_vars[0].c_str()));
+                                const std::string safe_name = sanitize_workspace_string(selected_vars[0]);
+                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(safe_name.c_str()));
                             } else if (xmlStrcmp(dimAttr, reinterpret_cast<const xmlChar *>("y")) == 0) {
-                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(selected_vars[1].c_str()));
+                                const std::string safe_name = sanitize_workspace_string(selected_vars[1]);
+                                xmlSetProp(child, reinterpret_cast<const xmlChar *>("name"), reinterpret_cast<const xmlChar *>(safe_name.c_str()));
                             }
                             xmlFree(dimAttr);
                         }
@@ -1190,7 +1247,7 @@ void add_laplace_gates(const std::string &filename, const std::string &sample_na
         }
 
         xmlNodePtr gateNode = xmlNewNode(nullptr, reinterpret_cast<const xmlChar *>("Gate"));
-        std::string gateId = "LaplaceGate_" + sample_name + "_" + parent_pop_name + "_" + std::to_string(klass);
+        std::string gateId = "LaplaceGate_" + sanitize_workspace_string(sample_name) + "_" + sanitize_workspace_string(parent_pop_name) + "_" + std::to_string(klass);
         xmlSetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:id"), reinterpret_cast<const xmlChar *>(gateId.c_str()));
 
         xmlNodePtr rectGateNode = xmlNewNode(gatingNs, reinterpret_cast<const xmlChar *>("RectangleGate"));
@@ -1472,7 +1529,7 @@ SelectionState build_ftxui_interface(Workspace &ws)
             : emptyElement();
             
         return vbox({
-            text(" Leonard - " + std::filesystem::path(ws.filename).stem().string() + " ") | bold | hcenter,
+            text(" Leonard - " + sanitize_workspace_string(std::filesystem::path(ws.filename).stem().string()) + " ") | bold | hcenter,
             separator(),
             hbox({ sample_win, var_win, pop_win }) | size(HEIGHT, LESS_THAN, 20),
             separator(),
