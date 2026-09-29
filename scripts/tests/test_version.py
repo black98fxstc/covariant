@@ -15,6 +15,10 @@ SPEC.loader.exec_module(VERSION)
 
 
 class VersionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.metadata = VERSION.read_version(REPOSITORY / "vcpkg.json")
+
     def test_prerelease_metadata(self):
         self.assertEqual(
             VERSION.parse_version("0.1.0-alpha.2"),
@@ -39,7 +43,7 @@ class VersionTest(unittest.TestCase):
             output = Path(directory) / "output"
             env = os.environ | {
                 "GITHUB_REF_TYPE": "tag",
-                "GITHUB_REF_NAME": "v0.1.0-alpha.3",
+                "GITHUB_REF_NAME": f"v{self.metadata['version']}",
                 "GITHUB_OUTPUT": str(output),
             }
             subprocess.run(
@@ -51,16 +55,19 @@ class VersionTest(unittest.TestCase):
             self.assertEqual(
                 output.read_text(encoding="utf-8").splitlines(),
                 [
-                    "version=0.1.0-alpha.3",
-                    "short_version=0.1.0",
-                    "mac_bundle_version=0.1.0a3",
+                    f"version={self.metadata['version']}",
+                    f"short_version={self.metadata['short_version']}",
+                    f"mac_bundle_version={self.metadata['mac_bundle_version']}",
                 ],
             )
 
     def test_tag_build_rejects_mismatch(self):
+        mismatched_version = (
+            "0.0.1" if self.metadata["version"] == "0.0.0" else "0.0.0"
+        )
         env = os.environ | {
             "GITHUB_REF_TYPE": "tag",
-            "GITHUB_REF_NAME": "v0.1.0-alpha.2",
+            "GITHUB_REF_NAME": f"v{mismatched_version}",
         }
         result = subprocess.run(
             [sys.executable, str(SCRIPT)],
