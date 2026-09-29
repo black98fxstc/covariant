@@ -38,7 +38,7 @@ jobs:
             ${{ github.workspace }}/vcpkg
             ${{ github.workspace }}/build/vcpkg_installed
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
       
       - name: Validate release version (macOS)
         if: runner.os == 'macOS'
