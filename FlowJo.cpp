@@ -1322,23 +1322,26 @@ SelectionState build_ftxui_interface(Workspace &ws)
     auto input_kld_norm = Input(&state.kld_norm_str, "0.04");
     auto input_kld_exp = Input(&state.kld_exp_str, "0.2");
 
-    auto real_settings_container = Container::Vertical({
-        input_smoothing,
-        input_threshold,
-        input_kld_norm,
-        input_kld_exp
-    });
-
     auto input_max_clusters = Input(&state.max_clusters_str, "12");
     auto input_min_events = Input(&state.min_events_str, "0");
     auto input_min_cluster_rel = Input(&state.min_cluster_rel_str, "0.0");
     auto input_tolerance = Input(&state.tolerance_str, "0.01");
 
-    auto count_settings_container = Container::Vertical({
-        input_max_clusters,
+    auto parameters_container = Container::Vertical({
+        input_smoothing,
         input_min_events,
-        input_min_cluster_rel,
-        input_tolerance
+        input_min_cluster_rel
+    });
+
+    auto laplace_container = Container::Vertical({
+        input_threshold,
+        input_max_clusters
+    });
+
+    auto klds_container = Container::Vertical({
+        input_tolerance,
+        input_kld_norm,
+        input_kld_exp
     });
 
     auto main_layout = Container::Horizontal({sample_container,
@@ -1348,8 +1351,9 @@ SelectionState build_ftxui_interface(Workspace &ws)
                                                     { return num_vars_selected >= 2; })});
 
     auto bottom_container = Container::Horizontal({choice_handled,
-                                                   real_settings_container,
-                                                   count_settings_container});
+                                                   parameters_container,
+                                                   laplace_container,
+                                                   klds_container});
 
     auto top_level = Container::Vertical({main_layout,
                                           bottom_container});
@@ -1446,18 +1450,21 @@ SelectionState build_ftxui_interface(Workspace &ws)
             ? window(text(" Detectors            Stains "), combined_content | vscroll_indicator | frame)
             : emptyElement();
 
-        auto real_settings_win = window(text(" Real Parameters "), vbox({
+        auto parameters_win = window(text(" Parameters "), vbox({
             hbox({text("Smoothing: "), input_smoothing->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("Threshold: "), input_threshold->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("KLD Norm:  "), input_kld_norm->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("KLD Exp:   "), input_kld_exp->Render() | size(WIDTH, EQUAL, 6)})
+            hbox({text("Min Abs:   "), input_min_events->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Min Rel:   "), input_min_cluster_rel->Render() | size(WIDTH, EQUAL, 6)})
         }));
 
-        auto count_settings_win = window(text(" Count/EPP Params "), vbox({
-            hbox({text("Max Clusters:     "), input_max_clusters->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("Min Cluster Abs:  "), input_min_events->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("Min Cluster Rel:  "), input_min_cluster_rel->Render() | size(WIDTH, EQUAL, 6)}),
-            hbox({text("Tolerance:        "), input_tolerance->Render() | size(WIDTH, EQUAL, 6)})
+        auto laplace_win = window(text(" Laplace "), vbox({
+            hbox({text("Threshold:    "), input_threshold->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("Max Clusters: "), input_max_clusters->Render() | size(WIDTH, EQUAL, 6)})
+        }));
+
+        auto klds_win = window(text(" EPP "), vbox({
+            hbox({text("Tolerance: "), input_tolerance->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("KLD Norm:  "), input_kld_norm->Render() | size(WIDTH, EQUAL, 6)}),
+            hbox({text("KLD Exp:   "), input_kld_exp->Render() | size(WIDTH, EQUAL, 6)})
         }));
             
         auto pop_win = num_vars_selected >= 2 
@@ -1471,8 +1478,9 @@ SelectionState build_ftxui_interface(Workspace &ws)
             separator(),
             hbox({
                 window(text(" Analysis Method "), choice_handled->Render()) | flex,
-                real_settings_win,
-                count_settings_win
+                parameters_win,
+                laplace_win,
+                klds_win
             }),
             separator(),
             text(" Space: Select | Arrows: Navigate | Tab: Switch Section | Enter: Confirm | Esc: Cancel ") | hcenter

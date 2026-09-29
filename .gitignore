@@ -20,6 +20,8 @@ norminv.cpp
 *.wsp
 *.len
 *.csv
+*.truth
+*.m
 testdata
 laplace
 riemann
