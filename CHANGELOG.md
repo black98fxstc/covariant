@@ -36,3 +36,5 @@ This is an early release, so some workflows may still be rough around the edges.
 - Several code quality flags fixed by copilot
 - Mistakenly submitted files cleaned out
 - Remove C style casts and other anachronisms
+- Parameter layout reogranized
+- Droplets request larger terminal

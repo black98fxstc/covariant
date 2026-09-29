@@ -18,5 +18,7 @@ on runLeonard(wspPath)
         activate
         -- Run leonard with the workspace file path
         do script quoted form of binPath & " " & quoted form of wspPath
+        set number of rows of selected tab of front window to 32
+        set number of columns of selected tab of front window to 120
     end tell
 end runLeonard

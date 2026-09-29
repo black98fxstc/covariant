@@ -10,6 +10,8 @@ if not exist "%BIN%" (
     exit /b 1
 )
 
+mode con: cols=120 lines=32 >nul 2>&1
+
 "%BIN%" %*
 set "ERR=%ERRORLEVEL%"
 
