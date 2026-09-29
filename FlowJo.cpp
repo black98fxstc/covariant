@@ -1461,7 +1461,7 @@ SelectionState build_ftxui_interface(Workspace &ws)
             hbox({text("Max Clusters: "), input_max_clusters->Render() | size(WIDTH, EQUAL, 6)})
         }));
 
-        auto klds_win = window(text(" EPP "), vbox({
+        auto epp_win = window(text(" EPP "), vbox({
             hbox({text("Tolerance: "), input_tolerance->Render() | size(WIDTH, EQUAL, 6)}),
             hbox({text("KLD Norm:  "), input_kld_norm->Render() | size(WIDTH, EQUAL, 6)}),
             hbox({text("KLD Exp:   "), input_kld_exp->Render() | size(WIDTH, EQUAL, 6)})
@@ -1480,7 +1480,7 @@ SelectionState build_ftxui_interface(Workspace &ws)
                 window(text(" Analysis Method "), choice_handled->Render()) | flex,
                 parameters_win,
                 laplace_win,
-                klds_win
+                epp_win
             }),
             separator(),
             text(" Space: Select | Arrows: Navigate | Tab: Switch Section | Enter: Confirm | Esc: Cancel ") | hcenter

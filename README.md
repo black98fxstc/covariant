@@ -5,6 +5,9 @@
 To make it as simple as possible for bench biologists, Leonard is distributed as a **desktop droplet** for both Windows and macOS. You do not need to open a terminal, configure environment variables, or know how to code.
 
 > [!WARNING]
+> This is alpha pre-release software, not feature complete and not throughly tested.
+
+> [!WARNING]
 > Leonard rewrites the FlowJo workspace file (`.wsp`) to include the new gating information. Always work on a copy of any important workspace.
 
 ---
@@ -37,8 +40,8 @@ There are two options for Windows: the **Setup Installer (Recommended)** or the 
 1. Download **`Leonard-Windows-Portable.zip`** from the releases page.
 2. Extract the `.zip` archive to a folder on your computer (e.g. `Desktop` or `Documents`).
 3. To run:
-   * Drag your `.wsp` file directly onto **`Leonard.bat`** (or `leonard.exe`).
-   * Or double-click **`Leonard.bat`** to open the file selection dialog.
+   * Drag your `.wsp` file directly onto **`Leonard.cmd`** (or `leonard.exe`).
+   * Or double-click **`Leonard.cmd`** to open the file selection dialog.
 
 ---
 
