@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       actions: write
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -70,6 +70,7 @@ jobs:
         with:
           name: Leonard-macOS
           path: Leonard-macOS.zip
+          if-no-files-found: error
 
       - name: Package Windows Droplet
         if: runner.os == 'Windows'
@@ -95,6 +96,7 @@ jobs:
         with:
           name: Leonard-Windows-Portable
           path: Leonard-Windows-Portable.zip
+          if-no-files-found: error
 
       - name: Upload Artifact (Windows Setup Installer)
         if: runner.os == 'Windows' && hashFiles('dist/Leonard-Setup-x64.exe') != ''
@@ -102,14 +104,55 @@ jobs:
         with:
           name: Leonard-Windows-Setup
           path: dist/Leonard-Setup-x64.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: Leonard-macOS
+          path: release-assets
+
+      - name: Download Windows portable package
+        uses: actions/download-artifact@v4
+        with:
+          name: Leonard-Windows-Portable
+          path: release-assets
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: Leonard-Windows-Setup
+          path: release-assets
+
+      - name: Generate and verify release checksums
+        working-directory: release-assets
+        shell: bash
+        run: |
+          for asset in Leonard-macOS.zip Leonard-Windows-Portable.zip Leonard-Setup-x64.exe; do
+            if [ ! -f "$asset" ]; then
+              echo "::error::Missing required release asset: $asset"
+              exit 1
+            fi
+          done
+          sha256sum -- Leonard-Setup-x64.exe Leonard-Windows-Portable.zip Leonard-macOS.zip > SHA256SUMS
+          sha256sum -c SHA256SUMS
 
       - name: Upload release assets
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Leonard-macOS.zip
-            Leonard-Windows-Portable.zip
-            dist/Leonard-Setup-x64.exe
-          fail_on_unmatched_files: false
+            release-assets/Leonard-macOS.zip
+            release-assets/Leonard-Windows-Portable.zip
+            release-assets/Leonard-Setup-x64.exe
+            release-assets/SHA256SUMS
+          fail_on_unmatched_files: true
           generate_release_notes: true
