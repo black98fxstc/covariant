@@ -5,6 +5,7 @@ methods from computational and differential geometry, inluding
 - Exhaustive Projection Pursuit
 - Laplacian Clustering
 - Covariant Statistics
+
 It can be run from the command line on a variety of data file formats but
 primarily will be run on FlowJo workspaces (.wsp) and then allows the analysis
 of FlowJo gated subpopulation. The investigator selects a sample, a set of dimensions
