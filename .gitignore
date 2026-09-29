@@ -33,3 +33,4 @@ matplotplusplus
 vcpkg
 vcpkg_installed
 __pycache__/
+vcpkg_cache
