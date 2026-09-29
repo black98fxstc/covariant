@@ -63,3 +63,29 @@ Because this version is distributed outside the Apple App Store, macOS Gatekeepe
 2. Paste the following command and hit `Return`:
    ```bash
    xattr -cr /Applications/Leonard.app
+   ```
+
+## Packaging locally
+
+The `version-string` in `vcpkg.json` is the authoritative Leonard release
+version. It uses
+`MAJOR.MINOR.PATCH` or `MAJOR.MINOR.PATCH-(alpha|beta|rc).NUMBER`; release tags
+must be the same value prefixed with `v`. Tag builds validate this match, while
+manually dispatched builds package the checked-in version.
+
+Validate a proposed tag and run the version tests with:
+
+```bash
+python3 scripts/version.py --tag "v$(python3 scripts/version.py)"
+python3 -m unittest scripts/tests/test_version.py
+```
+
+On macOS, `./scripts/mac/package_mac.sh build` reads the manifest directly. For
+a local Windows installer build, validate the version and pass its full and
+numeric forms to Inno Setup:
+
+```powershell
+$version = python scripts/version.py
+$shortVersion = python scripts/version.py --print short-version
+iscc "/DMyAppVersion=$version" "/DMyAppNumericVersion=$shortVersion" scripts/windows/installer.iss
+```

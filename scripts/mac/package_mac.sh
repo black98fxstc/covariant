@@ -6,6 +6,9 @@ BUILD_DIR="${1:-build}"
 BIN_PATH="${BUILD_DIR}/leonard"
 APP_NAME="Leonard.app"
 ZIP_NAME="Leonard-macOS.zip"
+VERSION="$(python3 scripts/version.py)"
+SHORT_VERSION="$(python3 scripts/version.py --print short-version)"
+BUNDLE_VERSION="$(python3 scripts/version.py --print mac-bundle-version)"
 
 if [ ! -f "$BIN_PATH" ]; then
     echo "Error: leonard binary not found at $BIN_PATH"
@@ -33,8 +36,12 @@ PLIST="$APP_NAME/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier org.covariant.leonard" "$PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string org.covariant.leonard" "$PLIST" 2>/dev/null || true
 
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.1.0" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 0.1.0" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT_VERSION" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $SHORT_VERSION" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUNDLE_VERSION" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUNDLE_VERSION" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleGetInfoString Leonard $VERSION" "$PLIST" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleGetInfoString string Leonard $VERSION" "$PLIST" 2>/dev/null || true
 
 echo "==> Packaging into $ZIP_NAME..."
 zip -r -y "$ZIP_NAME" "$APP_NAME"

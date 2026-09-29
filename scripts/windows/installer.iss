@@ -1,5 +1,10 @@
 #define MyAppName "Leonard"
-#define MyAppVersion "0.1.0"
+#ifndef MyAppVersion
+  #error MyAppVersion must be supplied from vcpkg.json with /DMyAppVersion=<version>
+#endif
+#ifndef MyAppNumericVersion
+  #error MyAppNumericVersion must be supplied with /DMyAppNumericVersion=<version>
+#endif
 #define MyAppPublisher "Covariant"
 #define MyAppExeName "leonard.exe"
 #define MyAppCmdName "Leonard.cmd"
@@ -8,6 +13,8 @@
 AppId={{D37F2936-7C1C-4B14-B1F7-418E66275811}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppNumericVersion}
+VersionInfoTextVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DisableProgramGroupPage=yes

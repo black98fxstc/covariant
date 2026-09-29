@@ -31,6 +31,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate release version (macOS)
+        if: runner.os == 'macOS'
+        run: python3 scripts/version.py
+
+      - name: Validate release version (Windows)
+        if: runner.os == 'Windows'
+        run: python scripts/version.py
+
       - name: Install macOS build tools
         if: runner.os == 'macOS'
         run: brew install autoconf automake libtool
@@ -67,13 +75,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $version = python scripts/version.py
+          $shortVersion = python scripts/version.py --print short-version
           Copy-Item -Path "scripts/windows/Leonard.cmd" -Destination "build/Release/" -Force
           Get-ChildItem -Path "${{ github.workspace }}/vcpkg_installed" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Copy-Item -Destination "build/Release" -Force -ErrorAction SilentlyContinue
           $isccPath = "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
           if (Test-Path $isccPath) {
-              & $isccPath "scripts/windows/installer.iss"
+              & $isccPath "/DMyAppVersion=$version" "/DMyAppNumericVersion=$shortVersion" "scripts/windows/installer.iss"
           } elseif (Get-Command iscc -ErrorAction SilentlyContinue) {
-              iscc "scripts/windows/installer.iss"
+              iscc "/DMyAppVersion=$version" "/DMyAppNumericVersion=$shortVersion" "scripts/windows/installer.iss"
           } else {
               Write-Host "Inno Setup not detected on runner; skipping installer compilation."
           }
