@@ -2,23 +2,24 @@
 
 Leonard is a desktop tool for the analysis of flow cytometry datasets using
 methods from computational and differential geometry, inluding
+
 - Exhaustive Projection Pursuit
 - Laplacian Clustering
 - Covariant Statistics
 
 It can be run from the command line on a variety of data file formats but
 primarily will be run on FlowJo workspaces (.wsp) and then allows the analysis
-of FlowJo gated subpopulation. The investigator selects a sample, a set of dimensions
-and then one or more previously identified populations.
+of FlowJo gated subpopulations. The investigator selects a sample, a set of 
+dimensions and then one or more previously identified populations.
 
 Exhaustive Projection Pursuit examines all two dimensional projections to find
 the best split into two new populations, then starts the process on each subpopulation 
-until no suitable split can be found. It is suitable for any number of dimensions
+until no suitable split can be found. It is suitable for any number of dimensions,
 and it is possible to sort on the resulting gating tree.
 
 Laplacian Clustering is an n-dimensional method based on ideas from differential
 geometry. 2, 3, and 4 dimensional analysis is supported and while the subpopulations
-may be further analyzed, existing instruments do not support sorting.
+may be further analyzed in software, existing hardware does not support sorting.
 
 Covariant Statistics are statistics that are invariant under monotonic transformations,
 i.e., independant of the data scale used. They offer a quantitative morphology of
@@ -30,6 +31,9 @@ Mac and Windows are supported. Computers suitable for running FlowJo should be f
 
 ## Downloads
 Get the latest alpha builds from [GitHub Releases](https://github.com/black98fxstc/covariant/releases/latest)
+
+## Installation
+https://github.com/black98fxstc/covariant/README.md
 
 ## Source code
 https://github.com/black98fxstc/covariant
@@ -48,3 +52,6 @@ https://github.com/black98fxstc/covariant/security/policy
 - Wayne A. Moore
   *Covariant Statistics*. (Draft)
   https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link
+
+# About
+https://github.com/black98fxstc/covariant/ABOUT.md
