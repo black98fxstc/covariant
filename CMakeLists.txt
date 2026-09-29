@@ -14,6 +14,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
     # MSVC needs /bigobj for heavily templated code like Eigen
     add_compile_options(/bigobj)
+    # Keep AVX2 with the project rather than overriding CMAKE_CXX_FLAGS on the command line,
+    # which would drop MSVC's default flags (including /EHsc)
+    add_compile_options(/arch:AVX2)
+    # Guard against callers that replace CMAKE_CXX_FLAGS and lose the default /EHsc,
+    # which triggers C4530 (C++ exception handler used without unwind semantics)
+    if(NOT CMAKE_CXX_FLAGS MATCHES "/EH")
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/EHsc>)
+    endif()
 endif()
 
 if(WIN32)
