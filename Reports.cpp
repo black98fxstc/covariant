@@ -35,8 +35,10 @@ static std::string escape_xml(const std::string &input)
 {
     std::string output;
     output.reserve(input.size());
-    for (char c : input)
+    for (unsigned char c : input)
     {
+        if (c < 0x20 || c == 0x7f)
+            continue;
         switch (c)
         {
         case '&':
@@ -60,6 +62,34 @@ static std::string escape_xml(const std::string &input)
         }
     }
     return output;
+}
+
+static std::string report_text(const std::string &input)
+{
+    std::string output;
+    output.reserve(input.size());
+    for (unsigned char c : input)
+    {
+        if (c >= 0x20 && c != 0x7f)
+            output.push_back(static_cast<char>(c));
+    }
+    return output;
+}
+
+static std::string report_filename_component(const std::string &input)
+{
+    const std::string text = report_text(input);
+    std::string output;
+    output.reserve(text.size());
+    for (unsigned char c : text)
+    {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_')
+            output.push_back(static_cast<char>(c));
+        else
+            output.push_back('_');
+    }
+    return output.empty() ? "unnamed" : output;
 }
 
 void write_rgb_png(const std::string &path, const std::vector<std::vector<std::vector<double>>> &class_data)
@@ -261,7 +291,7 @@ void Reports::update_index(const std::string &report_dir, const std::string &tit
     std::ofstream out(index_path);
 
     out << "<!DOCTYPE html>\n<html>\n<head>\n"
-        << "  <title>" << title << "</title>\n"
+        << "  <title>" << escape_xml(report_text(title)) << "</title>\n"
         << "  <style>\n"
         << "    body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }\n"
         << "    .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n"
@@ -274,14 +304,15 @@ void Reports::update_index(const std::string &report_dir, const std::string &tit
         << "  </style>\n"
         << "</head>\n<body>\n"
         << "  <div class=\"container\">\n"
-        << "    <h1>" << title << "</h1>\n"
+        << "    <h1>" << escape_xml(report_text(title)) << "</h1>\n"
         << "    <ul class=\"report-list\">\n";
 
     for (const auto &link : links)
     {
         out << "      <li>\n"
-            << "        <a href=\"" << link.filename << "\">" << link.title << "</a>\n"
-            << "        <div class=\"desc\">" << link.description << "</div>\n"
+            << "        <a href=\"" << escape_xml(report_text(link.filename)) << "\">"
+            << escape_xml(report_text(link.title)) << "</a>\n"
+            << "        <div class=\"desc\">" << escape_xml(report_text(link.description)) << "</div>\n"
             << "      </li>\n";
     }
 
@@ -310,8 +341,7 @@ static std::string generate_laplace_report_v2(const std::string &report_dir,
                                               const std::vector<std::string> &display_vars)
 {
     fs::create_directories(report_dir);
-    std::string stem = "laplace_" + sample_name + "_" + pop_name;
-    std::replace(stem.begin(), stem.end(), ' ', '_');
+    std::string stem = "laplace_" + report_filename_component(sample_name) + "_" + report_filename_component(pop_name);
 
     std::string xml_path = report_dir + "/" + stem + ".xml";
     std::string xsl_path = report_dir + "/laplace_report.xsl";
@@ -538,8 +568,7 @@ static std::string generate_covariant_report_v2(const std::string &report_dir,
                                                  const std::vector<std::string> &display_vars)
 {
     fs::create_directories(report_dir);
-    std::string stem = "covariant_" + sample_name + "_" + pop_name;
-    std::replace(stem.begin(), stem.end(), ' ', '_');
+    std::string stem = "covariant_" + report_filename_component(sample_name) + "_" + report_filename_component(pop_name);
 
     std::string xml_path = report_dir + "/" + stem + ".xml";
     std::string xsl_path = report_dir + "/covariant_report.xsl";
@@ -820,8 +849,7 @@ std::string Reports::generate_laplace_report(const std::string &report_dir, cons
 {
     return generate_laplace_report_v2(report_dir, sample_name, pop_name, res, selected_vars, display_vars);
     fs::create_directories(report_dir);
-    std::string stem = "laplace_" + sample_name + "_" + pop_name;
-    std::replace(stem.begin(), stem.end(), ' ', '_');
+    std::string stem = "laplace_" + report_filename_component(sample_name) + "_" + report_filename_component(pop_name);
 
     std::string xml_path = report_dir + "/" + stem + ".xml";
     std::string xsl_path = report_dir + "/laplace_report.xsl";
@@ -960,8 +988,7 @@ std::string Reports::generate_laplace_report(const std::string &report_dir, cons
 std::string Reports::generate_epp_report(const std::string &report_dir, const std::string &sample_name, const std::string &pop_name, const Pursuit_Results &res, const std::vector<std::string> &display_vars)
 {
     fs::create_directories(report_dir);
-    std::string stem = "epp_" + sample_name + "_" + pop_name;
-    std::replace(stem.begin(), stem.end(), ' ', '_');
+    std::string stem = "epp_" + report_filename_component(sample_name) + "_" + report_filename_component(pop_name);
 
     std::string xml_path = report_dir + "/" + stem + ".xml";
     std::string xsl_path = report_dir + "/epp_report.xsl";
