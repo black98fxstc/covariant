@@ -1,6 +1,6 @@
 {
   "name": "covariant-project",
-  "version-string": "0.1.0",
+  "version-string": "0.1.0-alpha.3",
   "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
   "dependencies": [
     {
