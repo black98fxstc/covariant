@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <numbers>
 #include <cmath>
+#include <cctype>
 
 #include <Eigen/Dense>
 #include <fftw3.h>
@@ -32,6 +33,28 @@ extern char **environ;
 #include "Reports.hpp"
 #include "Ledger.hpp"
 #include "Samples.hpp"
+
+static std::string safe_report_stem(const std::filesystem::path &source)
+{
+    const std::string stem = source.stem().string();
+    std::string safe;
+    safe.reserve(stem.size());
+    for (unsigned char c : stem)
+    {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_')
+            safe.push_back(static_cast<char>(c));
+        else
+            safe.push_back('_');
+    }
+    return safe.empty() ? "unknown" : safe;
+}
+
+static bool is_regular_input_file(const std::filesystem::path &path)
+{
+    std::error_code ec;
+    return std::filesystem::is_regular_file(path, ec);
+}
 
 int Leonard::parse_args(int argc, char *argv[])
 {
@@ -216,7 +239,7 @@ int Leonard::run()
             std::filesystem::current_path(resolved.parent_path(), ec);
         }
 
-        std::string report_dir = resolved.stem().string() + ".len";
+        std::string report_dir = safe_report_stem(resolved) + ".len";
         if (!session_.open(std::filesystem::path(report_dir) / "logs"))
             std::cerr << "Could not open session log in " << report_dir << std::endl;
 
@@ -284,9 +307,9 @@ int Leonard::run()
         else
         {
             filename = params.files[0];
-            if (!std::filesystem::exists(filename))
+            if (!is_regular_input_file(filename))
             {
-                if (std::filesystem::exists(filename + ".wsp"))
+                if (is_regular_input_file(filename + ".wsp"))
                     filename += ".wsp";
             }
         }
@@ -351,7 +374,7 @@ int Leonard::run()
     }
 
     std::filesystem::path source(!ws.filename.empty() ? ws.filename : (params.files.empty() ? "unknown" : params.files[0]));
-    std::string report_dir = source.stem().string() + ".len";
+    std::string report_dir = safe_report_stem(source) + ".len";
     if (!session_.open(std::filesystem::path(report_dir) / "logs"))
         std::cerr << "Could not open session log in " << report_dir << std::endl;
     else

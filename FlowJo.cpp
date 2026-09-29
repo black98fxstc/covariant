@@ -250,19 +250,25 @@ SpilloverMatrix parse_spillover_matrix(xmlNodePtr matrixNode, xmlXPathContextPtr
 
 std::string find_workspace(int argc, char *argv[])
 {
+    auto is_regular_file = [](const std::filesystem::path &path)
+    {
+        std::error_code ec;
+        return std::filesystem::is_regular_file(path, ec);
+    };
+
     std::string filename;
     if (argc >= 2)
     {
         filename = argv[1];
-        if (!std::filesystem::exists(filename))
+        if (!is_regular_file(filename))
         {
-            if (std::filesystem::exists(filename + ".wsp"))
+            if (is_regular_file(filename + ".wsp"))
                 filename += ".wsp";
         }
     }
 
     // If not provided or missing, locate the most recent .wsp file
-    if (filename.empty() || !std::filesystem::exists(filename))
+    if (filename.empty() || !is_regular_file(filename))
     {
         std::filesystem::file_time_type latest_time = std::filesystem::file_time_type::min();
         for (const auto &entry : std::filesystem::directory_iterator("."))
@@ -280,7 +286,7 @@ std::string find_workspace(int argc, char *argv[])
     }
 
     // If still not found, prompt with native OS file dialog
-    if (filename.empty() || !std::filesystem::exists(filename))
+    if (filename.empty() || !is_regular_file(filename))
     {
 #if defined(_WIN32)
         FILE *fp = _popen("powershell -NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'FlowJo Workspaces (*.wsp)|*.wsp|All Files (*.*)|*.*'; $f.Title = 'Select FlowJo Workspace'; if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $f.FileName }\" 2>NUL", "r");
@@ -313,7 +319,7 @@ std::string find_workspace(int argc, char *argv[])
 #endif
     }
 
-    if (filename.empty() || !std::filesystem::exists(filename))
+    if (filename.empty() || !is_regular_file(filename))
     {
         std::cerr << "Error: No workspace (.wsp) file found or specified.\n";
         return "";

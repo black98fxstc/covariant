@@ -27,7 +27,7 @@ cluster shapes that measure how strongly the values of different dimensions are
 linked.
 
 ## Requirements
-Mac and Windows are supported. Computers suitable for running FlowJo should be fine
+Mac and Windows are supported. Computers suitable for running FlowJo should be fine.
 
 ## Downloads
 Get the latest alpha builds from [GitHub Releases](https://github.com/black98fxstc/covariant/releases/latest)
@@ -50,8 +50,8 @@ https://github.com/black98fxstc/covariant/security/policy
   PMID: [40797028](https://pubmed.ncbi.nlm.nih.gov/40797028/) · PMCID: PMC12343891
 
 - Wayne A. Moore
-  *Covariant Statistics*. (Draft)
-  https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link
+  *Covariant Statistics*. 
+  [Current Draft](https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link)
 
-# About
+## About
 https://github.com/black98fxstc/covariant/ABOUT.md
