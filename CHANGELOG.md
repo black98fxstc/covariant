@@ -38,3 +38,4 @@ This is an early release, so some workflows may still be rough around the edges.
 - Remove C style casts and other anachronisms
 - Parameter layout reogranized
 - Droplets request larger terminal
+- BSD3 LICNESE added
