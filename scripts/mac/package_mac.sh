@@ -22,6 +22,11 @@ echo "==> Embedding leonard binary into $APP_NAME/Contents/MacOS/..."
 cp "$BIN_PATH" "$APP_NAME/Contents/MacOS/leonard"
 chmod +x "$APP_NAME/Contents/MacOS/leonard"
 
+if [ -f "THIRD_PARTY_NOTICES.txt" ]; then
+    mkdir -p "$APP_NAME/Contents/Resources"
+    cp "THIRD_PARTY_NOTICES.txt" "$APP_NAME/Contents/Resources/THIRD_PARTY_NOTICES.txt"
+fi
+
 echo "==> Configuring Info.plist for .wsp file association..."
 PLIST="$APP_NAME/Contents/Info.plist"
 
@@ -33,15 +38,11 @@ PLIST="$APP_NAME/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeRole string Viewer" "$PLIST" 2>/dev/null || true
 
 # Set clean Bundle ID and Version
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier org.covariant.leonard" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string org.covariant.leonard" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier org.covariant.leonard" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string org.covariant.leonard" "$PLIST" 2>/dev/null || true
 
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT_VERSION" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $SHORT_VERSION" "$PLIST" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUNDLE_VERSION" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUNDLE_VERSION" "$PLIST" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Set :CFBundleGetInfoString Leonard $VERSION" "$PLIST" 2>/dev/null || \
-/usr/libexec/PlistBuddy -c "Add :CFBundleGetInfoString string Leonard $VERSION" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT_VERSION" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $SHORT_VERSION" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUNDLE_VERSION" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUNDLE_VERSION" "$PLIST" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleGetInfoString Leonard $VERSION" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleGetInfoString string Leonard $VERSION" "$PLIST" 2>/dev/null || true
 
 echo "==> Packaging into $ZIP_NAME..."
 zip -r -y "$ZIP_NAME" "$APP_NAME"
