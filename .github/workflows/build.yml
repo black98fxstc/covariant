@@ -1,7 +1,6 @@
 name: Build Leonard
 
 env:
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
@@ -16,6 +15,11 @@ jobs:
     permissions:
       actions: write
       contents: read
+    env:
+      # 'x-gha' was removed from vcpkg. Use the built-in 'files' backend and let
+      # actions/cache persist the directory between runs; this needs no token,
+      # no NuGet feed and works identically on Windows and macOS runners.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
     strategy:
       fail-fast: false
       matrix:
@@ -29,14 +33,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Cache vcpkg
+      - name: Cache vcpkg binary packages
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ github.workspace }}/vcpkg
-            ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-${{ runner.os }}-
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}-
+            vcpkg-${{ runner.os }}-
       
       - name: Validate release version (macOS)
         if: runner.os == 'macOS'
@@ -54,6 +58,8 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+          # Cache the vcpkg tool and its ports (the action does not do so by default).
+          doNotCache: false
 
       - name: Configure CMake
         run: >
