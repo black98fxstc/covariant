@@ -18,7 +18,7 @@ set "ERR=%ERRORLEVEL%"
 if not "%ERR%"=="0" (
     echo(
     echo -------------------------------------------------------------
-    echo Leonard encountered an error (exit code: %ERR%).
+    echo Leonard encountered an error ^(exit code: %ERR%^).
     pause
 )
 exit /b %ERR%

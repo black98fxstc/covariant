@@ -625,9 +625,9 @@ Workspace parse_workspace(const std::string &filename)
                                             xmlChar *parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("gating:parent_id"));
                                             if (!parentIdAttr)
                                                 parentIdAttr = xmlGetProp(gateNode, reinterpret_cast<const xmlChar *>("parent_id"));
-                                                parent_id = sanitize_workspace_string(reinterpret_cast<char *>(parentIdAttr));
+                                            if (parentIdAttr)
                                             {
-                                                parent_id = reinterpret_cast<const char *>(parentIdAttr);
+                                                parent_id = sanitize_workspace_string(reinterpret_cast<char *>(parentIdAttr));
                                                 xmlFree(parentIdAttr);
                                             }
 
