@@ -80,7 +80,7 @@ add_executable(leonard
     Reports.hpp
     Ledger.cpp
     Ledger.hpp)
-target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot ${OpenCV_LIBS} cxxopts::cxxopts nlohmann_json::nlohmann_json ${MATH_LIB})
+target_link_libraries(leonard PRIVATE covariant_core ftxui::screen ftxui::dom ftxui::component LibXml2::LibXml2 LibXslt::LibXslt FFTW3::fftw3f Eigen3::Eigen Matplot++::matplot)
 
 set_target_properties(leonard PROPERTIES OUTPUT_NAME "leonard")
 

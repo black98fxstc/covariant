@@ -85,6 +85,11 @@ jobs:
             --vcpkg-root build/vcpkg_installed `
             --output build/Release/THIRD_PARTY_NOTICES.txt
 
+      - name: Inspect macOS link command
+        if: runner.os == 'macOS'
+        run: |
+          cmake --build build --target leonard --config Release --verbose 2>&1 | tee macos-link.log
+
       - name: Package macOS Droplet
         if: runner.os == 'macOS'
         run: |
