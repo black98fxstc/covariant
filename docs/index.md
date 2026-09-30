@@ -33,7 +33,7 @@ Mac and Windows are supported. Computers suitable for running FlowJo should be f
 Get the latest alpha builds from [GitHub Releases](https://github.com/black98fxstc/covariant/releases/latest)
 
 ## Installation
-[Installation instructions](../README.md)
+[Installation instructions](https://github.com/black98fxstc/covariant/blob/main/README.md)
 
 ## Source code
 [Source code repository](https://github.com/black98fxstc/covariant)
