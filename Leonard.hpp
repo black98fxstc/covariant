@@ -75,9 +75,9 @@ public:
     Workspace ws;
     std::vector<SampleData> dummy_samples;
     std::vector<std::vector<double>> colors;
-    ThreadPool compute_plane{std::thread::hardware_concurrency()};
-    ThreadPool control_plane{4};
-    ThreadPool plot_plane{1}; // std::max(1u, std::thread::hardware_concurrency())};
+    ThreadPool compute_plane{std::max(1u, std::thread::hardware_concurrency())};
+    ThreadPool control_plane{4u};
+    ThreadPool plot_plane{std::max(1u, std::thread::hardware_concurrency())};
 
     int parse_args(int argc, char *argv[]);
 
