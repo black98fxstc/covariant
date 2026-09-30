@@ -23,8 +23,8 @@ may be further analyzed in software, existing hardware does not support sorting.
 
 Covariant Statistics are statistics that are invariant under monotonic transformations,
 i.e., independant of the data scale used. They offer a quantitative morphology of
-cluster shapes that measure how strongly the values of different dimensions are
-linked.
+Laplacian cluster shapes that measure how strongly the values of different dimensions 
+are linked.
 
 ## Requirements
 Mac and Windows are supported. Computers suitable for running FlowJo should be fine.
@@ -33,14 +33,14 @@ Mac and Windows are supported. Computers suitable for running FlowJo should be f
 Get the latest alpha builds from [GitHub Releases](https://github.com/black98fxstc/covariant/releases/latest)
 
 ## Installation
-https://github.com/black98fxstc/covariant/README.md
+(https://github.com/black98fxstc/covariant/README.md)
 
 ## Source code
-https://github.com/black98fxstc/covariant
+
+(https://github.com/black98fxstc/covariant)
 
 ## Security
-Security policy:
-https://github.com/black98fxstc/covariant/security/policy
+[Security policy](https://github.com/black98fxstc/covariant/security/policy)
 
 ## References
 
@@ -54,4 +54,4 @@ https://github.com/black98fxstc/covariant/security/policy
   [Current Draft](https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link)
 
 ## About
-https://github.com/black98fxstc/covariant/ABOUT.md
+[About Leonard](https://github.com/black98fxstc/covariant/ABOUT.md)
