@@ -10,6 +10,7 @@
 #include <future>
 #include <atomic>
 #include <thread>
+#include <chrono>
 #include <unordered_map>
 #include <numbers>
 #include <cmath>
@@ -692,14 +693,15 @@ int Leonard::run()
             Pursuit_Results res = result_pair.second.get();
             res.wait_for_results();
 
+            say << "Waiting for plots to complete..." << std::endl;
+            res.wait_for_plots();
+
             std::string filename = Reports::generate_epp_report(report_dir, s.name, result_pair.first, res, display_vars);
             report_links.push_back({s.name + " - " + result_pair.first + " (EPP)", filename, "EPP tree analysis"});
 
             Ledger::append(report_dir, {Ledger::now_iso8601(), source.string(), s.name, result_pair.first,
                                         "Exhaustive Projection Pursuit", selections.variables, display_vars,
                                         res.event_count, 0, filename});
-
-            res.wait_for_plots();
         }
         for (auto &result_pair : laplace_results)
         {
@@ -723,6 +725,7 @@ int Leonard::run()
             if (res->cluster_events[res->valid_clusters + 1].size() > 0)
                 ++laplacian_offset;
 
+            say << "Waiting for plots to complete..." << std::endl;
             res->wait_for_plots();
 
             for (const auto &entry : std::filesystem::directory_iterator(params.img_dir))
@@ -810,6 +813,7 @@ int Leonard::run()
     }
 
     say << "Analysis complete." << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     return 0;
 }
 
