@@ -1,0 +1,17 @@
+title: Leonard
+description: Geometric methods for flow cytometry analysis
+theme: minima
+
+url: "https://black98fxstc.github.io"
+baseurl: "/covariant"
+
+header_pages:
+  - about.md
+  - methods.md
+  - documentation.md
+  - examples.md
+
+github_username: black98fxstc
+
+exclude:
+  - README.md
