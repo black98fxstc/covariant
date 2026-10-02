@@ -15,8 +15,7 @@ Leonard is a desktop tool for the analysis of flow cytometry datasets using meth
 
 Leonard can be run from the command line on a variety of data file formats, but primarily operates on FlowJo workspaces (`.wsp`), enabling the analysis of FlowJo gated subpopulations. The investigator selects a sample, a set of dimensions to analyze, and one or more previously identified populations. If the same dimensions and populations are present in other samples these become available for selection. Once a suitable method is chosen, analyses proceeds in parallel until all are complete, and then a browser window is opened, displaying the results of the analysis.
 
-> [!WARNING]
-> Leonard is intended to enrich the FlowJo workspace with the analysis results. This is still experimental and is not completely implemented. Always work on a copy of any important workspace! Your data are fine. Only the .wsp file is needed.
+> [!WARNING] Leonard is intended to enrich the FlowJo workspace with the analysis results. This is still experimental and is not completely implemented. Always work on a copy of any important workspace! Your data are fine. Only the .wsp file is needed.
 
 ## Explore Leonard
 
@@ -33,7 +32,7 @@ macOS and Windows are supported. Computers suitable for running FlowJo should be
 
 - **Downloads**: Get the latest alpha builds from [GitHub Releases](https://github.com/black98fxstc/covariant/releases/latest).
 - **Installation**: See the [installation instructions](https://github.com/black98fxstc/covariant#readme).
-- **Source Code**: [black98fxstc/covariant repository](https://github.com/black98fxstc/covariant).
+- **Source Code**: [black98fxstc/covariant](https://github.com/black98fxstc/covariant).
 - **Security**: [Security policy](https://github.com/black98fxstc/covariant/security/policy).
 
 ## References

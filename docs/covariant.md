@@ -3,10 +3,15 @@ layout: page
 title: Covariant Analysis
 permalink: /covariant/
 ---
+## Factoring Probability
 
 The first step is to factor the n-dimensional sample distribution function into a large number of 1-dimensional distribution functions, which are statistically independant. The first and second derivatives of the logarithim of these one-dimensional distribution functions are known in statistics as the natural parameters and in geometry as the Christoffel symbols.
 
+## Laplacian Clustering
+
 The Laplacian is the sum of some of these second derivatives. When the Laplacian of the distribution function of a population is positive, it has a smooth distribution with a strong centeral tendency, which is to say, it looks like what we think of as a cluster or phenotype. The events in a contiguous region with a consistent positive Laplacian define a Laplacian cluster. The clusters are surrounded and separated by areas where the Lagrangian is negative and the tendency is to dispersion not concentration. Events in this reageon are ambiguous and cannot be assighed to any specific cluster.
+
+## Covariant Statistics
 
 There exist invariant quantities that do not depend on the scales used. For a common example, you would get the same answer if you used either linear or logarithmic scales. The first example was found by Gauss in the nineteenth century, a result he called Theorema Eggregium (Remarkable Result) it was so surprising.
 
