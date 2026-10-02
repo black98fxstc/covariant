@@ -45,3 +45,8 @@ macOS and Windows are supported. Computers suitable for running FlowJo should be
 - Wayne A. Moore.  
   *Covariant Statistics*.  
   [Current Draft](https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link)
+
+- Guenther Walther, Noah Zimmerman, Wayne Moore, David Parks, Stephen Meehan, Ilana Belitskaya, Jinhui Pan, & Leonore Herzenberg (2009).  
+  [Automatic clustering of flow cytometry data with density-based merging](https://doi.org/10.1155/2009/686759).  
+  *Advances in Bioinformatics, 2009*, Article 686759.  
+  PMID: [20069107](https://pubmed.ncbi.nlm.nih.gov/20069107/) · PMCID: [PMC2801806](https://pmc.ncbi.nlm.nih.gov/articles/PMC2801806/)
