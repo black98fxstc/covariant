@@ -17,12 +17,14 @@ Leonard can be run from the command line on a variety of data file formats, but 
 
 > [!WARNING] Leonard is intended to enrich the FlowJo workspace with the analysis results. This is still experimental and is not completely implemented. Always work on a copy of any important workspace! Your data are fine. Only the .wsp file is needed.
 
+<!--
 ## Explore Leonard
 
 - [About Leonard]({{ '/about/' | relative_url }}): Background, history, and project dedication.
 - [Analysis Methods]({{ '/methods/' | relative_url }}): Detailed explanations of computational and differential geometry methods.
 - [Documentation]({{ '/documentation/' | relative_url }}): System requirements, workflows, and usage guide.
 - [Example Reports]({{ '/examples/' | relative_url }}): Overview and links to example analysis reports.
+-->
 
 ## Requirements
 

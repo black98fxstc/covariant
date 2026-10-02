@@ -10,7 +10,7 @@ First 1-dimensional distributions of the sample are compared to a uniformly stai
 
 ### Sample density estimator
 
-For each pair of dimensions the events are projected down onto the corresponding plane and the weights, a more sophisticated form of histogram, are calculated. The weights are then smoothed with a [Gaussian filter](https://en.wikipedia.org/wiki/Gaussian_filter) to form a density estimator.
+For each pair of dimensions the events are projected down onto the corresponding plane and the [weights]{https://doi.org/10.1155/2009/686759}, a more sophisticated form of histogram, are calculated. The weights are then smoothed with a [Gaussian filter](https://en.wikipedia.org/wiki/Gaussian_filter) to form a density estimator.
 
 ### Find all possible candidate separations
 
