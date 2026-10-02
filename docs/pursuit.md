@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Exhaustive Projection Pursuit
-permalink: /covariant/
+permalink: /pursuit/
 ---
 
 First 1-dimensional distributions of the sample are compared to a uniformly stained distribution 
