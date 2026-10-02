@@ -3,18 +3,20 @@ layout: home
 title: Leonard
 ---
 
-Leonard is a desktop tool for the analysis of flow cytometry datasets using
-methods from [computational]{{ '/pursuit/' | relative_url }} and[differential]({{ '/covariant/' | relative_url }}) geometry.
+Leonard is a desktop tool for the analysis of flow cytometry datasets using methods from *[computational]({{ '/pursuit/' | relative_url }})* and *[differential]({{ '/covariant/' | relative_url }})* geometry.
 
 ## Analysis Methods
 
-- **[Exhaustive Projection Pursuit]({{ '/methods/' | relative_url }}#exhaustive-projection-pursuit)**: Examines all 2-dimensional projections to find the best split into two new populations, then recurses on each subpopulation until no suitable split can be found. Suitable for any number of dimensions, with sortable resulting gating trees.
-- **[Laplacian Clustering]({{ '/methods/' | relative_url }}#laplacian-clustering)**: An *n*-dimensional clustering method based on ideas from differential geometry (supporting 2, 3, and 4 dimensions). Subpopulations may be further analyzed in software.
-- **[Covariant Statistics]({{ '/methods/' | relative_url }}#covariant-statistics)**: Statistics invariant under monotonic transformations (independent of data scale), offering a quantitative morphology of Laplacian cluster shapes and dimension linkage.
+- **[Exhaustive Projection Pursuit]({{ '/pursuit/' | relative_url }}#exhaustive-projection-pursuit)**: Examines all 2-dimensional projections to find the best split into two new populations, then recurses on each subpopulation until no suitable split can be found. Suitable for any number of dimensions, with sortable resulting gating trees.
+- **[Laplacian Clustering]({{ '/covariant/' | relative_url }}#laplacian-clustering)**: An *n*-dimensional clustering method based on ideas from differential geometry (supporting 2, 3, and 4 dimensions). Subpopulations may be further analyzed in software but not sorted.
+- **[Covariant Statistics]({{ '/covariant/' | relative_url }}#covariant-statistics)**: Statistics invariant under monotonic transformations (independent of the data scales), offering a quantitative morphology of Laplacian cluster shapes and dimension linkage.
 
 ## Workflow
 
-Leonard can be run from the command line on a variety of data file formats but primarily operates on FlowJo workspaces (`.wsp`), enabling the analysis of FlowJo gated subpopulations. The investigator selects a sample, a set of dimensions, and one or more previously identified populations.
+Leonard can be run from the command line on a variety of data file formats, but primarily operates on FlowJo workspaces (`.wsp`), enabling the analysis of FlowJo gated subpopulations. The investigator selects a sample, a set of dimensions to analyze, and one or more previously identified populations. If the same dimensions and populations are present in other samples these become available for selection. Once a suitable method is chosen, analyses proceeds in parallel until all are complete, and then a browser window is opened, displaying the results of the analysis.
+
+> [!WARNING]
+> Leonard is intended to enrich the FlowJo workspace with the analysis results. This is still experimental and is not completely implemented. Always work on a copy of any important workspace! Your data are fine. Only the .wsp file is needed.
 
 ## Explore Leonard
 
@@ -44,4 +46,3 @@ macOS and Windows are supported. Computers suitable for running FlowJo should be
 - Wayne A. Moore.  
   *Covariant Statistics*.  
   [Current Draft](https://drive.google.com/file/d/1Sq5W18-JzMJAaWGBl-vYJojl5mElBpw4/view?usp=drive_link)
-
