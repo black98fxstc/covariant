@@ -4,7 +4,7 @@ title: Exhaustive Projection Pursuit
 permalink: /pursuit/
 ---
 
-**![Exhaustive projection pursuit diagram]({{ '/assets/images/pursuit.svg' | relative_url }})**
+![Exhaustive projection pursuit diagram]({{ '/assets/images/pursuit.svg' | relative_url }})
 
 ### Exclude uniformly stained dimensions
 
