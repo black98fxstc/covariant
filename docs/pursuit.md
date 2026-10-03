@@ -4,6 +4,8 @@ title: Exhaustive Projection Pursuit
 permalink: /pursuit/
 ---
 
+**![Exhaustive projection pursuit diagram]({{ '/assets/images/pursuit.svg' | relative_url }})**
+
 ### Exclude uniformly stained dimensions
 
 First 1-dimensional distributions of the sample are compared to a uniformly stained distribution using the [Kullback-Leibler Divergence](https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence) and only those showing significant structure are considered.

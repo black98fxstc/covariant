@@ -10,7 +10,6 @@ norminv.cpp
 *.so.1
 *.asv
 *.dat
-*.svg
 *.cluster
 *.png
 *.darwin

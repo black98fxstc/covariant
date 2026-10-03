@@ -13,7 +13,7 @@ Leonard is a desktop tool for the analysis of flow cytometry datasets using meth
 
 ## Workflow
 
-Leonard can be run from the command line on a variety of data file formats, but primarily operates on FlowJo workspaces (`.wsp`), enabling the analysis of FlowJo gated subpopulations. The investigator selects a sample, a set of dimensions to analyze, and one or more previously identified populations. If the same dimensions and populations are present in other samples these become available for selection. Once a suitable method is chosen, analyses proceeds in parallel until all are complete, and then a browser window is opened, displaying the results of the analysis.
+Leonard can be run from the command line on a variety of data file formats, but primarily operates on [FlowJo](https://www.flowjo.com/) workspaces (`.wsp`), enabling the analysis of FlowJo gated subpopulations. The investigator selects a sample, a set of dimensions to analyze, and one or more previously identified populations. If the same dimensions and populations are present in other samples these become available for selection. Once a suitable method is chosen, analyses proceeds in parallel until all are complete, and then a browser window is opened, displaying the results of the analysis.
 
 > [!WARNING] Leonard is intended to enrich the FlowJo workspace with the analysis results. This is still experimental and is not completely implemented. Always work on a copy of any important workspace! Your data are fine. Only the .wsp file is needed.
 
