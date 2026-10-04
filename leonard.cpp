@@ -241,6 +241,12 @@ int Leonard::run()
         {
             std::error_code ec;
             std::filesystem::current_path(resolved.parent_path(), ec);
+            if (ec)
+            {
+                std::cerr << "Error: Could not change to workspace folder "
+                          << resolved.parent_path() << ": " << ec.message() << std::endl;
+                return 1;
+            }
         }
 
         std::string report_dir = safe_report_stem(resolved) + ".len";
@@ -263,6 +269,12 @@ int Leonard::run()
             {
                 std::error_code ec;
                 std::filesystem::current_path(df_path.parent_path(), ec);
+                if (ec)
+                {
+                    std::cerr << "Error: Could not change to data file folder "
+                              << df_path.parent_path() << ": " << ec.message() << std::endl;
+                    return 1;
+                }
             }
         }
 
@@ -326,9 +338,18 @@ int Leonard::run()
         {
             std::error_code ec;
             std::filesystem::current_path(wsp_path.parent_path(), ec);
+            if (ec)
+            {
+                std::cerr << "Error: Could not change to workspace folder "
+                          << wsp_path.parent_path() << ": " << ec.message() << std::endl;
+                return 1;
+            }
         }
 
-        ws = parse_workspace(filename);
+        // Parse via the absolute path: relative references (sample data files,
+        // report output) resolve against the workspace folder, which is now
+        // the current working directory.
+        ws = parse_workspace(wsp_path.string());
         if (ws.samples.empty())
         {
             std::cerr << "Error: No samples found or failed to parse workspace.\n";
@@ -432,7 +453,7 @@ int Leonard::run()
 
         say << "Processing sample: " << s.name << " ... " << std::endl;
         DataSet dataset;
-        if (!dataset.read(s.name))
+        if (!dataset.read(s.name, s.alt_names, {}))
         {
             session_.error("Failed to read dataset: " + s.name + "\n");
             continue;

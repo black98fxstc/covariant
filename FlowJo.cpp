@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <algorithm>
 #include <map>
@@ -474,41 +475,63 @@ Workspace parse_workspace(const std::string &filename)
             if (sampleMatObj)
                 xmlXPathFreeObject(sampleMatObj);
 
-            // Try fetching name from 'name' attribute
+            // Capture the display name attribute and the $FIL keyword
+            // independently. The display name may differ from the file on
+            // disk, so $FIL (FlowJo's own record of the acquisition file)
+            // is kept as a separate resolution candidate.
+            std::string name_attr;
             xmlChar *nameAttr = xmlGetProp(sampleNode, reinterpret_cast<const xmlChar *>("name"));
             if (nameAttr)
             {
-                sd.name = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
+                name_attr = sanitize_workspace_string(reinterpret_cast<char *>(nameAttr));
                 xmlFree(nameAttr);
             }
-            else
+
+            std::string fil_kw;
+            xpathCtx->node = sampleNode;
+            xmlXPathObjectPtr filObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Keyword[@name='$FIL']/@value"), xpathCtx);
+            if (filObj && filObj->nodesetval && filObj->nodesetval->nodeNr > 0)
             {
-                // Fallback to finding the $FIL keyword
-                xpathCtx->node = sampleNode;
-                xmlXPathObjectPtr filObj = xmlXPathEvalExpression(reinterpret_cast<const xmlChar *>(".//Keyword[@name='$FIL']/@value"), xpathCtx);
-                if (filObj && filObj->nodesetval && filObj->nodesetval->nodeNr > 0)
+                xmlChar *content = xmlNodeGetContent(filObj->nodesetval->nodeTab[0]);
+                if (content)
                 {
-                    xmlChar *content = xmlNodeGetContent(filObj->nodesetval->nodeTab[0]);
-                    if (content)
+                    fil_kw = sanitize_workspace_string(reinterpret_cast<char *>(content));
+                    xmlFree(content);
+                }
+            }
+            if (filObj)
+                xmlXPathFreeObject(filObj);
+
+            if (!name_attr.empty())
+                sd.name = name_attr;
+            else if (!fil_kw.empty())
+                sd.name = fil_kw;
+            else
+                sd.name = "Sample_" + std::to_string(i);
+
+            // Strip a trailing data-file extension only (e.g. "specimen.fcs"
+            // -> "specimen"); never erase embedded occurrences like
+            // "exp.fcs.backup".
+            auto strip_data_ext = [](std::string &s)
+            {
+                static const char *exts[] = {".fcs", ".csv", ".tsv", ".txt", ".bin", ".dat"};
+                for (const char *e : exts)
+                {
+                    size_t n = std::strlen(e);
+                    if (s.size() >= n && s.compare(s.size() - n, n, e) == 0)
                     {
-                        sd.name = sanitize_workspace_string(reinterpret_cast<char *>(content));
-                        xmlFree(content);
+                        s.erase(s.size() - n);
+                        return;
                     }
                 }
-                else
-                {
-                    sd.name = "Sample_" + std::to_string(i);
-                }
-                if (filObj)
-                    xmlXPathFreeObject(filObj);
+            };
+            strip_data_ext(sd.name);
+            if (!fil_kw.empty())
+            {
+                strip_data_ext(fil_kw);
+                if (fil_kw != sd.name)
+                    sd.alt_names.push_back(fil_kw);
             }
-
-            size_t fcs_pos = sd.name.find(".fcs");
-            if (fcs_pos != std::string::npos)
-                sd.name.erase(fcs_pos, 4);
-            size_t FCS_pos = sd.name.find(".FCS");
-            if (FCS_pos != std::string::npos)
-                sd.name.erase(FCS_pos, 4);
 
             // Collect $PnN keywords (variables) and $PnS keywords (stains)
             xpathCtx->node = sampleNode;

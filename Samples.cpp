@@ -612,13 +612,69 @@ bool DataSet::read(const std::string &filename, const std::vector<std::string> &
     const char *exts[] = {".fcs", ".csv", ".tsv", ".txt", ".bin", ".dat"};
     for (const char *ext : exts)
     {
-        if (std::filesystem::exists(filename + ext))
+        std::cerr << "cwd: " << std::filesystem::current_path()
+          << " probing: " << std::filesystem::absolute(filename + ext) << std::endl;        if (std::filesystem::exists(filename + ext))
         {
+            std::cerr << "Found file: " << std::filesystem::absolute(filename + ext) << std::endl;
             if (do_read(filename + ext, ext))
                 return true;
         }
     }
 
+    // Workspace sample names may contain characters that cannot appear in
+    // file names (path separators, control characters). Retry with a
+    // sanitized stem so such samples still resolve inside the workspace
+    // folder instead of escaping it or failing to match.
+    auto sanitize_stem = [](const std::string &stem, std::string &out) -> bool
+    {
+        out.clear();
+        out.reserve(stem.size());
+        bool changed = false;
+        for (unsigned char c : stem)
+        {
+            if (c < 0x20 || c == 0x7f)
+            {
+                changed = true;
+                continue;
+            }
+            if (c == '/' || c == '\\')
+            {
+                out.push_back('_');
+                changed = true;
+            }
+            else
+            {
+                out.push_back(static_cast<char>(c));
+            }
+        }
+        return changed;
+    };
+
+    std::string sanitized;
+    if (sanitize_stem(filename, sanitized))
+    {
+        for (const char *ext : exts)
+        {
+            if (std::filesystem::exists(sanitized + ext))
+            {
+                if (do_read(sanitized + ext, ext))
+                    return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool DataSet::read(const std::string &filename, const std::vector<std::string> &alt_stems, const std::vector<std::string> &headers)
+{
+    if (read(filename, headers))
+        return true;
+    for (const auto &alt : alt_stems)
+    {
+        if (!alt.empty() && alt != filename && read(alt, headers))
+            return true;
+    }
     return false;
 }
 

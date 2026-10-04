@@ -41,3 +41,9 @@ This is an early release, so some workflows may still be rough around the edges.
 - BSD3 LICNESE added
 - Sanitize strings from workspace
 - Added release checksums
+
+## v0.1.0-alpha.4 - FlowJo integration
+
+- Sorted out file references in FlowJo
+
+

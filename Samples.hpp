@@ -117,5 +117,6 @@ public:
     bool read_binary(const std::string &filename, const std::vector<std::string> &headers);
     bool read_fcs(const std::string &filename);
     bool read(const std::string &filename, const std::vector<std::string> &headers = {});
+    bool read(const std::string &filename, const std::vector<std::string> &alt_stems, const std::vector<std::string> &headers);
     size_t size() const;
 };

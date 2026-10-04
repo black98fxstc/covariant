@@ -24,6 +24,7 @@ struct SpilloverMatrix
 struct SampleData
 {
     std::string name;
+    std::vector<std::string> alt_names; // extra file-name candidates (e.g. $FIL keyword)
     bool selected = false;
     bool enabled = true;
     std::vector<std::string> variables;
