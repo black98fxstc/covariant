@@ -450,7 +450,7 @@ Workspace parse_workspace(const std::string &filename)
                             double m = get_double(node, "pos", 4.418539922);
                             double a = get_double(node, "neg", 0.0);
                             double width = get_double(node, "width", -100.0);
-                            double w = 0.5 * std::log10(-width);
+                            double w = std::log10(-width);
                             transform = std::make_shared<Logicle>(t, w, m, a);
                         }
                     }
