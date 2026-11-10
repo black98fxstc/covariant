@@ -44,6 +44,10 @@ PLIST="$APP_NAME/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUNDLE_VERSION" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUNDLE_VERSION" "$PLIST" 2>/dev/null || true
 /usr/libexec/PlistBuddy -c "Set :CFBundleGetInfoString Leonard $VERSION" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleGetInfoString string Leonard $VERSION" "$PLIST" 2>/dev/null || true
 
+# Shown in the macOS consent prompt when the droplet first drives Terminal;
+# required alongside the apple-events entitlement used when signing.
+/usr/libexec/PlistBuddy -c "Set :NSAppleEventsUsageDescription Leonard needs to open Terminal to run the analysis." "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string Leonard needs to open Terminal to run the analysis." "$PLIST" 2>/dev/null || true
+
 echo "==> Packaging into $ZIP_NAME..."
 zip -r -y "$ZIP_NAME" "$APP_NAME"
 
